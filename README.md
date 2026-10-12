@@ -25,10 +25,11 @@ Pick a word. Draw something questionable. Watch your friends guess everything
 except the answer. Skribbil keeps that experience inside the original Go engine,
 with a small league extension for identity, results, and the dislike penalty.
 
-[![An edited local gameplay demonstration showing the original drawing canvas and synchronized test players.](docs/media/gameplay.gif)](docs/media/gameplay.mp4)
+[![An edited local gameplay demonstration showing the original drawing canvas and synchronized test players.](docs/media/gameplay.gif)](https://github.com/Kenshi0905/skribbil/raw/refs/heads/main/docs/media/gameplay.mp4)
 
-**[Play the silent demo →](docs/media/gameplay.mp4)**
-Use the MP4 link if your Markdown viewer does not animate or play the preview.
+**[Download the silent gameplay video →](https://github.com/Kenshi0905/skribbil/raw/refs/heads/main/docs/media/gameplay.mp4)**
+The GIF plays here; download the MP4 for a larger, silent clip. GitHub does not
+provide an inline player for repository MP4 files.
 
 <details>
 <summary>See the desktop game screen</summary>
