@@ -831,3 +831,65 @@ kbd {
 #league-dislike-button:disabled{opacity:.55;cursor:default}
 body[data-league-mode] #toggle-spectate-button,body[data-league-mode] #force-restart-button,body[data-league-mode] .namechange-field,body[data-league-mode] #namechange-button-start-dialog,body[data-league-mode] #ready-state-game-over{display:none!important}
 body[data-league-mode="ranked"] #lobby-settings-button{display:none!important}
+
+/* Keep gestures on the canvas local; page scrolling and zoom remain available
+   everywhere else. Pointer capture keeps a stroke intact at its edges. */
+#drawing-board { touch-action:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+#message-form { display:flex; gap:5px; margin-top:5px; flex:none; }
+#message-input { min-width:0; flex:1; margin-top:0; font:inherit; }
+#message-send { padding:0 12px; font:inherit; font-weight:700; }
+button:focus-visible, input:focus-visible, .custom-check-or-radio:focus-visible + div {
+    outline:3px solid #214e85; outline-offset:2px;
+}
+@supports not (position-anchor: --menu-anchor) {
+    #menu { position:fixed; inset:4rem 1rem auto auto; max-height:calc(100dvh - 5rem); overflow:auto; }
+}
+
+@media (max-width:900px) {
+    html { font-size:16px; }
+    #app { min-height:100svh; padding-bottom:env(safe-area-inset-bottom); }
+    #lobby { display:flex; flex-direction:column; min-width:0; flex:none; padding:6px; gap:6px; }
+    #lobby-header { order:1; display:grid; grid-template-columns:1fr auto 1fr; grid-template-rows:auto auto; gap:5px; }
+    #lobby-header-center-element { display:contents; }
+    #round-container { grid-column:1; grid-row:1; justify-content:flex-start; font-size:1.1rem; }
+    #menu-button-container { grid-column:2; grid-row:1; display:flex; justify-content:center; }
+    #time-left { grid-column:3; grid-row:1; justify-content:flex-end; font-size:1.1rem; }
+    #word-container { grid-column:1 / 4; grid-row:2; width:auto; min-width:0; overflow-x:auto; justify-content:safe center; gap:3px; padding:8px 4px; }
+    #menu-button, .menu-item { min-height:44px; min-width:44px; }
+    #drawing-board-wrapper { order:2; width:100%; height:auto; padding:0; aspect-ratio:16 / 9; flex:none; }
+    #toolbox { order:3; width:100%; min-width:0; gap:6px; }
+    .color-button-container { flex:1 0 100%; box-sizing:border-box; height:90px; overflow-x:auto; overflow-y:hidden; }
+    .color-button-row { width:max-content; flex:none; }
+    .color-button { width:44px; height:44px; flex:none; }
+    .canvas-button, .line-width-button-content { width:44px; height:44px; }
+    .line-width-button-content > *, .canvas-button > * { width:32px; height:32px; }
+    #chat { order:4; width:100%; height:clamp(200px,30svh,300px); min-height:0; }
+    #message-container { max-height:none; min-height:0; overscroll-behavior:contain; }
+    #message-form { min-height:44px; }
+    #message-input { font-size:16px; padding:10px; }
+    #message-send { min-width:60px; min-height:44px; }
+    #player-container { order:5; height:auto; min-height:0; flex-direction:row; gap:5px; overflow-x:auto; padding-bottom:4px; }
+    .player { flex:0 0 148px; min-width:0; }
+    .player + .player { margin-top:0; }
+    .center-dialog { box-sizing:border-box; max-width:calc(100% - 12px); max-height:min(70svh,460px); padding:12px; }
+    .center-dialog-content { min-height:0; }
+    .dialog-title { flex:none; font-size:1.3rem; margin-bottom:8px; }
+    .dialog-button, .ready-check-box { min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; }
+    .button-bar { flex-wrap:wrap; flex:none; }
+    #word-button-container { margin:0; grid-template-columns:1fr; }
+    #help-dialog { width:calc(100% - 12px); }
+    .namechange-field, .input-container input { min-height:44px; font-size:16px; }
+    #league-toolbar { width:calc(100% - 12px); margin:6px; padding:8px; gap:8px; font-size:13px; }
+    #league-dislike-button { min-height:44px; }
+    #league-dislike-status { flex:1 0 100%; }
+}
+
+body[data-league-mode] #start-dialog .center-dialog-content,
+body[data-league-mode] #game-over-dialog .ready-check-box-wrapper { display:none; }
+
+body[data-league-spectator="true"] #start-dialog .ready-check-box-wrapper,
+body[data-league-spectator="true"] #force-start-button { display:none!important; }
+
+.sound-volume-control { display:flex; flex-direction:column; gap:2px; padding:4px 10px; min-width:180px; }
+.sound-volume-control label { display:flex; justify-content:space-between; gap:12px; font-size:1rem; }
+#sound-volume { width:100%; min-height:44px; margin:0; accent-color:#214e85; }

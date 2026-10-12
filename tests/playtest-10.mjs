@@ -1,0 +1,261 @@
+// Isolated protocol playtest, not browser/device automation. Three clients use
+// mobile User-Agent headers; actual touch/viewport checks are separate evidence.
+// All accounts, credentials, engine secret, database and assets are ephemeral.
+import assert from 'node:assert/strict';
+import net from 'node:net';
+import { EventEmitter } from 'node:events';
+import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm, mkdir, writeFile, access } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve, join, dirname, basename } from 'node:path';
+import { openDatabase } from '../server/db.mjs';
+import { createApp } from '../server/index.mjs';
+import { AssetStore } from '../server/assets.mjs';
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function until(check, label, timeout = 10000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) { const value = await check(); if (value) return value; await delay(25); }
+  throw new Error(`Timed out: ${label}`);
+}
+class ProtocolSocket extends EventEmitter {
+  constructor() { super(); this.pending = []; this.bytes = Buffer.alloc(0); this.fragments = []; this.upgraded = false; this.closed = false; }
+  async connect(url, cookie, origin, userAgent) {
+    this.socket = net.createConnection({ host: url.hostname, port: Number(url.port) });
+    this.socket.on('data', chunk => this.receive(chunk));
+    this.socket.on('error', error => { this.error = error; });
+    this.socket.on('close', () => { this.closed = true; clearInterval(this.heartbeat); });
+    this.socket.once('connect', () => this.socket.write([
+      `GET ${url.pathname} HTTP/1.1`, `Host: ${url.host}`, `Origin: ${origin}`, `Cookie: ${cookie}`, `User-Agent: ${userAgent}`,
+      'Upgrade: websocket', 'Connection: Upgrade', 'Sec-WebSocket-Version: 13',
+      `Sec-WebSocket-Key: ${randomBytes(16).toString('base64')}`, '', '',
+    ].join('\r\n')));
+    await until(() => { if (this.error) throw this.error; return this.upgraded; }, 'authenticated websocket upgrade');
+    this.heartbeat = setInterval(() => { if (!this.closed) this.send('keep-alive'); }, 5000);
+    this.heartbeat.unref();
+  }
+  receive(chunk) {
+    this.bytes = Buffer.concat([this.bytes, chunk]);
+    if (!this.upgraded) {
+      const end = this.bytes.indexOf('\r\n\r\n'); if (end < 0) return;
+      const status = this.bytes.subarray(0, end).toString().split('\r\n')[0];
+      if (!status.startsWith('HTTP/1.1 101 ')) { this.error = new Error(`Websocket rejected: ${status}`); return; }
+      this.bytes = this.bytes.subarray(end + 4); this.upgraded = true;
+    }
+    while (this.bytes.length >= 2) {
+      const final = !!(this.bytes[0] & 128), opcode = this.bytes[0] & 15;
+      let length = this.bytes[1] & 127, offset = 2;
+      if (length === 126) { if (this.bytes.length < 4) return; length = this.bytes.readUInt16BE(2); offset = 4; }
+      if (length === 127) { if (this.bytes.length < 10) return; length = Number(this.bytes.readBigUInt64BE(2)); offset = 10; }
+      assert.equal(this.bytes[1] & 128, 0, 'server frames are unmasked');
+      if (this.bytes.length < offset + length) return;
+      const payload = this.bytes.subarray(offset, offset + length); this.bytes = this.bytes.subarray(offset + length);
+      if (opcode === 9) { this.sendFrame(payload, 10); continue; }
+      if (opcode === 8) { this.closed = true; this.socket.end(); continue; }
+      if (opcode !== 0 && opcode !== 1) continue;
+      this.fragments.push(payload);
+      if (final) {
+        const message = JSON.parse(Buffer.concat(this.fragments).toString()); this.fragments = [];
+        this.pending.push(message); this.emit('event', message);
+      }
+    }
+  }
+  sendFrame(payload, opcode = 1) {
+    const mask = randomBytes(4), header = Buffer.alloc(payload.length < 126 ? 6 : 8);
+    header[0] = 128 | opcode; header[1] = 128 | (payload.length < 126 ? payload.length : 126);
+    if (payload.length >= 126) header.writeUInt16BE(payload.length, 2);
+    mask.copy(header, header.length - 4);
+    const bytes = Buffer.from(payload); for (let i = 0; i < bytes.length; i++) bytes[i] ^= mask[i % 4];
+    this.socket.write(Buffer.concat([header, bytes]));
+  }
+  send(type, data) { this.sendFrame(Buffer.from(JSON.stringify({ type, data }))); }
+  async wait(type, predicate = () => true, timeout = 10000) {
+    return until(() => {
+      if (this.error) throw this.error;
+      const index = this.pending.findIndex(message => message.type === type && predicate(message.data));
+      return index < 0 ? null : this.pending.splice(index, 1)[0];
+    }, `event ${type}`, timeout);
+  }
+  close() { clearInterval(this.heartbeat); this.socket?.destroy(); }
+}
+
+const demo = process.argv.includes('--demo');
+let demoMetadata, demoContinue, demoStart, demoClubhouseId, viewer;
+const scratch = await mkdtemp(join(tmpdir(), 'skribbil-playtest-'));
+const db = await openDatabase({ url: '', dataDir: ':memory:' });
+const secret = randomBytes(48).toString('hex');
+const portProbe = net.createServer(); await new Promise(resolve => portProbe.listen(0, '127.0.0.1', resolve));
+const enginePort = portProbe.address().port; await new Promise(resolve => portProbe.close(resolve));
+const config = { secret, engineUrl: `http://127.0.0.1:${enginePort}`, origin: '', secure: false, ranked: false, production: false };
+const app = await createApp({ db, config, assets: new AssetStore({ root: join(scratch, 'assets'), bucket: '' }) });
+await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+const base = `http://127.0.0.1:${app.server.address().port}`; config.origin = base;
+const engine = spawn(resolve(process.env.ENGINE_BINARY || '.tools/skribbil-engine.exe'), [], {
+  cwd: resolve('engine'), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+  env: { ...process.env, ROOT_PATH: '/engine', NETWORK_ADDRESS: '127.0.0.1', PORT: String(enginePort),
+    SKRIBBIL_ENGINE_SECRET: secret, SKRIBBIL_EVENTS_URL: `${base}/api/internal/engine-events`,
+    SKRIBBIL_OUTBOX_DIR: join(scratch, 'outbox'), SKRIBBIL_RANKED_ENABLED: 'false' },
+});
+let engineError, engineExit;
+engine.on('error', error => { engineError = error; }); engine.on('exit', code => { engineExit = code; });
+// Do not print subprocess environment, cookies, tickets or generated credentials.
+engine.stdout.on('data', () => {}); engine.stderr.on('data', () => {});
+const clients = [], turns = [], report = { clients: 10, spectators: 1, mobileUserAgentClients: 3, physicalMobileDevices: 0, browserTouchTests: false, turns: 0, checks: [] };
+const desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36';
+const mobileUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
+const request = async (client, path, data, headers = {}) => {
+  const response = await fetch(base + path, { method: data === undefined ? 'GET' : 'POST', redirect: 'manual',
+    headers: { Cookie: client?.cookie || '', 'User-Agent': client?.ua || desktopUA, ...headers,
+      ...(data === undefined ? {} : { 'Content-Type': 'application/json', 'X-Requested-With': 'Skribbil', Origin: base }) },
+    body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(10000) });
+  return response;
+};
+const json = async response => {
+  const data = await response.json(); assert.ok(response.ok, `HTTP ${response.status}: ${data.error || 'request failed'}`); return data;
+};
+let matchId, lobbyId;
+const connect = async (client, ticketUrl) => {
+  const launch = await request(client, ticketUrl); assert.equal(launch.status, 303, 'signed account admission succeeds');
+  client.nativeCookie = launch.headers.getSetCookie().map(v => v.split(';')[0]).join('; ');
+  const id = new URL(launch.headers.get('location'), base).pathname.split('/').at(-1);
+  assert.equal(id, lobbyId);
+  client.ws = new ProtocolSocket();
+  client.ws.on('event', message => { if (message.type === 'your-turn') turns.push({ client, data: message.data }); });
+  await client.ws.connect(new URL(`/engine/v1/lobby/${lobbyId}/ws`, base), `${client.cookie}; ${client.nativeCookie}`, base, client.ua);
+  const ready = (await client.ws.wait('ready')).data;
+  assert.equal(ready.playerName, client.user.display_name);
+  if (client.playerId) assert.equal(ready.playerId, client.playerId, 'reconnect keeps engine identity');
+  client.playerId = ready.playerId; return ready;
+};
+try {
+  await until(async () => { if (engineError) throw engineError; if (engineExit !== undefined) throw new Error('Engine exited before playtest'); return fetch(`${config.engineUrl}/engine/`).then(r => r.ok).catch(() => false); }, 'isolated engine startup', 15000);
+  for (let i = 0; i < 11; i++) {
+    const name = `play_${i}_${randomBytes(4).toString('hex')}`;
+    const { user, token } = await app.platform.register({ username: name, email: `${name}@example.invalid`, password: randomBytes(32).toString('hex') });
+    clients.push({ user, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
+  }
+  if (demo) {
+    const name = `viewer_${randomBytes(4).toString('hex')}`, password = randomBytes(24).toString('hex');
+    const registered = await app.platform.register({ username: name, email: `${name}@example.invalid`, password });
+    viewer = { user: registered.user, cookie: `skribbil_session=${registered.token}`, ua: desktopUA, password };
+    await db.transaction(async tx => {
+      await tx.query("INSERT INTO skribbil.platform_roles(user_id,role) VALUES($1,'administrator')", [viewer.user.id]);
+      const created = await tx.query("INSERT INTO skribbil.clubhouses(name,description,owner_id,created_by) VALUES('Pencil pals','An isolated demonstration group with synthetic test players.',$1,$1) RETURNING id", [viewer.user.id]);
+      demoClubhouseId = created.rows[0].id;
+      await tx.query("INSERT INTO skribbil.clubhouse_members(clubhouse_id,user_id,role) VALUES($1,$2,'owner')", [demoClubhouseId, viewer.user.id]);
+      for (const client of clients) await tx.query("INSERT INTO skribbil.clubhouse_members(clubhouse_id,user_id,role) VALUES($1,$2,'member')", [demoClubhouseId, client.user.id]);
+    });
+  }
+  const room = await json(await request(clients[0], '/api/rooms', { mode: 'private', rounds: 2, drawTime: demo ? 300 : 60, maxPlayers: 10, private: true, ...(demo ? { clubhouseId: demoClubhouseId } : {}) }));
+  matchId = room.matchId;
+  const lookup = await db.query('SELECT engine_room_id FROM skribbil.matches WHERE id=$1', [matchId]); lobbyId = lookup.rows[0].engine_room_id;
+  for (const [index, client] of clients.entries()) {
+    const ticket = index === 0 ? room : await json(await request(client, `/api/rooms/${matchId}/join`, { role: client.spectator ? 'spectator' : 'player' }));
+    await connect(client, ticket.url);
+  }
+  const players = clients.slice(0, 10), spectator = clients[10];
+  report.checks.push('10 authenticated players and a spectator connected through the gateway');
+  // All clients are genuine members of this room, but one must not use another
+  // account's engine cookie to view its private drawing/word state.
+  const borrowed = await request(clients[1], `/engine/lobby/${lobbyId}`, undefined, { Cookie: `${clients[1].cookie}; ${clients[0].nativeCookie}` });
+  assert.equal(borrowed.status, 403); report.checks.push('borrowed native cookie rejected for a different logged-in account');
+  players[0].ws.send('message', 'Ten-player protocol check');
+  await Promise.all(players.map(c => c.ws.wait('message', d => d.content === 'Ten-player protocol check')));
+  if (demo) {
+    await mkdir(resolve('.data'), { recursive: true });
+    demoMetadata = resolve(`.data/playtest-demo-${process.pid}.json`);
+    demoStart = resolve(`.data/playtest-demo-${process.pid}.start`);
+    demoContinue = resolve(`.data/playtest-demo-${process.pid}.continue`);
+    await writeFile(demoMetadata, JSON.stringify({ origin: base, username: viewer.user.username, password: viewer.password,
+      matchId, clubhouseId: demoClubhouseId, startFile: demoStart, continueFile: demoContinue, stage: 'lobby' }, null, 2), { flag: 'wx' });
+    console.log(`Demo lobby ready. Local ephemeral metadata: ${demoMetadata}`);
+    console.log('Create its startFile to begin the native game; staging expires after12minutes.');
+    await until(() => access(demoStart).then(() => true).catch(() => false), 'demo lobby continuation', 720000);
+  }
+  // Ready must not be blocked by the spectator.
+  for (const p of players) p.ws.send('toggle-readiness');
+  let penalized;
+  for (let turn = 1; turn <= 20; turn++) {
+    const next = await until(() => turns.shift(), `artist turn ${turn}`);
+    const artist = next.client;
+    if (turn === 1) penalized = artist;
+    if (turn > 10 && artist === penalized) { assert.equal(next.data.words.length, 1, 'penalized artist gets one forced hard word'); report.checks.push('next-turn hard word forced'); }
+    const word = next.data.words[0]; assert.equal(typeof word, 'string');
+    artist.ws.send('choose-word', 0);
+    await Promise.all(clients.map(c => c.ws.wait('word-chosen')));
+    const guessers = players.filter(c => c !== artist);
+    const draw = { x: 30 + turn, y: 40, x2: 100 + turn, y2: 110, color: 2, width: 8 };
+    artist.ws.send('line', draw);
+    await Promise.all(clients.filter(c => c !== artist).map(c => c.ws.wait('line', d => d.x2 === draw.x2)));
+    artist.ws.send('fill', { x: 1500, y: 800, color: 6 });
+    await Promise.all(clients.filter(c => c !== artist).map(c => c.ws.wait('fill')));
+    if (turn === 1 && demo) {
+      const launch = await json(await request(viewer, `/api/rooms/${matchId}/join`, { role: 'spectator' }));
+      await writeFile(demoMetadata, JSON.stringify({ origin: base, username: viewer.user.username, password: viewer.password,
+        launchUrl: base + launch.url, matchId, clubhouseId: demoClubhouseId, startFile: demoStart, continueFile: demoContinue, stage: 'drawing' }, null, 2));
+      // This is real line/fill traffic on the original game canvas. The scene is
+      // a demo doodle, not a generated image or a replacement canvas renderer.
+      artist.ws.send('fill', { x: 1500, y: 800, color: 0 });
+      const strokes = [[300,650,600,350],[600,350,900,650],[350,610,350,850],[350,850,850,850],[850,850,850,610],[520,850,520,690],[520,690,660,690],[660,690,660,850],[1000,720,1300,480],[1300,480,1550,720]];
+      for (const [x,y,x2,y2] of strokes) { artist.ws.send('line',{x,y,x2,y2,color:13,width:16}); await delay(70); }
+      for (let a=0;a<24;a++) { const b=a*2*Math.PI/24,c=(a+1)*2*Math.PI/24; artist.ws.send('line',{x:Math.round(1150+80*Math.cos(b)),y:Math.round(220+80*Math.sin(b)),x2:Math.round(1150+80*Math.cos(c)),y2:Math.round(220+80*Math.sin(c)),color:3,width:16}); }
+      players[1].ws.send('message', 'A tiny house, a very ambitious sun.');
+      console.log(`Demo paused for CUA browser capture. Read local ephemeral metadata: ${demoMetadata}`);
+      console.log('Create its continueFile to resume; all demo credentials and files are deleted on exit.');
+      await until(() => access(demoContinue).then(() => true).catch(() => false), 'demo capture continuation', 240000);
+    }
+    if (turn === 1) {
+      const reconnecting = guessers.find(c => c.ua === mobileUA) || guessers[0];
+      const identity = reconnecting.playerId;
+      reconnecting.ws.close(); await delay(400);
+      const ticket = await json(await request(reconnecting, `/api/rooms/${matchId}/join`, {}));
+      const recovered = await connect(reconnecting, ticket.url);
+      assert.equal(recovered.playerId, identity); assert.ok(recovered.currentDrawing.length >= 2, 'reconnect replays current canvas');
+      report.checks.push('mobile-UA connection reconnects with same identity and current drawing');
+      spectator.ws.send('dislike-drawing', { turnId: 1 }); spectator.ws.send('message', word);
+      spectator.ws.send('line', { ...draw, x2: 1599 });
+      for (const c of guessers.slice(0, 8)) c.ws.send('dislike-drawing', { turnId: 1 });
+      const before = await artist.ws.wait('dislike-state', d => d.votes === 8);
+      assert.equal(before.data.required, 9); assert.equal(before.data.applied, false);
+      guessers[8].ws.send('dislike-drawing', { turnId: 1 });
+      await artist.ws.wait('dislike-state', d => d.applied === true);
+      await artist.ws.wait('update-players', roster => roster.some(p => p.id === artist.playerId && p.score === -100));
+      for (let i = 0; i < 3; i++) guessers[8].ws.send('dislike-drawing', { turnId: 1 });
+      assert.ok(!guessers[0].ws.pending.some(e => e.type === 'line' && e.data.x2 === 1599), 'spectator drawing never broadcast');
+      report.checks.push('spectator excluded; nine unique votes apply exactly -100 despite duplicates');
+    }
+    // Keep the native anti-spam rule active: fewer than five guesses in3sec.
+    await delay(900);
+    for (const c of guessers) c.ws.send('message', word);
+    await Promise.all(guessers.map(c => c.ws.wait('correct-guess-self')));
+    report.turns = turn;
+    if (turn % 5 === 0) console.log(`Protocol playtest: ${turn}/20 native turns completed.`);
+  }
+  await Promise.all(players.map(c => c.ws.wait('game-over')));
+  const settled = await until(async () => (await db.query(`SELECT * FROM skribbil.matches WHERE id=$1 AND status='completed'`, [matchId])).rows[0], 'authoritative result settlement', 90000);
+  const results = (await db.query('SELECT * FROM skribbil.match_result_players WHERE result_id=$1', [settled.accepted_result_id])).rows;
+  assert.equal(results.length, 10); assert.ok(!results.some(r => r.user_id === spectator.user.id));
+  assert.ok(results.every(r => r.correct_guesses === 18 && r.fastest_guess_ms !== null));
+  const penalties = (await db.query(`SELECT * FROM skribbil.score_events WHERE match_id=$1 AND kind='dislike_penalty'`, [matchId])).rows;
+  assert.equal(penalties.length, 1); assert.equal(penalties[0].delta, -100); assert.equal(penalties[0].user_id, penalized.user.id);
+  const archive = (await db.query(`SELECT count(*) AS total,count(*) FILTER(WHERE t.difficulty='hard') AS hard
+    FROM skribbil.drawings d JOIN skribbil.drawing_turns t ON t.id=d.turn_id WHERE d.match_id=$1`, [matchId])).rows[0];
+  assert.equal(Number(archive.total), 20); assert.equal(Number(archive.hard), 1);
+  const debt = (await db.query('SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1', [penalized.user.id])).rows[0]; assert.equal(debt.pending, false);
+  report.checks.push('20 real turns archived;10 results with18 correct guesses each; spectator absent from results; debt consumed');
+  report.archivedDrawings = Number(archive.total); report.authoritativeResults = results.length;
+  report.status = 'passed'; console.log(JSON.stringify(report, null, 2));
+} finally {
+  for (const client of clients) client.ws?.close();
+  engine.kill();
+  await Promise.race([new Promise(resolve => engine.once('exit', resolve)), delay(2000)]);
+  app.server.closeAllConnections(); await new Promise(resolve => app.server.close(resolve));
+  await db.close();
+  assert.equal(dirname(resolve(scratch)), resolve(tmpdir()));
+  assert.ok(basename(scratch).startsWith('skribbil-playtest-'));
+  await rm(scratch, { recursive: true, force: true });
+  if (demoMetadata) await rm(demoMetadata, { force: true });
+  if (demoContinue) await rm(demoContinue, { force: true });
+  if (demoStart) await rm(demoStart, { force: true });
+}

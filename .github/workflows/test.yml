@@ -15,6 +15,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - run: node scripts/check-secrets.mjs
       - run: npm test
       - run: node --test infra/tests/*.test.mjs
       - run: npm run check
@@ -31,3 +32,26 @@ jobs:
           cache-dependency-path: engine/go.sum
       - run: go test -race ./...
       - run: go build ./cmd/scribblers
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f infra/Dockerfile -t skribbil-verified .
+  multiplayer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+      - run: npm ci
+      - run: mkdir -p ../.tools && go build -o ../.tools/skribbil-engine ./cmd/scribblers
+        working-directory: engine
+      - run: node tests/playtest-10.mjs
+        env:
+          ENGINE_BINARY: .tools/skribbil-engine

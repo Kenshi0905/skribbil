@@ -233,6 +233,10 @@ func (handler *V1Handler) postPlayer(writer http.ResponseWriter, request *http.R
 
 	lobby.Synchronized(func() {
 		player := GetPlayer(lobby, request)
+		if lobby.League != nil && player != nil && !GatewayAccountMatches(request, player.AccountID) {
+			http.Error(writer, "platform account does not match engine session", http.StatusForbidden)
+			return
+		}
 
 		if player == nil {
 			if lobby.League != nil {
@@ -316,6 +320,17 @@ func (handler *V1Handler) patchLobby(writer http.ResponseWriter, request *http.R
 		return
 	}
 
+	if lobby.League != nil {
+		allowed := false
+		lobby.Synchronized(func() {
+			player := lobby.GetPlayerBySession(userSession)
+			allowed = player != nil && GatewayAccountMatches(request, player.AccountID)
+		})
+		if !allowed {
+			http.Error(writer, "platform account does not match engine session", http.StatusForbidden)
+			return
+		}
+	}
 	if lobby.League != nil && lobby.League.Mode == "ranked" {
 		http.Error(writer, "ranked settings are immutable", http.StatusForbidden)
 		return

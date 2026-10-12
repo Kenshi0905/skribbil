@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -26,8 +27,8 @@ test('avatars and team logos enforce ownership, invalidate old URLs and retain d
   const db=await openDatabase({url:'',dataDir:':memory:'}),root=await mkdtemp(join(tmpdir(),'skribbil-media-'));
   const p=new Platform(db),media=new Media(p,new AssetStore({root,bucket:''}));
   try{
-    const a=(await p.register({username:'avatar_owner',email:'avatar@example.test',password:'some-long-password'})).user;
-    const b=(await p.register({username:'other_player',email:'other@example.test',password:'some-long-password'})).user;
+    const a=(await p.register({username:'avatar_owner',email:'avatar@example.test',password:randomBytes(24).toString('base64url')})).user;
+    const b=(await p.register({username:'other_player',email:'other@example.test',password:randomBytes(24).toString('base64url')})).user;
     const input={png:sample().toString('base64')};
     const first=await media.upload(a,input);assert.match(first.url,/^\/api\/media\//);
     assert.ok((await media.read(first.url.split('/').at(-1))).body.length);

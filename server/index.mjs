@@ -12,11 +12,12 @@ import { Social } from './social.mjs';
 import { Media } from './media.mjs';
 import { Community } from './community.mjs';
 import { Rematch } from './rematch.mjs';
+import { Clubhouses } from './clubhouses.mjs';
 import { expireAssets } from './retention.mjs';
 import { AssetStore } from './assets.mjs';
 import { acceptEngineEvent } from './events.mjs';
 import { loadConfig } from './config.mjs';
-import { ApiError,requireValue,isUuid,textField,sessionToken,setSession,signedTicket,verifySignature } from './security.mjs';
+import { ApiError,requireValue,isUuid,textField,sessionToken,setSession,signedTicket,readTicket,verifySignature } from './security.mjs';
 
 const one=async(db,sql,args=[]) => (await db.query(sql,args)).rows[0];
 const json=(res,status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
@@ -26,6 +27,15 @@ async function body(req,limit=32768) {
   return Buffer.concat(chunks);
 }
 const sameSecret=(a,b)=>typeof a==='string'&&typeof b==='string'&&Buffer.byteLength(a)===Buffer.byteLength(b)&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
+const decodedPath=url=>{try{return decodeURIComponent(url.pathname);}catch{throw new ApiError(400,'Invalid URL encoding.');}};
+function requestUrl(target) {
+  // This server is an origin, never a forward proxy. WHATWG URL parsing treats
+  // //host and backslashes as an authority, so reject those forms before parse.
+  requireValue(typeof target==='string'&&target.startsWith('/')&&!target.startsWith('//')&&!/[\\\u0000-\u0020\u007f]/.test(target),'Invalid request target.',400);
+  const url=new URL(target,'http://skribbil.invalid'),path=decodedPath(url);
+  requireValue(url.origin==='http://skribbil.invalid'&&!url.hash&&!path.startsWith('//')&&!/[\\\u0000-\u001f\u007f]/.test(path),'Invalid request target.',400);
+  return url;
+}
 
 export async function createApp({db,config,assets}={}) {
   config ||= await loadConfig(); db ||= await openDatabase(); assets ||= new AssetStore();
@@ -34,8 +44,10 @@ export async function createApp({db,config,assets}={}) {
   const social=new Social(platform);
   const media=new Media(platform,assets);
   const community=new Community(platform);
+  const clubhouses=new Clubhouses(platform);
   const rematch=new Rematch({db,provision:payload=>engineRequest('/engine/internal/rooms',payload),admit,rankedEnabled:()=>config.ranked});
   const webRoot=resolve('web');let engineCache={at:0,available:false};
+  const engineTarget=url=>{const target=new URL(config.engineUrl);target.pathname=url.pathname;target.search=url.search;target.hash='';return target;};
   const engineStatus=async()=>{
     if(Date.now()-engineCache.at>5000){
       let available=false;try{available=(await fetch(`${config.engineUrl}/engine/`,{signal:AbortSignal.timeout(1000)})).ok;}catch{}
@@ -59,6 +71,22 @@ export async function createApp({db,config,assets}={}) {
     if(!response.ok)throw new ApiError(response.status===503?503:response.status===404?404:409,(await response.text()).trim().slice(0,200));
     return response.json();
   }
+  async function engineAccess(user,url,req) {
+    let match;const path=decodedPath(url);
+    if(path==='/engine/league/join'){
+      const ticket=readTicket(url.searchParams.get('ticket'),config.secret);
+      requireValue(ticket.userId===user.id,'This admission belongs to another account.',403);
+      match=await one(db,'SELECT * FROM skribbil.matches WHERE id=$1 AND engine_room_id=$2',[ticket.matchId,ticket.lobbyId]);
+      requireValue(match,'Room not found.',404);
+    }else{
+      const legacy=['/engine/v1/lobby','/engine/v1/lobby/ws'].includes(path);
+      const route=path.match(/^\/engine\/(?:v1\/)?lobby\/([^/]+)(?:\/|$)/);
+      const lobbyId=legacy?(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('lobby-id='))?.slice(9):route?.[1];
+      if(lobbyId)match=await one(db,'SELECT * FROM skribbil.matches WHERE engine_room_id=$1',[lobbyId]);
+    }
+    if(match?.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,db,{lock:false});
+    return match;
+  }
   async function admit(user,match,role='player') {
     requireValue(['player','spectator'].includes(role),'Invalid role.');
     requireValue(match&&['lobby','running'].includes(match.status),'This match has finished.',409);
@@ -74,14 +102,16 @@ export async function createApp({db,config,assets}={}) {
       throw new ApiError(409,'This room is no longer on the game server. You can create a new room.');
     }
     await db.transaction(async tx=>{
-      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR UPDATE`,[user.id]);
+      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[user.id]);
       requireValue(account?.status==='active','This account is unavailable.',403);
       match=await one(tx,`SELECT * FROM skribbil.matches WHERE id=$1 FOR UPDATE`,[match.id]);
       requireValue(match&&['lobby','running'].includes(match.status),'This match has finished.',409);
+      if(match.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,tx);
       if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
       if(role==='player') {
         const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
-          WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND m.id<>$2 LIMIT 1`,[user.id,match.id]);
+          WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND m.id<>$2
+          AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`,[user.id,match.id]);
         requireValue(!active,'Finish your current room before joining another.',409);
         await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3) ON CONFLICT(match_id,user_id) DO NOTHING`,[match.id,user.id,user.display_name]);
       } else await tx.query(`INSERT INTO skribbil.spectator_sessions(match_id,user_id,delay_ms) VALUES($1,$2,0)`,[match.id,user.id]);
@@ -102,6 +132,9 @@ export async function createApp({db,config,assets}={}) {
   }
   async function newRoom(user,input) {
     const mode=input.mode==='ranked'?'ranked':'private';
+    const clubhouseId=input.clubhouseId||null;
+    requireValue(!clubhouseId||isUuid(clubhouseId),'Invalid Clubhouse.');
+    requireValue(!clubhouseId||mode==='private','Clubhouse rooms use private casual rules.');
     if(mode==='ranked')requireValue(config.ranked,'Ranked play opens after deployment reliability checks. Private play is available.',503);
     const rounds=mode==='ranked'?3:Number(input.rounds||3),drawTime=mode==='ranked'?80:Number(input.drawTime||80),maxPlayers=mode==='ranked'?8:Number(input.maxPlayers||8);
     requireValue(Number.isInteger(rounds)&&rounds>=1&&rounds<=20&&Number.isInteger(drawTime)&&drawTime>=60&&drawTime<=300&&Number.isInteger(maxPlayers)&&maxPlayers>=2&&maxPlayers<=24,'Use 1–20 rounds, 60–300 seconds, and 2–24 players.');
@@ -109,13 +142,15 @@ export async function createApp({db,config,assets}={}) {
     // Reserve admission before the network call. Retries use the same opaque
     // match ID; a timeout must not orphan a room that Go already created.
     const reserved=await db.transaction(async tx=>{
-      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR UPDATE`,[user.id]);
+      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[user.id]);
       requireValue(account?.status==='active','This account is unavailable.',403);
-      const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.user_id=$1 AND m.status IN ('lobby','running') LIMIT 1`,[user.id]);
+      if(clubhouseId)await clubhouses.requireMember(user,clubhouseId,tx);
+      const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.user_id=$1 AND m.status IN ('lobby','running')
+        AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`,[user.id]);
       requireValue(!active,'Finish or cancel your current room before making another.',409);
       const context=await platform.context(tx);
-      const match=await one(tx,`INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,engine_room_id,engine_instance_id,custom_rules,private,created_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10) RETURNING *`,[id,context.game_id,mode==='ranked'?context.ranked_rules:context.private_rules,context.community_id,mode==='ranked'?context.season_id:null,mode==='ranked'?'ranked':'casual',`pending-${id}`,JSON.stringify(mode==='ranked'?{}:{rounds,drawTime,maxPlayers}),mode==='private'&&input.private!==false,user.id]);
+      const match=await one(tx,`INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,engine_room_id,engine_instance_id,custom_rules,private,created_by,clubhouse_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10,$11) RETURNING *`,[id,context.game_id,mode==='ranked'?context.ranked_rules:context.private_rules,context.community_id,mode==='ranked'?context.season_id:null,mode==='ranked'?'ranked':'casual',`pending-${id}`,JSON.stringify(mode==='ranked'?{}:{rounds,drawTime,maxPlayers}),!!clubhouseId||(mode==='private'&&input.private!==false),user.id,clubhouseId]);
       await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3)`,[id,user.id,user.display_name]);
       return match;
     });
@@ -128,7 +163,8 @@ export async function createApp({db,config,assets}={}) {
     requireValue(d&&d.state==='ready'&&(!d.expires_at||new Date(d.expires_at)>new Date()),'Drawing has expired or is unavailable.',404);
     let allowed=d.visibility==='public'&&d.publication_consent_at&&!d.consent_revoked_at;
     if(user)allowed ||= user.id===d.artist_id || !!(await one(db,`SELECT 1 FROM skribbil.platform_roles WHERE user_id=$1`,[user.id]));
-    if(user&&d.visibility==='match')allowed ||= !!(await one(db,`SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2`,[d.match_id,user.id]));
+    if(user&&d.visibility==='match')allowed ||= !!(await one(db,`SELECT 1 FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.match_id=$1 AND p.user_id=$2
+      AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm JOIN skribbil.clubhouses c ON c.id=cm.clubhouse_id WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$2 AND cm.left_at IS NULL AND c.archived_at IS NULL))`,[d.match_id,user.id]));
     requireValue(allowed,'This drawing is private.',403);
     return {...await assets.get(d.object_key),type:d.media_type};
   }
@@ -136,10 +172,11 @@ export async function createApp({db,config,assets}={}) {
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Frame-Options','SAMEORIGIN');
     try {
-      const url=new URL(req.url,'http://localhost'),path=url.pathname;
+      const url=requestUrl(req.url),path=decodedPath(url);
       originGuard(req,path);
       if(path==='/api/health')return json(res,200,{ok:true,service:'Skribbil',database:db.mode});
       if(path==='/api/internal/engine-events') {
+        requireValue(!config.production||['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress),'Not found.',404);
         requireValue(req.method==='POST','Method not allowed.',405);
         const raw=await body(req,8*1024*1024);
         requireValue(verifySignature(raw,req.headers['x-skribbil-signature'],config.secret),'Invalid engine signature.',401);
@@ -149,7 +186,7 @@ export async function createApp({db,config,assets}={}) {
       if(path.startsWith('/engine/')) {
         requireValue(user,'Sign in at the Skribbil clubhouse to play.',401);
         requireValue(!path.startsWith('/engine/internal/'),'Not found.',404);
-        return proxy(req,res);
+        await engineAccess(user,url,req);return proxy(req,res,user,url);
       }
       if(!path.startsWith('/api/')) {
         requireValue(req.method==='GET'||req.method==='HEAD','Method not allowed.',405);
@@ -197,6 +234,36 @@ export async function createApp({db,config,assets}={}) {
         else{res.writeHead(200,{'Content-Type':asset.type,'Cache-Control':'private, no-store'});res.end(asset.body);}return;
       }
       requireValue(user,'Sign in to continue.',401);
+      if(path==='/api/auth/password'&&req.method==='POST'){
+        rateLimit(req,'password',6);
+        const changed=await platform.changePassword(user,token,input);
+        disconnect(user.id);setSession(res,changed.token,config.secure);return json(res,200,{ok:true});
+      }
+      if(path==='/api/clubhouses'){
+        if(req.method==='GET')return json(res,200,await clubhouses.list(user));
+        if(req.method==='POST')return json(res,201,await clubhouses.create(user,input));
+      }
+      if(path==='/api/clubhouse-requests'){
+        if(req.method==='GET')return json(res,200,await clubhouses.listRequests(user));
+        if(req.method==='POST')return json(res,201,await clubhouses.request(user,input));
+      }
+      const clubhouseDecision=path.match(/^\/api\/clubhouse-requests\/([a-f0-9-]+)$/);
+      if(clubhouseDecision&&req.method==='POST')return json(res,200,await clubhouses.decideRequest(user,clubhouseDecision[1],input));
+      const clubhouseAccept=path.match(/^\/api\/clubhouse-invites\/([a-f0-9-]+)\/accept$/);
+      if(clubhouseAccept&&req.method==='POST')return json(res,200,await clubhouses.acceptInvite(user,clubhouseAccept[1]));
+      const clubhouse=path.match(/^\/api\/clubhouses\/([a-f0-9-]+)(?:\/(invites|leave|roles|owner))?$/);
+      if(clubhouse){
+        if(!clubhouse[2]&&req.method==='GET')return json(res,200,await clubhouses.detail(user,clubhouse[1]));
+        if(req.method==='POST'){
+          const action={invites:'invite',leave:'leave',roles:'setRole',owner:'transferOwner'}[clubhouse[2]];
+          if(action){const result=await clubhouses[action](user,clubhouse[1],input);if(action==='leave')disconnect(user.id);return json(res,200,result);}
+        }
+      }
+      const clubhouseRemoval=path.match(/^\/api\/clubhouses\/([a-f0-9-]+)\/members\/([a-f0-9-]+)\/remove$/);
+      if(clubhouseRemoval&&req.method==='POST'){
+        const result=await clubhouses.removeMember(user,clubhouseRemoval[1],clubhouseRemoval[2]);
+        disconnect(clubhouseRemoval[2]);return json(res,200,result);
+      }
       const teamLogo=path.match(/^\/api\/teams\/([a-f0-9-]+)\/logo$/);
       if(path==='/api/profile/avatar'||teamLogo){
         if(req.method==='POST')return json(res,200,await media.upload(user,input,teamLogo?.[1]));
@@ -223,6 +290,7 @@ export async function createApp({db,config,assets}={}) {
         requireValue(isUuid(cancel[1]),'Invalid room.');
         let room=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running')`,[cancel[1],user.id]);
         requireValue(room,'Only the owner can cancel an unstarted room.',409);
+        if(room.clubhouse_id)await clubhouses.requireMember(user,room.clubhouse_id,db,{lock:false});
         room=await provisionPending(room);
         try{await engineRequest('/engine/internal/rooms/cancel',{matchId:room.id,lobbyId:room.engine_room_id});}
         catch(error){if(error.status!==404)throw error;} // A disappeared in-memory room is abandoned, never finalized.
@@ -268,8 +336,9 @@ export async function createApp({db,config,assets}={}) {
       }
       const detail=path.match(/^\/api\/matches\/([a-f0-9-]+)(\/mvp)?$/);
       if(detail){
-        requireValue(isUuid(detail[1]),'Invalid match.');const match=await one(db,`SELECT id,status,mode,ended_at FROM skribbil.matches WHERE id=$1`,[detail[1]]);
+        requireValue(isUuid(detail[1]),'Invalid match.');const match=await one(db,`SELECT id,status,mode,ended_at,clubhouse_id FROM skribbil.matches WHERE id=$1`,[detail[1]]);
         requireValue(match,'Match not found.',404);
+        if(match.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,db,{lock:false});
         requireValue(await one(db,`SELECT 1 FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id WHERE m.id=$1 AND p.user_id=$2`,[match.id,user.id]),'Only match participants can view this summary.',403);
         if(detail[2]&&req.method==='POST'){
           requireValue(match.status==='completed'&&new Date(match.ended_at).getTime()>Date.now()-86400000,'MVP voting is open for 24 hours after completion.',409);
@@ -334,9 +403,9 @@ export async function createApp({db,config,assets}={}) {
       if(!res.headersSent)json(res,status,{error:status===500?'Something went wrong. Please retry.':error.code==='23505'?'That record already exists.':error.code==='23503'?'The selected record is invalid.':error.message});else res.end();
     }
   });
-  function proxy(req,res) {
-    const target=new URL(req.url,config.engineUrl),transport=target.protocol==='https:'?https:http;
-    const headers={...req.headers,host:new URL(config.origin).host};delete headers['x-skribbil-origin-key'];
+  function proxy(req,res,user,url) {
+    const target=engineTarget(url),transport=target.protocol==='https:'?https:http;
+    const headers={...req.headers,host:new URL(config.origin).host,'x-skribbil-user':user.id,'x-skribbil-gateway-key':config.secret};delete headers['x-skribbil-origin-key'];
     const upstream=transport.request(target,{method:req.method,headers},response=>{res.writeHead(response.statusCode,response.headers);response.pipe(res);});
     upstream.on('error',()=>{if(!res.headersSent)json(res,503,{error:'The game server is unavailable. Try again shortly.'});else res.end();});
     req.on('aborted',()=>upstream.destroy());req.pipe(upstream);
@@ -344,20 +413,29 @@ export async function createApp({db,config,assets}={}) {
   function disconnect(userId){for(const socket of connections.get(userId)||[])socket.destroy();connections.delete(userId);}
   server.on('upgrade',async(req,socket,head)=>{
     try{
-      originGuard(req,req.url);
-      requireValue(req.url.startsWith('/engine/')&&!req.url.startsWith('/engine/internal/'),'Not found.',404);
+      const url=requestUrl(req.url),path=decodedPath(url);
+      originGuard(req,path);
+      requireValue(path.startsWith('/engine/')&&!path.startsWith('/engine/internal/'),'Not found.',404);
       requireValue(req.headers.origin===config.origin,'Invalid WebSocket origin.',403);
       const user=await platform.authenticate(sessionToken(req));requireValue(user,'Authentication required.',401);
-      const target=new URL(req.url,config.engineUrl),transport=target.protocol==='https:'?https:http;
-      const headers={...req.headers,host:new URL(config.origin).host};delete headers['x-skribbil-origin-key'];
+      const match=await engineAccess(user,url,req);
+      const target=engineTarget(url),transport=target.protocol==='https:'?https:http;
+      const headers={...req.headers,host:new URL(config.origin).host,'x-skribbil-user':user.id,'x-skribbil-gateway-key':config.secret};delete headers['x-skribbil-origin-key'];
       const upstream=transport.request(target,{headers});
-      upstream.on('upgrade',(response,remote,remoteHead)=>{
-        socket.write(`HTTP/1.1 101 Switching Protocols\r\n${Object.entries(response.headers).map(([k,v])=>`${k}: ${v}`).join('\r\n')}\r\n\r\n`);
-        if(head.length)remote.write(head);if(remoteHead.length)socket.write(remoteHead);
-        socket.pipe(remote);remote.pipe(socket);
+      upstream.on('upgrade',async(response,remote,remoteHead)=>{
+        // Register before the asynchronous recheck: a concurrent ban, password
+        // change or membership removal must see and close this connection.
         let peers=connections.get(user.id);if(!peers){peers=new Set();connections.set(user.id,peers);}peers.add(socket);
         socket.on('close',()=>{remote.destroy();peers.delete(socket);});remote.on('close',()=>socket.destroy());
         remote.on('error',()=>socket.destroy());socket.on('error',()=>remote.destroy());
+        try{
+          requireValue(await platform.authenticate(sessionToken(req)),'Authentication expired.',401);
+          if(match?.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,db,{lock:false});
+        }catch{socket.destroy();remote.destroy();return;}
+        if(socket.destroyed){remote.destroy();return;}
+        socket.write(`HTTP/1.1 101 Switching Protocols\r\n${Object.entries(response.headers).map(([k,v])=>`${k}: ${v}`).join('\r\n')}\r\n\r\n`);
+        if(head.length)remote.write(head);if(remoteHead.length)socket.write(remoteHead);
+        socket.pipe(remote);remote.pipe(socket);
       });
       upstream.on('response',response=>{socket.end(`HTTP/1.1 ${response.statusCode} Rejected\r\nConnection: close\r\n\r\n`);response.resume();});
       upstream.on('error',()=>socket.destroy());upstream.end();
@@ -370,11 +448,18 @@ export async function createApp({db,config,assets}={}) {
     }catch(error){console.error('Retention retry scheduled:',error.message);}
   },60000);cleanup.unref();
   server.on('close',()=>{clearInterval(cleanup);for(const id of connections.keys())disconnect(id);});
-  return {server,db,platform,config};
+  const close=async()=>{
+    for(const id of connections.keys())disconnect(id);
+    server.closeIdleConnections();
+    const deadline=setTimeout(()=>server.closeAllConnections(),5000);deadline.unref();
+    await new Promise(resolve=>server.close(resolve));clearTimeout(deadline);await db.close();
+  };
+  return {server,db,platform,config,close};
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const app=await createApp();
   app.server.listen(app.config.port,app.config.host,()=>console.log(`Skribbil is ready at http://localhost:${app.config.port} (${app.db.mode})`));
-  const stop=()=>app.server.close(async()=>{await app.db.close();process.exit(0);});process.on('SIGINT',stop);process.on('SIGTERM',stop);
+  let stopping=false;
+  const stop=async()=>{if(stopping)return;stopping=true;await app.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }

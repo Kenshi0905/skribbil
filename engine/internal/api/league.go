@@ -124,12 +124,26 @@ func (handler *V1Handler) postLeagueRoom(w http.ResponseWriter, r *http.Request)
 	_, _ = marshalToHTTPWriter(map[string]string{"lobbyId": lobbyID}, w)
 }
 
+// GatewayAccountMatches binds a native engine cookie to the authenticated
+// platform account. The gateway overwrites both headers on the private hop.
+// Call only for managed rooms; standalone upstream lobbies remain unchanged.
+func GatewayAccountMatches(r *http.Request, accountID string) bool {
+	secret := os.Getenv("SKRIBBIL_ENGINE_SECRET")
+	return accountID != "" && len(secret) >= 32 &&
+		hmac.Equal([]byte(r.Header.Get("X-Skribbil-Gateway-Key")), []byte(secret)) &&
+		hmac.Equal([]byte(r.Header.Get("X-Skribbil-User")), []byte(accountID))
+}
+
 func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	ticket, err := verifyJoinTicket(r.URL.Query().Get("ticket"), os.Getenv("SKRIBBIL_ENGINE_SECRET"), time.Now())
 	if err != nil {
 		http.Error(w, "invalid or expired join ticket", http.StatusUnauthorized)
+		return
+	}
+	if !GatewayAccountMatches(r, ticket.UserID) {
+		http.Error(w, "platform account does not match join ticket", http.StatusForbidden)
 		return
 	}
 	lobby := state.GetLobby(ticket.LobbyID)

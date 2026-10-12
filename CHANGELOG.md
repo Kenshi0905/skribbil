@@ -4,6 +4,27 @@ Each major milestone is committed and pushed separately under the repository
 owner's configured Git identity. Unreleased work is described honestly; feature
 designs are not treated as completed runtime features.
 
+## 0.2.0 - Private groups and mobile play, 2026-10-12
+
+- Added game-independent, invite-only Clubhouses. Platform admins create them
+  directly or approve player requests; owners manage invitations and membership.
+- Enforced Clubhouse privacy at room creation, admission, native HTTP/WebSocket
+  entry and rematch. Removing a member disconnects their live game connection.
+- Added password changes with current-password verification, session rotation
+  and revocation of older sessions. No user credentials are included in source.
+- Bound managed native engine sessions to the authenticated universal account.
+- Replaced fragile mouse/touch dispatch with captured Pointer Events while
+  keeping the original canvas renderer, drawing protocol and Go game loop.
+- Fixed cropped desktop league cards and added phone navigation, usable chat,
+  scrollable player/palette strips and larger touch controls.
+- Lowered the default pop to 20% amplitude, coalesced simultaneous pops, and
+  added persistent sound volume with Web Audio gain for supported mobile browsers.
+- Passed a real ten-player, two-round protocol playtest with three mobile
+  User-Agent profiles, a spectator, reconnects, penalties and result archival.
+  Mobile profiles and input tests do not claim physical-phone coverage.
+- Added staged and outgoing-history secret guards and a CI container build; kept automatic deployment
+  disabled and all runtime secrets, databases and test credentials Git-ignored.
+
 ## 0.1.0 - Local preview, 2026-10-12
 
 ### Architecture and foundation

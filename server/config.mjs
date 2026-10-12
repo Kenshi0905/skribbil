@@ -12,6 +12,14 @@ export async function loadConfig() {
   if(!secret||secret.length<32)throw new Error('SKRIBBIL_ENGINE_SECRET must contain at least 32 characters.');
   if(production&&(!process.env.DATABASE_URL||!process.env.S3_BUCKET||process.env.COOKIE_SECURE!=='true'||!process.env.PUBLIC_ORIGIN?.startsWith('https://')))
     throw new Error('Production requires external DATABASE_URL, private S3_BUCKET, COOKIE_SECURE=true and HTTPS PUBLIC_ORIGIN.');
+  if(production){
+    const origin=new URL(process.env.PUBLIC_ORIGIN);
+    if(origin.origin!==process.env.PUBLIC_ORIGIN)throw new Error('PUBLIC_ORIGIN must be an exact HTTPS origin without a path or trailing slash.');
+    if(!process.env.SKRIBBIL_ORIGIN_KEY||process.env.SKRIBBIL_ORIGIN_KEY.length<32||process.env.SKRIBBIL_ORIGIN_KEY===secret)
+      throw new Error('Production needs a separate SKRIBBIL_ORIGIN_KEY of at least 32 characters.');
+    const engine=new URL(process.env.ENGINE_URL||'http://127.0.0.1:8080');
+    if(!['127.0.0.1','localhost','[::1]'].includes(engine.hostname))throw new Error('The production engine must listen on loopback.');
+  }
   return {secret,production,port:Number(process.env.PORT||3000),host:process.env.HOST||'127.0.0.1',
     engineUrl:process.env.ENGINE_URL||'http://127.0.0.1:8080',origin:process.env.PUBLIC_ORIGIN||'http://localhost:3000',
     secure:process.env.COOKIE_SECURE==='true',originKey:process.env.SKRIBBIL_ORIGIN_KEY,

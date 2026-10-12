@@ -5,7 +5,7 @@ export async function openDatabase({ url = process.env.DATABASE_URL, dataDir = p
   let driver, mode;
   if (url) {
     const { default: pg } = await import('pg');
-    driver = new pg.Pool({ connectionString: url, max: 12 });
+    driver = new pg.Pool({ connectionString: url, max: 12, connectionTimeoutMillis: 10000, idleTimeoutMillis: 30000 });
     mode = 'postgres';
   } else {
     const { PGlite } = await import('@electric-sql/pglite');
@@ -24,7 +24,7 @@ export async function openDatabase({ url = process.env.DATABASE_URL, dataDir = p
   if (mode === 'postgres') await driver.query(seed); else await driver.exec(seed);
   const runtime = await readFile(new URL('../database/runtime.sql', import.meta.url), 'utf8');
   if (mode === 'postgres') await driver.query(runtime); else await driver.exec(runtime);
-  for (const file of ['community.sql','rematch.sql']) {
+  for (const file of ['community.sql','rematch.sql','clubhouses.sql']) {
     const migration = await readFile(new URL(`../database/${file}`, import.meta.url), 'utf8');
     if (mode === 'postgres') await driver.query(migration); else await driver.exec(migration);
   }

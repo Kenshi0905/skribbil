@@ -69,6 +69,8 @@ func TestOriginalWebsocketDrawingGuessingAndLeaguePenaltyTogether(t *testing.T) 
 	for i, name := range []string{"Artist", "Guesser"} {
 		ticket := signTestTicket(joinTicket{UserID: name, Username: name, MatchID: "network-smoke", LobbyID: room["lobbyId"], ExpiresAt: time.Now().Add(time.Minute).Unix()}, secret)
 		join := httptest.NewRequest("GET", "/engine/league/join?ticket="+ticket, nil)
+		join.Header.Set("X-Skribbil-User", name)
+		join.Header.Set("X-Skribbil-Gateway-Key", secret)
 		joined := httptest.NewRecorder()
 		handler.joinLeagueRoom(joined, join)
 		if joined.Code != 303 {
@@ -82,7 +84,7 @@ func TestOriginalWebsocketDrawingGuessingAndLeaguePenaltyTogether(t *testing.T) 
 		}
 		h := &testSocketEvents{events: make(chan map[string]any, 100)}
 		handlers[i] = h
-		client, _, err := gws.NewClient(h, &gws.ClientOption{Addr: strings.Replace(server.URL, "http://", "ws://", 1) + "/engine/v1/lobby/" + room["lobbyId"] + "/ws", RequestHeader: http.Header{"Cookie": []string{cookie}, "Origin": []string{server.URL}}})
+		client, _, err := gws.NewClient(h, &gws.ClientOption{Addr: strings.Replace(server.URL, "http://", "ws://", 1) + "/engine/v1/lobby/" + room["lobbyId"] + "/ws", RequestHeader: http.Header{"Cookie": []string{cookie}, "Origin": []string{server.URL}, "X-Skribbil-User": []string{name}, "X-Skribbil-Gateway-Key": []string{secret}}})
 		if err != nil {
 			t.Fatal(err)
 		}

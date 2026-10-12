@@ -72,9 +72,24 @@ func TestRankedRulesIgnoreCallerSettingsAndRequireSecret(t *testing.T) {
 	if l.Rounds != 3 || l.DrawingTime != 80 || l.MaxPlayers != 8 || l.Public || len(l.GetPlayers()) != 0 {
 		t.Fatal("ranked rules changed or placeholder player remained")
 	}
+	ticket := signTestTicket(joinTicket{UserID: "ranked-owner", Username: "Owner", MatchID: "rules-test", LobbyID: l.LobbyID, ExpiresAt: time.Now().Add(time.Minute).Unix()}, secret)
+	join := httptest.NewRequest("GET", "/engine/league/join?ticket="+ticket, nil)
+	join.Header.Set("X-Skribbil-User", "ranked-owner")
+	join.Header.Set("X-Skribbil-Gateway-Key", secret)
+	joined := httptest.NewRecorder()
+	h.joinLeagueRoom(joined, join)
+	if joined.Code != 303 {
+		t.Fatal(joined.Body.String())
+	}
 	patch := httptest.NewRequest("PATCH", "/v1/lobby", nil)
+	patch.Header.Set("X-Skribbil-User", "ranked-owner")
+	patch.Header.Set("X-Skribbil-Gateway-Key", secret)
+	for _, cookie := range joined.Result().Cookies() {
+		if cookie.Name == "usersession" {
+			patch.AddCookie(cookie)
+		}
+	}
 	patch.SetPathValue("lobby_id", l.LobbyID)
-	patch.Header.Set("Usersession", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	w = httptest.NewRecorder()
 	h.patchLobby(w, patch)
 	if w.Code != 403 {

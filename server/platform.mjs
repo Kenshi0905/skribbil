@@ -71,9 +71,33 @@ export class Platform {
     const dummy = 'scrypt:00000000000000000000000000000000:'+'0'.repeat(128);
     const correct = await passwordMatches(body.password,row?.password_hash || dummy);
     requireValue(correct && row?.status==='active','Email/username or password is incorrect.',401);
-    return {user:row,token:await this.session(this.db,row.id)};
+    return this.db.transaction(async db=>{
+      const current=await one(db,`SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[row.id]);
+      // Read the hash after acquiring the account lock. A joined credentials
+      // row could otherwise retain the pre-lock snapshot across a password change.
+      const credential=await one(db,'SELECT password_hash FROM skribbil.credentials WHERE user_id=$1',[row.id]);
+      requireValue(current?.status==='active'&&credential?.password_hash===row.password_hash,'Credentials changed. Please sign in again.',401);
+      return {user:row,token:await this.session(db,row.id)};
+    });
   }
   async logout(token) { if(token) await this.db.query(`UPDATE skribbil.auth_sessions SET revoked_at=now() WHERE token_hash=$1`,[hash(token)]); }
+  async changePassword(user,token,body) {
+    requireValue(typeof body.currentPassword==='string'&&body.currentPassword.length<=128,'Enter your current password.');
+    requireValue(typeof body.newPassword==='string'&&body.newPassword.length>=12&&body.newPassword.length<=128,'New password must be 12–128 characters.');
+    requireValue(body.currentPassword!==body.newPassword,'Choose a different new password.');
+    const credential=await one(this.db,'SELECT password_hash FROM skribbil.credentials WHERE user_id=$1',[user.id]);
+    requireValue(await passwordMatches(body.currentPassword,credential?.password_hash),'Current password is incorrect.',403);
+    const nextHash=await passwordHash(body.newPassword);
+    return this.db.transaction(async db=>{
+      const account=await one(db,'SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE',[user.id]);
+      const session=await one(db,`SELECT 1 FROM skribbil.auth_sessions WHERE user_id=$1 AND token_hash=$2 AND revoked_at IS NULL AND expires_at>now()`,[user.id,hash(token||'')]);
+      requireValue(account?.status==='active'&&session,'Sign in again to change your password.',401);
+      const changed=await db.query(`UPDATE skribbil.credentials SET password_hash=$2,updated_at=now() WHERE user_id=$1 AND password_hash=$3 RETURNING user_id`,[user.id,nextHash,credential.password_hash]);
+      requireValue(changed.rows.length,'Your password changed in another session. Sign in again.',409);
+      await db.query(`UPDATE skribbil.auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`,[user.id]);
+      return {token:await this.session(db,user.id)};
+    });
+  }
   async updateProfile(user,body) {
     const displayName=textField(body.displayName ?? user.display_name,1,60,'Display name');
     const bio=textField(body.bio ?? user.bio,0,280,'Bio');
@@ -136,7 +160,8 @@ export class Platform {
     return {user:profile,leaderboard:leaderboard.rows,seasonLeaderboard:seasonBoard.rows,challenges:challenges.rows,
       tournaments:tournaments.rows,teams:teams.rows,friends:friends.rows,rooms:rooms.rows,drawings:drawings.rows,season:season||null,
       ownRooms:user?(await this.db.query(`SELECT DISTINCT m.id,m.engine_room_id AS code,m.mode,m.status,m.private,m.created_by=$1 AS owner
-        FROM skribbil.matches m JOIN skribbil.match_players p ON p.match_id=m.id WHERE p.user_id=$1 AND m.status IN ('lobby','running')`,[user.id])).rows:[],
+        FROM skribbil.matches m JOIN skribbil.match_players p ON p.match_id=m.id WHERE p.user_id=$1 AND m.status IN ('lobby','running')
+        AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL))`,[user.id])).rows:[],
       stats:await one(this.db,`SELECT (SELECT count(*) FROM skribbil.users WHERE username<>'skribbil_system' AND status='active') AS players,
         (SELECT count(*) FROM skribbil.matches WHERE status='completed') AS matches`),engine,mode:this.db.mode,demo:false};
   }

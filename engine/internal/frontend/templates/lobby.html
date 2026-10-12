@@ -5,7 +5,7 @@
 <head>
     <title>Skribbil - Game</title>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1, user-scalable=0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     {{template "non-static-css-decl" .}}
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "root.css"}}' />
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "lobby.css"}}' />
@@ -19,7 +19,7 @@
     <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "no-sound.svg"}}' />
 </head>
 
-<body {{if eq .Translation.IsRtl true}} dir="rtl" {{end}}>
+<body {{if eq .Translation.IsRtl true}} dir="rtl" {{end}}{{if .LeagueMode}} data-league-mode="{{.LeagueMode}}" data-league-spectator="{{.LeagueSpectator}}"{{end}}>
     <div id="app">
         <noscript><span class="noscript">{{.Translation.Get "requires-js"}}</span></noscript>
 
@@ -55,6 +55,10 @@
                                     <img id="sound-toggle-label" class="header-button-image" />
                                     {{.Translation.Get "toggle-soundeffects"}}
                                 </button>
+                                <div class="sound-volume-control">
+                                    <label for="sound-volume">Effects volume <output id="sound-volume-value" for="sound-volume">40%</output></label>
+                                    <input id="sound-volume" type="range" min="0" max="100" step="5" value="40" />
+                                </div>
                                 <button id="toggle-pen-pressure-button"
                                     class="dialog-button menu-item header-button"
                                     alt="{{.Translation.Get "toggle-pen-pressure"}}"
@@ -160,7 +164,7 @@
                                 <div class="ready-check-box-wrapper">
                                     <label class="ready-check-box" for="ready-state-start">
                                         {{.Translation.Get "ready"}}
-                                        <input type="checkbox" name="ready-state-start" id="ready-state-start">
+                                        <input type="checkbox" name="ready-state-start" id="ready-state-start"{{if .LeagueSpectator}} disabled{{end}}>
                                         (<span class="ready-count">0</span>/<span class="ready-needed">0</span>)
                                     </label>
                                 </div>
@@ -237,7 +241,7 @@
                                 <div class="ready-check-box-wrapper">
                                     <label class="ready-check-box" for="ready-state-game-over">
                                         Ready
-                                        <input type="checkbox" name="ready-state-game-over" id="ready-state-game-over">
+                                        <input type="checkbox" name="ready-state-game-over" id="ready-state-game-over"{{if .LeagueMode}} disabled{{end}}>
                                         (<span class="ready-count">0</span>/<span class="ready-needed">0</span>)
                                     </label>
                                 </div>
@@ -381,8 +385,13 @@
 
             <div id="chat">
                 <div id="message-container"></div>
-                <input id="message-input" type="text" autocomplete="off"
-                    placeholder="{{.Translation.Get "message-input-placeholder"}}" />
+                <form id="message-form">
+                    <input id="message-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"
+                        data-default-placeholder="{{.Translation.Get "message-input-placeholder"}}"
+                        aria-label="{{if .LeagueSpectator}}Spectating — chat disabled{{else}}{{.Translation.Get "message-input-placeholder"}}{{end}}"
+                        placeholder="{{if .LeagueSpectator}}Spectating — chat disabled{{else}}{{.Translation.Get "message-input-placeholder"}}{{end}}"{{if .LeagueSpectator}} disabled{{end}} />
+                    <button id="message-send" type="submit" aria-label="Send guess or message"{{if .LeagueSpectator}} disabled{{end}}>Send</button>
+                </form>
             </div>
         </div>
     </div>

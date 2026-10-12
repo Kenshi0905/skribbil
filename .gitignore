@@ -20,4 +20,8 @@ engine-upstream.tar.gz
 go-releases.json
 upstream.json
 .deploy/
+*.pem
+*.p12
+*.pfx
+*.key
 

@@ -16,8 +16,10 @@ type lobbyPageData struct {
 	*BasePageConfig
 	*api.LobbyData
 
-	Translation *translations.Translation
-	Locale      string
+	Translation     *translations.Translation
+	Locale          string
+	LeagueMode      string
+	LeagueSpectator bool
 }
 
 type lobbyJsData struct {
@@ -80,6 +82,10 @@ func (handler *SSRHandler) ssrEnterLobbyNoChecks(
 	var pageData *lobbyPageData
 	lobby.Synchronized(func() {
 		player := getPlayer()
+		if lobby.League != nil && player != nil && !api.GatewayAccountMatches(request, player.AccountID) {
+			http.Error(writer, "platform account does not match engine session", http.StatusForbidden)
+			return
+		}
 
 		if player == nil {
 			if lobby.League != nil {
@@ -114,6 +120,10 @@ func (handler *SSRHandler) ssrEnterLobbyNoChecks(
 			LobbyData:      api.CreateLobbyData(handler.cfg, lobby),
 			Translation:    translation,
 			Locale:         locale,
+		}
+		if lobby.League != nil {
+			pageData.LeagueMode = lobby.League.Mode
+			pageData.LeagueSpectator = player != nil && (player.SpectatorOnly || player.State == game.Spectating)
 		}
 	})
 

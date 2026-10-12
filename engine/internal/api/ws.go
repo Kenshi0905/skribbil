@@ -71,6 +71,10 @@ func (handler *V1Handler) websocketUpgrade(writer http.ResponseWriter, request *
 			return
 		}
 
+		if lobby.League != nil && !GatewayAccountMatches(request, player.AccountID) {
+			http.Error(writer, "platform account does not match engine session", http.StatusForbidden)
+			return
+		}
 		if lobby.League != nil && (player.AccountID == "" || player.Connected) {
 			http.Error(writer, "account missing or already connected", http.StatusUnauthorized)
 			return

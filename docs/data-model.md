@@ -2,10 +2,11 @@
 
 `database/schema.sql` is a transactional, extension-free PostgreSQL 16+ baseline. It creates the `skribbil` schema. Apply it once to a new database; future changes belong in numbered migrations. It also works with an embedded PostgreSQL runtime that implements the same SQL. The schema describes the complete target platform. A table's presence does not mean its corresponding HTTP endpoint, background worker, or game hook has been implemented.
 
-The runnable application then applies `seed.sql`, `runtime.sql`, `community.sql`
-and `rematch.sql` in that order. The latter additions are idempotent and add
+The runnable application then applies `seed.sql`, `runtime.sql`, `community.sql`,
+`rematch.sql` and `clubhouses.sql` in that order. The latter additions are idempotent and add
 engine receipts, account hard-word state, public profile-image policies,
-recipient-bound team invitations and one successor room per completed match.
+recipient-bound team invitations, one successor room per completed match,
+invite-only Clubhouses and optional Clubhouse scope on matches.
 Run `npm run db:migrate` to apply the same sequence outside application startup.
 
 ## Identity and game boundaries
@@ -24,6 +25,7 @@ An account has one immutable UUID in `users`. The username has a case-insensitiv
 | --- | --- | --- |
 | Accounts | `users`, `credentials`, `auth_identities`, `auth_sessions`, `platform_roles` | Universal account, authentication and platform permissions |
 | Community | `communities`, `community_members`, `teams`, `team_members` | Shared identity, community roles and named clans |
+| Clubhouses | `clubhouses`, `clubhouse_members`, `clubhouse_requests`, `clubhouse_invitations` | Approval-created private friend groups, member roles and intended-recipient invitations, independent of league/game identity |
 | Game registry | `games`, `rule_sets`, `word_catalog` | Engine adapters, frozen standard rules, curated word difficulty |
 | League | `leagues`, `seasons`, `season_games`, `season_entries`, `league_result_points` | Cross-game competitions with permanent seasonal history |
 | Matches | `matches`, `match_players`, `spectator_sessions`, `room_join_tickets` | Room mapping, authenticated player identity and separate spectators |
@@ -54,6 +56,86 @@ The views provide:
 - `user_progression`: XP derived from immutable XP events and the configured level thresholds.
 
 Order leaderboards by points descending, wins descending, then account UUID for stable pagination. Use `dense_rank()` on the competitive fields if tied players should share a rank. Historical season totals remain accessible after closure. Materialized views or cached projections may be added later, but must remain rebuildable from accepted results.
+
+## Clubhouses, teams and private rooms
+
+Clubhouses are private friend groups, distinct from competitive teams/clans and
+from the global community or league. `clubhouses`, `clubhouse_members`,
+`clubhouse_requests` and `clubhouse_invitations` reference universal account UUIDs
+without a game-specific identity or league membership. The same group can be
+used by future game adapters; joining or leaving it does not reset league
+history, cosmetics or account progression. Competitive teams still own their
+separate tournament registrations and frozen rosters.
+
+Administrators may create a Clubhouse directly. Ordinary accounts submit a
+request; one pending request per account is enforced by a partial unique index.
+Approval inserts the Clubhouse, makes the requester its first member and owner,
+records the decision, and writes audit entries in one transaction. Rejection
+creates no group. Completed decisions cannot be edited or deleted, including by
+direct SQL updates; an identical API retry returns the existing decision.
+
+Memberships have `owner`, `admin` or `member` roles and preserve historical rows
+using `left_at`. The owner or a platform administrator assigns roles and transfers
+ownership. Clubhouse admins can invite accounts and remove ordinary members but
+cannot promote themselves, remove another admin or replace the owner. An owner
+must transfer ownership before leaving a group with other members; the sole
+owner leaving archives it. Groups are capped at 64 active memberships.
+
+Invitations expire after seven days and bind to an intended account ID. Their
+random token hashes are private; knowing an invitation UUID alone cannot accept
+it. Acceptance rechecks the intended account, inviter authority, expiry,
+revocation and the group's state. The capacity check and membership insert share
+the Clubhouse row lock. Reusing an accepted invitation never restores a removed
+or departed membership; a manager must issue a new invitation. Membership exits
+and role changes revoke affected pending invitations and append audit evidence.
+
+`matches.clubhouse_id` is an optional foreign key. A database check requires any
+scoped match to be private and casual; Clubhouses do not replace competitive
+league or tournament scope. Unscoped classic rooms retain their existing access
+rules. The API enforces membership when creating, joining, spectating, rematching,
+reading private match content or entering the engine through HTTP/WebSocket
+routes. Legacy cookie-based engine endpoints resolve the same Clubhouse scope.
+Artist-owned archives, moderation access and explicitly consented public gallery
+images retain their separate artwork permissions; Clubhouse membership controls
+other participants' access to match-only artwork.
+There is no platform-admin override for entering a private room: administrators
+must be members too. Authorized administrators can manage group membership, but
+nonmembers receive no room codes in the group detail response.
+
+Removal or leaving closes existing game connections in the current gateway and
+denies new admissions and old admission tickets. Historic `match_players` rows
+remain intact, while active-room checks ignore revoked Clubhouse memberships so
+players can join other rooms. Rematches copy the original Clubhouse ID and
+revalidate current membership; an old result does not grant future access.
+Multi-instance revocation requires coordination beyond the provided single
+gateway deployment.
+
+Admission locks the account, existing match rows and then the Clubhouse.
+Membership mutations lock the actor account and Clubhouse without acquiring
+match locks; ownership transfer takes the destination account's foreign-key
+reference lock before the Clubhouse. Account mutation locks use `NO KEY UPDATE`
+where possible to retain serialization without blocking compatible foreign-key
+references. Network calls stay outside these transactions. Reads use membership
+checks as well as object identifiers; a room code is never proof of authorization.
+
+## Account security and mobile identity
+
+The implemented password-change flow verifies the current password, replaces the
+scrypt hash, revokes existing `auth_sessions`, and issues a fresh session for the
+requesting browser in one transaction. The gateway then closes existing game
+connections for that account. Password changes preserve the same account UUID,
+Clubhouses, teams, cosmetics and competitive history. Email recovery and MFA are
+not implemented. Database files, credential hashes, session tokens, admission
+tickets and personal account data belong in protected runtime storage, never in
+source files or Git.
+
+Mobile clients use the same accounts, membership checks and engine tickets.
+Responsive layout and Pointer Events are client changes; they create no separate
+mobile identity or game loop. Automated input tests cover pointer/touch handling.
+Browser layout inspection covered 360, 390 and 430 CSS-pixel widths without
+horizontal page overflow; it did not exercise physical touch or mobile keyboards.
+Physical-phone and browser touch/keyboard verification remain separate from the
+database and protocol tests; this checkout has not been deployed to a host.
 
 ## Referential guarantees and service checks
 
@@ -113,7 +195,7 @@ Default policies are inserted in `asset_policies`:
 - Share cards: expire after 90 days, with a revocable share token and explicit user sharing.
 - Curated artwork: retain while curation and publication consent remain valid; unpublish immediately after consent is revoked, then schedule deletion under the retention policy.
 
-The worker stamps `expires_at` when it creates an asset, queues expired objects in `asset_deletion_jobs`, deletes the object, verifies completion, and only then marks the row deleted. Deleting metadata alone does not delete the blob. Retry object deletion with the same object key. Legal holds must be exceptional, access-controlled and audited. Apply corresponding lifecycle/deletion windows to replicas and backups; document the maximum backup expiry rather than promising immediate removal from immutable backups.
+The runnable worker claims up to 20 expired ready objects or previously failed deletion attempts in a transaction, using row locks and `SKIP LOCKED`, then marks them `deleting`. It deletes blobs outside the transaction and marks successful rows `deleted` with a timestamp while retaining audit metadata. Publication locks the same asset row and requires an unexpired `ready` object, so it cannot extend retention after deletion has begun. A failed deletion remains retryable even if its expiry changes; other objects in the batch continue. `asset_deletion_jobs` remains available for a richer future queue and is not used by this worker. Deleting metadata alone does not delete the blob. Legal holds are excluded from claims. Apply corresponding lifecycle/deletion windows to replicas and backups; document the maximum backup expiry rather than promising immediate removal from immutable backups.
 
 Automatically capture a completed turn's drawing privately. Admin curation publishes only after the artist opts in, including Hall of Shame entries. `public_gallery` excludes revoked consent, unpublished records, missing/deleted objects and expired objects. Public gallery endpoints must use this view or equivalent checks. Replays and spectator streams must withhold the secret word until the turn is over; a drawing game's privileged engine payload is not a safe spectator feed.
 

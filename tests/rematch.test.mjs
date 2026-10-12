@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { openDatabase } from '../server/db.mjs';
 import { Rematch } from '../server/rematch.mjs';
+import { Platform } from '../server/platform.mjs';
+import { Clubhouses } from '../server/clubhouses.mjs';
 import { ApiError } from '../server/security.mjs';
 
 const gameId = '00000000-0000-4000-8000-000000000020';
@@ -174,6 +176,33 @@ test('quick rematches preserve authority and reuse a durable successor', { timeo
       const unknown = await completed({ mode: 'ranked', ruleSetId: newRule });
       await rejects(service.join(unknown.players[0], unknown.id), 409, /ruleset/);
       assert.equal(await target(tournament), undefined); assert.equal(await target(unknown), undefined);
+    });
+    await t.test('clubhouse rematches retain scope, reject removed members and release stale room reservations', async () => {
+      const source=await completed(),admin=await user(),owner=source.players[0],member=source.players[1];
+      await db.query("INSERT INTO skribbil.platform_roles(user_id,role,granted_by) VALUES($1,'administrator',$1)",[admin.id]);
+      const clubs=new Clubhouses(new Platform(db));
+      const club=(await clubs.create(admin,{name:'Synthetic rematch clubhouse',description:'Private integration fixture.',ownerId:owner.id})).clubhouse;
+      const invitation=await clubs.invite(owner,club.id,{username:member.username});await clubs.acceptInvite(member,invitation.id);
+      await db.query('UPDATE skribbil.matches SET clubhouse_id=$2 WHERE id=$1',[source.id,club.id]);
+      const service=new Rematch({db,admit:launch,provision:async payload=>({lobbyId:`club-rematch-${payload.matchId}`})});
+      const first=await service.join(owner,source.id),second=await service.join(member,source.id);
+      assert.equal(first.matchId,second.matchId);
+      const successor=await target(source);assert.equal(successor.clubhouse_id,club.id);assert.equal(successor.private,true);
+      await clubs.removeMember(owner,club.id,member.id);
+      await rejects(service.join(member,source.id),403,/current Clubhouse members/);
+      assert.ok(await one(db,'SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2',[successor.id,member.id]));
+      assert.equal((await target(source)).id,successor.id);
+
+      // Historic participation remains, but removal must not trap this account
+      // behind an active room it is no longer permitted to enter.
+      const unrelated=await completed({privateRoom:false});
+      await db.query('INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3)',[unrelated.id,member.id,member.display_name]);
+      await db.query('INSERT INTO skribbil.match_result_players(result_id,match_id,user_id,score,placement) VALUES($1,$2,$3,0,3)',[unrelated.resultId,unrelated.id,member.id]);
+      const next=await service.join(member,unrelated.id);
+      assert.notEqual(next.matchId,successor.id);assert.equal((await target(unrelated)).clubhouse_id,null);
+
+      await clubs.leave(owner,club.id);
+      await rejects(service.join(owner,source.id),403,/current Clubhouse members/);
     });
   } finally { await db.close(); }
 });

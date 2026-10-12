@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -11,8 +12,8 @@ import { openDatabase } from '../server/db.mjs';
 import { AssetStore, PALETTE, renderDrawing } from '../server/assets.mjs';
 import { loadImage, createCanvas } from '@napi-rs/canvas';
 
-const secret = 'local-integration-test-secret-not-for-production';
-const password = 'drawing-cats-is-fun-123';
+const secret = randomBytes(32).toString('hex');
+const password = randomBytes(24).toString('base64url');
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${server.address().port}`)));
 const close = server => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); });
 
@@ -64,7 +65,7 @@ test('platform HTTP integration: accounts, consent, authoritative results and ad
       const stored = (await db.query('SELECT password_hash FROM skribbil.credentials WHERE user_id=$1', [artist.data.user.id])).rows[0];
       assert.match(stored.password_hash, /^scrypt:/); assert.ok(!stored.password_hash.includes(password));
       assert.equal((await api('/api/auth/register', { method: 'POST', body: { username: 'TEST_ARTIST', email: 'another@example.test', password } })).status, 409);
-      assert.equal((await api('/api/auth/login', { method: 'POST', body: { email: 'test_artist', password: 'wrong-password' } })).status, 401);
+      assert.equal((await api('/api/auth/login', { method: 'POST', body: { email: 'test_artist', password: randomBytes(24).toString('base64url') } })).status, 401);
     });
 
     await t.test('CSRF, cosmetic ownership and admin authorization survive forged client fields', async () => {

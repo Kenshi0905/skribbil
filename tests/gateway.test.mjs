@@ -78,7 +78,7 @@ test('real engine admission and original chat survive the platform WebSocket pro
   });
   try {
     const name = `gateway_${randomBytes(4).toString('hex')}`;
-    const registration = await request('/api/auth/register', { username: name, email: `${name}@example.test`, password: 'local-proxy-test-password' });
+    const registration = await request('/api/auth/register', { username: name, email: `${name}@example.test`, password: randomBytes(24).toString('base64url') });
     assert.equal(registration.status, 200); cookie = registration.headers.getSetCookie()[0].split(';')[0];
     const create = await request('/api/rooms', { mode: 'private', rounds: 1, drawTime: 60, maxPlayers: 2 });
     assert.equal(create.status, 201); const room = await create.json(); matchId = room.matchId;

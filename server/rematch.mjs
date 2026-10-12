@@ -44,7 +44,7 @@ export class Rematch {
     const reservation = await this.db.transaction(async db => {
       // All room admission paths lock the account before a match. This both
       // prevents two active rooms for one account and fixes lock ordering.
-      const account = await one(db, 'SELECT id,status,display_name FROM skribbil.users WHERE id=$1 FOR UPDATE', [user.id]);
+      const account = await one(db, 'SELECT id,status,display_name FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE', [user.id]);
       requireValue(account?.status === 'active', 'This account cannot join a room.', 403);
       const source = await one(db, `SELECT m.*,g.slug AS game_slug,r.version AS rule_version,r.rules
         FROM skribbil.matches m JOIN skribbil.games g ON g.id=m.game_id
@@ -59,8 +59,17 @@ export class Rematch {
       let match = await one(db, `SELECT m.* FROM skribbil.match_rematches r
         JOIN skribbil.matches m ON m.id=r.target_match_id WHERE r.source_match_id=$1 FOR UPDATE OF m`, [sourceId]);
       if (match) requireValue(active(match), 'This rematch has finished or was cancelled. Rematch your latest completed game instead.', 409);
+      // Existing target rooms must be locked before their clubhouse, matching
+      // ordinary admission; otherwise a reconnect can deadlock a rematch.
+      if(source.clubhouse_id){
+        await db.query('SELECT id FROM skribbil.clubhouses WHERE id=$1 FOR UPDATE',[source.clubhouse_id]);
+        const member=await one(db,`SELECT c.id FROM skribbil.clubhouses c JOIN skribbil.clubhouse_members cm ON cm.clubhouse_id=c.id
+          WHERE c.id=$1 AND cm.user_id=$2 AND cm.left_at IS NULL AND c.archived_at IS NULL`,[source.clubhouse_id,user.id]);
+        requireValue(member,'This rematch is available only to current Clubhouse members.',403);
+      }
       const other = await one(db, `SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
-        WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND ($2::uuid IS NULL OR m.id<>$2::uuid) LIMIT 1`, [user.id, match?.id ?? null]);
+        WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND ($2::uuid IS NULL OR m.id<>$2::uuid)
+        AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`, [user.id, match?.id ?? null]);
       requireValue(!other, 'Finish or cancel your current room before rematching.', 409);
       if (!match) {
         // A new match must not count toward an already closed season. A current
@@ -73,10 +82,10 @@ export class Rematch {
         const id = randomUUID();
         const customRules = source.mode === 'ranked' ? {} : { ...source.custom_rules, rounds: settings.rounds, drawTime: settings.drawTime, maxPlayers: settings.maxPlayers };
         match = await one(db, `INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,
-          engine_room_id,engine_instance_id,custom_rules,private,access_code_hash,created_by)
-          VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10,$11) RETURNING *`,
+          engine_room_id,engine_instance_id,custom_rules,private,access_code_hash,created_by,clubhouse_id)
+          VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10,$11,$12) RETURNING *`,
         [id, source.game_id, source.rule_set_id, source.community_id, season?.id ?? null, source.mode,
-          `pending-${id}`, JSON.stringify(customRules), source.private, source.access_code_hash, user.id]);
+          `pending-${id}`, JSON.stringify(customRules), source.private, source.access_code_hash, user.id,source.clubhouse_id]);
         await db.query(`INSERT INTO skribbil.match_rematches(source_match_id,target_match_id,requested_by) VALUES($1,$2,$3)`, [sourceId, id, user.id]);
       }
       await db.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot)

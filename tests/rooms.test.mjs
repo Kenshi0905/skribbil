@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -17,7 +18,7 @@ test('simultaneous creation reserves one room; uncertain provisioning resumes th
     if(missing&&req.url.endsWith('/status')){res.writeHead(404);res.end('match not found');return;}
     res.setHeader('Content-Type','application/json');res.end(JSON.stringify({lobbyId:`test-${data.matchId}`,cancelled:true,exists:true}));
   });
-  const config={secret:'test-secret-long-enough-for-room-control',engineUrl:await listen(engine),origin:'',ranked:false,secure:false};
+  const config={secret:randomBytes(32).toString('hex'),engineUrl:await listen(engine),origin:'',ranked:false,secure:false};
   const app=await createApp({db,config}),base=await listen(app.server);config.origin=base;
   let cookie;
   const api=async(path,body)=>{
@@ -26,7 +27,7 @@ test('simultaneous creation reserves one room; uncertain provisioning resumes th
     return {status:r.status,data:await r.json()};
   };
   try{
-    assert.equal((await api('/api/auth/register',{username:'room_racer',email:'rooms@example.test',password:'a-strong-test-password'})).status,200);
+    assert.equal((await api('/api/auth/register',{username:'room_racer',email:'rooms@example.test',password:randomBytes(24).toString('base64url')})).status,200);
     const race=await Promise.all([api('/api/rooms',{mode:'private'}),api('/api/rooms',{mode:'private'})]);
     assert.deepEqual(race.map(r=>r.status).sort(),[409,503]);assert.equal(requested.length,1);
     const own=(await api('/api/bootstrap')).data.ownRooms;assert.equal(own.length,1);
@@ -36,7 +37,7 @@ test('simultaneous creation reserves one room; uncertain provisioning resumes th
     assert.equal((await api(`/api/rooms/${id}/join`,{})).status,409);
     const created=await api('/api/rooms',{mode:'private'});assert.equal(created.status,201);assert.notEqual(created.data.matchId,id);
     const ownerCookie=cookie;
-    assert.equal((await api('/api/auth/register',{username:'room_guest',email:'guest@example.test',password:'a-strong-test-password'})).status,200);
+    assert.equal((await api('/api/auth/register',{username:'room_guest',email:'guest@example.test',password:randomBytes(24).toString('base64url')})).status,200);
     assert.equal((await api(`/api/rooms/${created.data.matchId}/join`,{})).status,200);
     fail=true;assert.equal((await api(`/api/rooms/${created.data.matchId}/join`,{})).status,503);
     assert.equal((await api('/api/bootstrap')).data.ownRooms.length,1,'transport failure must preserve room admission');

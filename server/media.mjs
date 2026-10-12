@@ -50,7 +50,7 @@ export class Media {
       requireValue(row && row.captain_id === user.id, 'Only the team captain can change its logo.',403);
       return {row,table:'teams',column:'logo_url',id:teamId};
     }
-    const row = await one(db,`SELECT * FROM skribbil.users WHERE id=$1${lock?' FOR UPDATE':''}`,[user.id]);
+    const row = await one(db,`SELECT * FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
     requireValue(row?.status === 'active','This account is unavailable.',403);
     return {row,table:'users',column:'avatar_url',id:user.id};
   }
@@ -65,7 +65,7 @@ export class Media {
     try {
       return await this.db.transaction(async db => {
         // One quota for all profile/team uploads, serialized on the uploader.
-        await db.query('SELECT id FROM skribbil.users WHERE id=$1 FOR UPDATE',[user.id]);
+        await db.query('SELECT id FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE',[user.id]);
         const target = await this.target(db,user,teamId,true);
         const usage = await one(db,`SELECT count(*) AS n FROM skribbil.object_assets WHERE owner_id=$1 AND policy_id='profile-image' AND created_at>now()-interval '1 day'`,[user.id]);
         requireValue(Number(usage.n) < 10,'You can upload up to 10 profile or team images per day.',429);

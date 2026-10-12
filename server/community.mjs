@@ -13,7 +13,7 @@ export class Community {
   constructor(platform){this.platform=platform;this.db=platform.db;}
   async account(db,user,lock=false){
     requireValue(user&&isUuid(user.id),'Sign in first.',401);
-    const account=await one(db,`SELECT id,username,status FROM skribbil.users WHERE id=$1${lock?' FOR UPDATE':''}`,[user.id]);
+    const account=await one(db,`SELECT id,username,status FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
     requireValue(account&&account.status==='active','Account unavailable.',403);return account;
   }
   async member(db,userId,communityId){

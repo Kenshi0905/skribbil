@@ -1,4 +1,6 @@
 import KeyboardManager from "./resources/keyboardManager.js";
+import { attachCanvasInput } from './resources/{{.WithCacheBust "canvas-input.js"}}';
+import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -40,6 +42,7 @@ window.onbeforeunload = () => {
 };
 
 const messageInput = document.getElementById("message-input");
+const messageInputPlaceholder = messageInput.dataset.defaultPlaceholder || messageInput.placeholder;
 const playerContainer = document.getElementById("player-container");
 const wordContainer = document.getElementById("word-container");
 const messageContainer = document.getElementById("message-container");
@@ -75,7 +78,19 @@ const kickDialog = document.getElementById("kick-dialog");
 const kickDialogPlayers = document.getElementById("kick-dialog-players");
 
 const soundToggleLabel = document.getElementById("sound-toggle-label");
-let sound = localStorage.getItem("sound") !== "false";
+const gameAudio = createGameAudio({ storage: localStorage });
+// Browsers require user activation before Web Audio can make sound. Capture
+// both touch/mouse/pen gestures and keyboard controls without blocking them.
+for (const event of ["pointerdown", "pointerup", "keydown"]) {
+    document.addEventListener(event, () => gameAudio.unlock(), { capture: true, passive: true });
+}
+const soundVolume = document.getElementById("sound-volume");
+const soundVolumeValue = document.getElementById("sound-volume-value");
+soundVolume.value = String(Math.round(gameAudio.volume * 100));
+soundVolume.addEventListener("input", () => {
+    gameAudio.setVolume(Number(soundVolume.value) / 100);
+    updateSoundIcon();
+});
 updateSoundIcon();
 
 const penToggleLabel = document.getElementById("pen-pressure-toggle-label");
@@ -361,8 +376,7 @@ document
     .addEventListener("click", saveLobbySettings);
 
 function toggleSound() {
-    sound = !sound;
-    localStorage.setItem("sound", sound.toString());
+    gameAudio.setEnabled(!gameAudio.enabled);
     updateSoundIcon();
 }
 document
@@ -370,7 +384,13 @@ document
     .addEventListener("click", toggleSound);
 
 function updateSoundIcon() {
-    if (sound) {
+    const audible = gameAudio.enabled && gameAudio.volume > 0;
+    const toggle = document.getElementById("toggle-sound-button");
+    toggle.setAttribute("aria-pressed", String(gameAudio.enabled));
+    toggle.setAttribute("aria-label", gameAudio.enabled ? "Mute sound effects" : "Unmute sound effects");
+    soundVolumeValue.textContent = `${Math.round(gameAudio.volume * 100)}%`;
+    soundVolume.setAttribute("aria-valuetext", `${Math.round(gameAudio.volume * 100)} percent${gameAudio.enabled ? "" : ", muted"}`);
+    if (audible) {
         soundToggleLabel.src = `{{.RootPath}}/resources/{{.WithCacheBust "sound.svg"}}`;
     } else {
         soundToggleLabel.src = `{{.RootPath}}/resources/{{.WithCacheBust "no-sound.svg"}}`;
@@ -513,14 +533,19 @@ function setColor(index) {
     }
 }
 
+const colorNames = ["White", "Light gray", "Red", "Orange", "Yellow", "Green", "Sky blue", "Blue", "Purple", "Pink", "Brown", "Dark brown", "Peach", "Black", "Dark gray", "Dark red", "Rust", "Gold", "Dark green", "Navy blue", "Indigo", "Dark purple", "Rose", "Chocolate", "Charcoal brown", "Tan"];
 const firstColorButtonRow = document.getElementById("first-color-button-row");
 const secondColorButtonRow = document.getElementById("second-color-button-row");
 for (let i = 0; i < firstColorButtonRow.children.length; i++) {
+    firstColorButtonRow.children[i].setAttribute("aria-label", colorNames[i]);
+    firstColorButtonRow.children[i].title = colorNames[i];
     const _setColor = () => setColor(i);
     firstColorButtonRow.children[i].addEventListener("mousedown", _setColor);
     firstColorButtonRow.children[i].addEventListener("click", _setColor);
 }
 for (let i = 0; i < secondColorButtonRow.children.length; i++) {
+    secondColorButtonRow.children[i].setAttribute("aria-label", colorNames[i + 13]);
+    secondColorButtonRow.children[i].title = colorNames[i + 13];
     const _setColor = () => setColor(i + 13);
     secondColorButtonRow.children[i].addEventListener("mousedown", _setColor);
     secondColorButtonRow.children[i].addEventListener("click", _setColor);
@@ -722,6 +747,16 @@ document
     .addEventListener("click", toggleSpectate);
 
 function setSpectateMode(requestedValue, spectatingValue) {
+    const managedRoom = Boolean(document.body.dataset.leagueMode);
+    if (managedRoom) {
+        document.body.dataset.leagueSpectator = String(spectatingValue);
+        document.getElementById("ready-state-start").disabled = spectatingValue;
+        document.getElementById("ready-state-game-over").disabled = true;
+        messageInput.disabled = spectatingValue;
+        document.getElementById("message-send").disabled = spectatingValue;
+        messageInput.placeholder = spectatingValue ? "Spectating — chat disabled" : messageInputPlaceholder;
+        messageInput.setAttribute("aria-label", messageInput.placeholder);
+    }
     const modeUnchanged = spectatingValue === spectating;
     const requestUnchanged = requestedValue === spectateRequested;
     if (modeUnchanged && requestUnchanged) {
@@ -755,7 +790,9 @@ function setSpectateMode(requestedValue, spectatingValue) {
     } else if (spectatingValue && !spectating) {
         showInfoDialog(
             `{{.Translation.Get "now-spectating-title"}}`,
-            `{{.Translation.Get "now-spectating-text"}}`,
+            managedRoom
+                ? "You are watching this match. Spectators cannot draw, chat, guess or vote. To play, return to the league or your Clubhouse and join a new room as a player."
+                : `{{.Translation.Get "now-spectating-text"}}`,
             `{{.Translation.Get "confirm"}}`,
         );
     } else if (!spectatingValue && spectating) {
@@ -827,9 +864,8 @@ let lastMessage = "";
 
 const encoder = new TextEncoder();
 function sendMessage(event) {
-    if (event.key !== "Enter") {
-        return;
-    }
+    event.preventDefault();
+    if (composingMessage || messageInput.disabled || socket?.readyState !== WebSocket.OPEN) return;
     if (!messageInput.value) {
         return;
     }
@@ -859,7 +895,10 @@ function sendMessage(event) {
     messageInput.value = "";
 }
 
-messageInput.addEventListener("keypress", sendMessage);
+let composingMessage = false;
+messageInput.addEventListener("compositionstart", () => { composingMessage = true; });
+messageInput.addEventListener("compositionend", () => { composingMessage = false; });
+document.getElementById("message-form").addEventListener("submit", sendMessage);
 messageInput.addEventListener("keydown", function (event) {
     if (event.key === "ArrowUp" && messageInput.value.length === 0) {
         messageInput.value = lastMessage;
@@ -939,10 +978,14 @@ dislikeButton.addEventListener("click", () => {
 
 const handleEvent = (parsed) => {
     if (parsed.type === "ready") {
+        // Player rendering applies spectator controls and opens the initial
+        // notice, so the room mode must be known before handling its players.
+        if (parsed.data.leagueMode) {
+            document.body.dataset.leagueMode = parsed.data.leagueMode;
+        }
         handleReadyEvent(parsed.data);
         if (parsed.data.leagueMode) {
             renderLeagueDislikes(parsed.data.dislikes);
-            document.body.dataset.leagueMode = parsed.data.leagueMode;
         }
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
@@ -989,7 +1032,7 @@ const handleEvent = (parsed) => {
             waitChooseDrawerSpan.innerText = parsed.data.playerName;
         }
     } else if (parsed.type === "correct-guess-self") {
-        playWav('{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}');
+        playWav('{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}', 0.5, true);
 
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
@@ -1001,7 +1044,7 @@ const handleEvent = (parsed) => {
             `{{.Translation.Get "correct-guess"}}`,
         );
     } else if (parsed.type === "correct-guess") {
-        playWav('{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}');
+        playWav('{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}', 0.5, true);
         const player = getCachedPlayer(parsed.data);
         if (player !== null) {
             appendMessage(
@@ -1416,12 +1459,8 @@ function promptWords(data) {
     wordDialog.style.visibility = "visible";
 }
 
-function playWav(file) {
-    if (sound) {
-        const audio = new Audio(file);
-        audio.type = "audio/wav";
-        audio.play();
-    }
+function playWav(file, gain = 1, coalesce = false) {
+    gameAudio.play(file, gain, { coalesce });
 }
 
 window.setInterval(() => {
@@ -1743,188 +1782,16 @@ const applyDrawData = (drawElements) => {
     context.putImageData(imageData, 0, 0);
 };
 
-let lastX = 0;
-let lastY = 0;
-
-let touchID = null;
-
-function onTouchStart(event) {
-    //We only allow a single touch
-    if (allowDrawing && touchID == null && localTool !== fillBucket) {
-        const touch = event.touches[0];
-        touchID = touch.identifier;
-
-        // calculate the offset coordinates based on client touch position and drawing board client origin
-        const clientRect = drawingBoard.getBoundingClientRect();
-        lastX = touch.clientX - clientRect.left;
-        lastY = touch.clientY - clientRect.top;
-    }
-}
-
-function onTouchMove(event) {
-    // Prevent moving, scrolling or zooming the page
-    event.preventDefault();
-
-    if (allowDrawing) {
-        for (let i = event.changedTouches.length - 1; i >= 0; i--) {
-            if (event.changedTouches[i].identifier === touchID) {
-                const touch = event.changedTouches[i];
-
-                // calculate the offset coordinates based on client touch position and drawing board client origin
-                const clientRect = drawingBoard.getBoundingClientRect();
-                const offsetX = touch.clientX - clientRect.left;
-                const offsetY = touch.clientY - clientRect.top;
-
-                // drawing functions must check for context boundaries
-                drawLineAndSendEvent(context, lastX, lastY, offsetX, offsetY);
-                lastX = offsetX;
-                lastY = offsetY;
-
-                return;
-            }
-        }
-    }
-}
-
-function onTouchEnd(event) {
-    for (let i = event.changedTouches.length - 1; i >= 0; i--) {
-        if (event.changedTouches[i].identifier === touchID) {
-            touchID = null;
-            return;
-        }
-    }
-}
-
-drawingBoard.addEventListener("touchend", onTouchEnd);
-drawingBoard.addEventListener("touchcancel", onTouchEnd);
-drawingBoard.addEventListener("touchstart", onTouchStart);
-drawingBoard.addEventListener("touchmove", onTouchMove);
-
-function onMouseDown(event) {
-    if (
-        allowDrawing &&
-        event.pointerType !== "touch" &&
-        event.buttons === 1 &&
-        localTool !== fillBucket
-    ) {
-        const clientRect = drawingBoard.getBoundingClientRect();
-        lastX = event.clientX - clientRect.left;
-        lastY = event.clientY - clientRect.top;
-    }
-}
-
-function pressureToLineWidth(event) {
-    //event.button === 0 could be wrong, as it can also be the uninitialized state.
-    //Therefore we use event.buttons, which works differently.
-    if (
-        event.buttons !== 1 ||
-        event.pressure === 0 ||
-        event.pointerType === "touch"
-    ) {
-        return 0;
-    }
-    if (!penPressure || event.pressure === 0.5 || !event.pressure) {
-        return localLineWidth;
-    }
-    return Math.ceil(event.pressure * 32);
-}
-
-// Previously the onMouseMove handled leave, but we do this separately now for
-// proper pen support. Otherwise leave leads to a loss of the pen pressure, as
-// we are handling that with mouseleave instead of pointerleave. pointerlave
-// is not triggered until the pen is let go.
-function onMouseLeave(event) {
-    if (allowDrawing && lastLineWidth && localTool !== fillBucket) {
-        // calculate the offset coordinates based on client mouse position and drawing board client origin
-        const clientRect = drawingBoard.getBoundingClientRect();
-        const offsetX = event.clientX - clientRect.left;
-        const offsetY = event.clientY - clientRect.top;
-
-        // drawing functions must check for context boundaries
-        drawLineAndSendEvent(
-            context,
-            lastX,
-            lastY,
-            offsetX,
-            offsetY,
-            lastLineWidth,
-        );
-        lastX = offsetX;
-        lastY = offsetY;
-    }
-}
-
-let lastLineWidth;
-function onMouseMove(event) {
-    const pressureLineWidth = pressureToLineWidth(event);
-    lastLineWidth = pressureLineWidth;
-
-    if (allowDrawing && pressureLineWidth && localTool !== fillBucket) {
-        // calculate the offset coordinates based on client mouse position and drawing board client origin
-        const clientRect = drawingBoard.getBoundingClientRect();
-        const offsetX = event.clientX - clientRect.left;
-        const offsetY = event.clientY - clientRect.top;
-
-        // drawing functions must check for context boundaries
-        drawLineAndSendEvent(
-            context,
-            lastX,
-            lastY,
-            offsetX,
-            offsetY,
-            pressureLineWidth,
-        );
-        lastX = offsetX;
-        lastY = offsetY;
-    }
-}
-
-function onMouseClick(event) {
-    //event.buttons won't work here, since it's always 0. Since we
-    //have a click event, we can be sure that we actually had a button
-    //clicked and 0 won't be the uninitialized state.
-    if (allowDrawing && event.button === 0) {
-        if (localTool === fillBucket) {
-            fillAndSendEvent(
-                context,
-                event.offsetX,
-                event.offsetY,
-                localColorIndex,
-            );
-        } else {
-            drawLineAndSendEvent(
-                context,
-                event.offsetX,
-                event.offsetY,
-                event.offsetX,
-                event.offsetY,
-            );
-        }
-    }
-}
-
-drawingBoard.addEventListener("pointerdown", onMouseDown);
-drawingBoard.addEventListener("pointermove", onMouseMove);
-drawingBoard.addEventListener("mouseleave", onMouseLeave);
-drawingBoard.addEventListener("click", onMouseClick);
-
-function onGlobalMouseMove(event) {
-    const clientRect = drawingBoard.getBoundingClientRect();
-    lastX = Math.min(
-        clientRect.width - 1,
-        Math.max(0, event.clientX - clientRect.left),
-    );
-    lastY = Math.min(
-        clientRect.height - 1,
-        Math.max(0, event.clientY - clientRect.top),
-    );
-}
-
-//necessary for mousemove to not use the previous exit coordinates.
-//If this is done via mouseleave and mouseenter of the
-//drawingBoard, the lines will end too early on leave and start
-//too late on exit.
-window.addEventListener("mousemove", onGlobalMouseMove);
+attachCanvasInput(drawingBoard, {
+    state: () => ({
+        enabled: allowDrawing && socket?.readyState === WebSocket.OPEN,
+        tool: localTool === fillBucket ? "fill" : localTool === rubber ? "rubber" : "pen",
+        width: localLineWidth,
+        pressure: penPressure,
+    }),
+    line: (x, y, x2, y2, width) => drawLineAndSendEvent(context, x, y, x2, y2, width),
+    fill: (x, y) => fillAndSendEvent(context, x, y, localColorIndex),
+});
 
 function isAnyDialogVisible() {
     for (let i = 0; i < centerDialogs.children.length; i++) {
