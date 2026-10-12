@@ -331,6 +331,7 @@ func handleMessage(message string, sender *Player, lobby *Lobby) {
 	switch CheckGuess(normInput, normSearched) {
 	case EqualGuess:
 		{
+			lobby.recordLeagueGuess(sender, time.Now())
 			sender.LastScore = lobby.calculateGuesserScore()
 			sender.Score += sender.LastScore
 
@@ -454,6 +455,7 @@ func (lobby *Lobby) startGame() {
 	// We are reseting each players score, since players could
 	// technically be player a second game after the last one
 	// has already ended.
+	lobby.resetLeagueTelemetry()
 	for _, otherPlayer := range lobby.players {
 		otherPlayer.Score = 0
 		otherPlayer.LastScore = 0
@@ -734,6 +736,7 @@ func advanceLobbyPredefineDrawer(lobby *Lobby, roundOver bool, newDrawer *Player
 		}
 
 		lobby.Round++
+		lobby.snapshotLeagueFinalRound()
 	}
 
 	lobby.ClearDrawing()

@@ -18,18 +18,22 @@ const EventTypeDislikeState = "dislike-state"
 var hardWordsV1 = []string{"time travel", "optical illusion", "photosynthesis", "continental drift", "parallel universe", "chain reaction", "metamorphosis", "gravitational wave", "ecosystem", "supply and demand", "infinite loop", "magnetic field"}
 
 type LeagueState struct {
-	Cancelled bool
-	Roster    []*Player
-	MatchID   string
-	Mode      string
-	TurnID    int
-	TurnUUID  string
-	Sequence  int
-	Eligible  map[uuid.UUID]bool
-	Votes     map[uuid.UUID]bool
-	Applied   bool
-	HardTurn  bool
-	Emit      func(LeagueEvent) bool
+	Stats                 map[uuid.UUID]*LeaguePlayerStats
+	WordStartedAt         time.Time
+	FinalRoundNumber      int
+	LastAtFinalRoundStart map[uuid.UUID]bool
+	Cancelled             bool
+	Roster                []*Player
+	MatchID               string
+	Mode                  string
+	TurnID                int
+	TurnUUID              string
+	Sequence              int
+	Eligible              map[uuid.UUID]bool
+	Votes                 map[uuid.UUID]bool
+	Applied               bool
+	HardTurn              bool
+	Emit                  func(LeagueEvent) bool
 }
 
 // CancelLeagueBeforeStart is atomic with the first start event. A running match
@@ -95,6 +99,7 @@ func (lobby *Lobby) beginDislikes() {
 	}
 	ls := lobby.League
 	ls.TurnID++
+	ls.WordStartedAt = time.Now()
 	ls.TurnUUID = uuid.Must(uuid.NewV4()).String()
 	ls.Eligible = map[uuid.UUID]bool{}
 	ls.Votes = map[uuid.UUID]bool{}
@@ -197,7 +202,8 @@ func (lobby *Lobby) completeLeagueMatch() {
 			rank++
 			previousScore = p.Score
 		}
-		participants = append(participants, map[string]any{"userId": p.AccountID, "playerId": p.ID, "username": p.Name, "score": p.Score, "rank": rank})
+		correct, fastest, comeback := lobby.leagueTelemetry(p, rank)
+		participants = append(participants, map[string]any{"userId": p.AccountID, "playerId": p.ID, "username": p.Name, "score": p.Score, "rank": rank, "correctGuesses": correct, "fastestGuessMs": fastest, "comebackWin": comeback})
 	}
 	lobby.emitLeague("match.completed", map[string]any{"participants": participants, "mode": lobby.League.Mode, "rulesVersion": "skribbil-ranked-v1", "deliveryFailed": lobby.LeagueDeliveryFailed})
 }
