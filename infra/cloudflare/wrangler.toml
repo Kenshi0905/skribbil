@@ -1,0 +1,10 @@
+# Local configuration only. This file never deploys on its own.
+name = "skribbil-community"
+compatibility_date = "2026-10-12"
+pages_build_output_dir = "../../.deploy/pages"
+
+# Set production bindings through the Pages dashboard only when publishing is authorized:
+# API_ORIGIN=https://YOUR-SERVICE.onrender.com
+# PUBLIC_ORIGIN=https://YOUR-PROJECT.pages.dev
+# SKRIBBIL_ORIGIN_KEY=<secret identical to Render's value>
+# Never put DATABASE_URL or S3 credentials in the frontend or this config file.

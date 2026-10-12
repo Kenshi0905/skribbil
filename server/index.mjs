@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import { openDatabase } from './db.mjs';
 import { Platform } from './platform.mjs';
 import { Competition } from './competition.mjs';
@@ -40,7 +41,9 @@ export async function createApp({db,config,assets}={}) {
     requireValue(sameSecret(req.headers['x-skribbil-origin-key'],config.originKey),'Use the public Skribbil website.',403);
   }
   function rateLimit(req,key,maximum=100) {
-    const id=`${req.socket.remoteAddress}:${key}`,now=Date.now();
+    const forwarded=String(req.headers['x-forwarded-for']||'').split(',')[0].trim();
+    const client=config.originKey&&sameSecret(req.headers['x-skribbil-origin-key'],config.originKey)&&isIP(forwarded)?forwarded:req.socket.remoteAddress;
+    const id=`${client}:${key}`,now=Date.now();
     let entry=limits.get(id);if(!entry||entry.until<now){entry={n:0,until:now+60000};limits.set(id,entry);}
     requireValue(++entry.n<=maximum,'Too many requests. Try again in a minute.',429);
   }

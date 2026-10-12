@@ -19,4 +19,5 @@ engine/.env
 engine-upstream.tar.gz
 go-releases.json
 upstream.json
+.deploy/
 

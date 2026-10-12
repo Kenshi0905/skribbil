@@ -1,0 +1,42 @@
+# Review-only template. Applying this Blueprint creates a public service.
+# No paid database, disk, worker, cron service, autoscaling, or previews.
+services:
+  - type: web
+    name: skribbil-community-preview
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./infra/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    healthCheckPath: /api/health
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SKRIBBIL_RANKED_ENABLED
+        value: "false"
+      - key: ENGINE_URL
+        value: http://127.0.0.1:8080
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SKRIBBIL_ENGINE_SECRET
+        generateValue: true
+      - key: SKRIBBIL_ORIGIN_KEY
+        generateValue: true
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        value: skribbil-private
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
