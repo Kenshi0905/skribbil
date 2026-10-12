@@ -1,0 +1,191 @@
+{{define "index"}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+
+<head>
+    <title>Skribbil</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+        content="A free and privacy respecting pictionary game to play with your friends. Multiple languages are available.">
+    <meta name="keywords" content="skribbl, skribbl io, skribblio,
+            skribbl.io, scribble, scribblers, scribble.rs, pictionary,
+            montagsmaler, sketchful, draw and guess, drawmything, free, oss">
+    <link rel="canonical" href="{{.CanonicalURL}}" />
+    {{if not .AllowIndexing}}
+    <meta name="robots" content="noindex, nofollow">{{end}}
+    {{if ne "" .RootURL}}
+    <meta property="og:image" content="{{.RootURL}}{{.RootPath}}/resources/logo.svg">
+    <meta property="og:image:type" content="image/svg+xml">
+    <meta property="og:image:width" content="1600">
+    <meta property="og:image:height" content="800">
+    <meta property="twitter:image" content="{{.RootURL}}{{.RootPath}}/resources/logo.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    {{end}}
+    {{template "non-static-css-decl" .}}
+    <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "root.css"}}' />
+    <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "index.css"}}' />
+    {{template "favicon-decl" .}}
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "user.svg"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "round.svg"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "clock.svg"}}' />
+</head>
+
+  <body {{if eq .Translation.IsRtl true}} dir="rtl" {{end}}>
+    <div id="app">
+        <div class="home">
+            <img id="logo" src='{{.RootPath}}/resources/{{.WithCacheBust "logo.svg"}}' alt="Skribbil logo">
+            <div id="home-choices">
+                <div class="home-choice">
+                    <div class="home-choice-inner">
+                        <div class="home-choice-header">
+                            <div class="home-choice-title">
+                                {{.Translation.Get "create-lobby"}}
+                            </div>
+                        </div>
+                        {{if .Errors}}
+                        <div class="lobby-create-errors">
+                            {{range .Errors}}
+                            <div class="error">{{.}}</div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                        <form id="lobby-create" action="{{.RootPath}}/lobby" method="POST">
+                            <label class="lobby-create-label" for="language">
+                                {{.Translation.Get "word-language"}}
+                            </label>
+                            <select class="input-item" name="language" id="language" placeholder="Choose your language">
+                                {{$language := .Language}}
+                                {{range $k, $v := .Languages}}
+                                <option value="{{$k}}" label="{{$v}}" {{if eq $k $language}}selected="selected" {{end}}>
+                                </option>
+                                {{end}}
+                            </select>
+                            <label class="lobby-create-label" for="score_calculation">
+                                {{.Translation.Get "score-calculation"}}
+                            </label>
+                            <select class="input-item" name="score_calculation" id="score_calculation"
+                                placeholder="Choose how player scores are determined">
+                                {{$scoreCalculation := .ScoreCalculation}}
+                                {{range $k := .ScoreCalculations}}
+                                {{$alt := $.Translation.Get (print $k "-alt")}}
+                                <option alt="{{$alt}}" title="{{$alt}}" value="{{$k}}" label="{{$.Translation.Get $k}}"
+                                    {{if eq $k $scoreCalculation}}selected="selected" {{end}}>
+                                </option>
+                                {{end}}
+                            </select>
+                            <label class="lobby-create-label" for="drawing_time">
+                                {{.Translation.Get "drawing-time-setting"}}
+                            </label>
+                            <div class="number-input">
+                                <button class="number-decrement" type="button">-</button>
+                                <input size="4" type="number" name="drawing_time" id="drawing_time"
+                                    min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}" value="{{.DrawingTime}}">
+                                <button class="number-increment" type="button">+</button>
+                            </div>
+                            <label class="lobby-create-label" for="rounds">
+                                {{.Translation.Get "rounds-setting"}}
+                            </label>
+                            <div class="number-input">
+                                <button class="number-decrement" type="button">-</button>
+                                <input size="4" type="number" name="rounds" id="rounds" min="{{.MinRounds}}"
+                                    max="{{.MaxRounds}}" value="{{.Rounds}}">
+                                <button class="number-increment" type="button">+</button>
+                            </div>
+                            <label class="lobby-create-label" for="max_players">
+                                {{.Translation.Get "max-players-setting"}}
+                            </label>
+                            <div class="number-input">
+                                <button class="number-decrement" type="button">-</button>
+                                <input size="4" type="number" name="max_players" id="max_players"
+                                    min="{{.MinMaxPlayers}}" max="{{.MaxMaxPlayers}}" value="{{.MaxPlayers}}">
+                                <button class="number-increment" type="button">+</button>
+                            </div>
+
+                            <input type="checkbox" id="advanced-toggle" class="advanced-toggle-checkbox" checked>
+                            <label for="advanced-toggle" class="advanced-section-label">
+                                {{.Translation.Get "advanced-settings"}}
+                                <span class="toggle-icon">▼</span>
+                            </label>
+                            <div class="advanced-section-content">
+                                <label class="lobby-create-label" for="clients_per_ip_limit">
+                                    {{.Translation.Get "players-per-ip-limit-setting"}}
+                                </label>
+                                <div class="number-input">
+                                    <button class="number-decrement" type="button">-</button>
+                                    <input size="4" type="number" name="clients_per_ip_limit" id="clients_per_ip_limit"
+                                        min="{{.MinClientsPerIPLimit}}" max="{{.MaxClientsPerIPLimit}}"
+                                        value="{{.ClientsPerIPLimit}}">
+                                    <button class="number-increment" type="button">+</button>
+                                </div>
+                                <label class="lobby-create-label" for="words_per_turn">
+                                  {{.Translation.Get "words-per-turn-setting"}}
+                                </label>
+                                <div class="number-input">
+                                    <button class="number-decrement" type="button">-</button>
+                                    <input size="4" type="number" name="words_per_turn" id="words_per_turn"
+                                      min="{{.MinWordsPerTurn}}" max="{{.MaxWordsPerTurn}}" value="{{.WordsPerTurn}}">
+                                    <button class="number-increment" type="button">+</button>
+                                </div>
+                                <label class="lobby-create-label" for="custom_words_per_turn">
+                                    {{.Translation.Get "custom-words-per-turn-setting"}}
+                                </label>
+                                <div class="number-input">
+                                    <button class="number-decrement" type="button">-</button>
+                                    <input size="4" type="number" name="custom_words_per_turn" id="custom_words_per_turn"
+                                        min="{{.MinCustomWordsPerTurn}}" max="{{.MaxWordsPerTurn}}" value="{{.CustomWordsPerTurn}}">
+                                    <button class="number-increment" type="button">+</button>
+                                </div>
+                                <label class="lobby-create-label" for="custom_words">
+                                    {{.Translation.Get "custom-words"}}
+                                </label>
+                                <textarea class="input-item" name="custom_words" id="custom_words"
+                                    placeholder="{{.Translation.Get "custom-words-placeholder"}}">{{.CustomWords}}</textarea>
+                            </div>
+
+                            <input type="checkbox" id="public-check-box" name="public" value="true"
+                                style="display: none" checked>
+                        </form>
+                        <div class="create-buttons">
+                            <button id="create-public" form="lobby-create" type="submit" class="create-button">
+                                {{.Translation.Get "create-public-lobby"}}
+                            </button>
+                            <button form="lobby-create" type="submit" class="create-button">
+                                {{.Translation.Get "create-private-lobby"}}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="lobby-join-choice" class="home-choice">
+                    <div class="home-choice-inner">
+                        <div class="home-choice-header">
+                            <div class="home-choice-title">
+                                {{.Translation.Get "join-lobby"}}
+                            </div>
+                            <button id="refresh-lobby-list-button">
+                                {{.Translation.Get "refresh"}}
+                            </button>
+                        </div>
+                        <div id="lobby-list-placeholder-text" class="lobby-list-placeholder"></div>
+                        <div id="lobby-list-placeholder-loading" class="lobby-list-placeholder">
+                            <svg class="reload-spinner" fill="#000000" height="48" viewBox="0 0 24 24" width="48"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                            </svg>
+                        </div>
+                        <div id="lobby-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            {{template "footer" .}}
+        </footer>
+
+        <script type="text/javascript" src='{{.RootPath}}/{{.WithCacheBust "index.js"}}'></script>
+</body>
+
+</html>
+{{end}}

@@ -1,0 +1,23 @@
+# We are going with a whitelisting approach, to avoid accidentally bleeding
+# too much into our container. This reduces the amount of cache miss and
+# potentially speeds up the build.
+*
+
+# All non-test Go Code
+!internal/
+!pkg/
+!cmd/
+**_test.go
+
+# Go Modules
+!go.mod
+!go.sum
+
+# While the dockerfile aren't needed inside of the Dockerfile, fly.io requires
+# them for remote bulding and uses this dockerignore to filter what's sent to
+# the remote builder.
+!linux.Dockerfile
+!windows.Dockerfile
+
+!public
+

@@ -1,0 +1,295 @@
+package frontend
+
+import (
+	//nolint:gosec //We just use this for cache busting, so it's secure enough
+
+	"crypto/md5"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	txtTemplate "text/template"
+
+	"github.com/scribble-rs/scribble.rs/internal/api"
+	"github.com/scribble-rs/scribble.rs/internal/config"
+	"github.com/scribble-rs/scribble.rs/internal/game"
+	"github.com/scribble-rs/scribble.rs/internal/state"
+	"github.com/scribble-rs/scribble.rs/internal/translations"
+	"github.com/scribble-rs/scribble.rs/internal/version"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
+	_ "embed"
+)
+
+//go:embed lobby.js
+var lobbyJsRaw string
+
+//go:embed index.js
+var indexJsRaw string
+
+type indexJsData struct {
+	*BasePageConfig
+
+	Translation *translations.Translation
+	Locale      string
+}
+
+// This file contains the API for the official web client.
+
+type SSRHandler struct {
+	cfg                *config.Config
+	basePageConfig     *BasePageConfig
+	lobbyJsRawTemplate *txtTemplate.Template
+	indexJsRawTemplate *txtTemplate.Template
+}
+
+func NewHandler(cfg *config.Config) (*SSRHandler, error) {
+	basePageConfig := &BasePageConfig{
+		checksums:     make(map[string]string),
+		hash:          md5.New(),
+		Version:       version.Version,
+		Commit:        version.Commit,
+		RootURL:       cfg.RootURL,
+		CanonicalURL:  cfg.CanonicalURL,
+		AllowIndexing: cfg.AllowIndexing,
+	}
+	if cfg.RootPath != "" {
+		basePageConfig.RootPath = "/" + cfg.RootPath
+	}
+	if basePageConfig.CanonicalURL == "" {
+		basePageConfig.CanonicalURL = basePageConfig.RootURL
+	}
+
+	indexJsRawTemplate, err := txtTemplate.
+		New("index-js").
+		Parse(indexJsRaw)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing index js template: %w", err)
+	}
+
+	lobbyJsRawTemplate, err := txtTemplate.
+		New("lobby-js").
+		Parse(lobbyJsRaw)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing lobby js template: %w", err)
+	}
+
+	lobbyJsRawTemplate.AddParseTree("footer", pageTemplates.Tree)
+
+	entries, err := frontendResourcesFS.ReadDir("resources")
+	if err != nil {
+		return nil, fmt.Errorf("error reading resource directory: %w", err)
+	}
+
+	//nolint:gosec //We just use this for cache busting, so it's secure enough
+	for _, entry := range entries {
+		bytes, err := frontendResourcesFS.ReadFile("resources/" + entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("error reading resource %s: %w", entry.Name(), err)
+		}
+
+		if err := basePageConfig.Hash(entry.Name(), bytes); err != nil {
+			return nil, fmt.Errorf("error hashing resource %s: %w", entry.Name(), err)
+		}
+	}
+	if err := basePageConfig.Hash("index.js", []byte(indexJsRaw)); err != nil {
+		return nil, fmt.Errorf("error hashing: %w", err)
+	}
+	if err := basePageConfig.Hash("lobby.js", []byte(lobbyJsRaw)); err != nil {
+		return nil, fmt.Errorf("error hashing: %w", err)
+	}
+
+	handler := &SSRHandler{
+		cfg:                cfg,
+		basePageConfig:     basePageConfig,
+		lobbyJsRawTemplate: lobbyJsRawTemplate,
+		indexJsRawTemplate: indexJsRawTemplate,
+	}
+	return handler, nil
+}
+
+func (handler *SSRHandler) indexJs(writer http.ResponseWriter, request *http.Request) {
+	translation, locale := determineTranslation(request)
+	pageData := &indexJsData{
+		BasePageConfig: handler.basePageConfig,
+		Translation:    translation,
+		Locale:         locale,
+	}
+
+	writer.Header().Set("Content-Type", "text/javascript")
+	// Duration of 1 year, since we use cachebusting anyway.
+	writer.Header().Set("Cache-Control", "public, max-age=31536000")
+	writer.WriteHeader(http.StatusOK)
+	if err := handler.indexJsRawTemplate.ExecuteTemplate(writer, "index-js", pageData); err != nil {
+		log.Printf("error templating JS: %s\n", err)
+	}
+}
+
+// indexPageHandler servers the default page for scribble.rs, which is the
+// page to create or join a lobby.
+func (handler *SSRHandler) indexPageHandler(writer http.ResponseWriter, request *http.Request) {
+	translation, locale := determineTranslation(request)
+	createPageData := handler.createDefaultIndexPageData()
+	createPageData.Translation = translation
+	createPageData.Locale = locale
+
+	err := pageTemplates.ExecuteTemplate(writer, "index", createPageData)
+	if err != nil {
+		log.Printf("Error templating home page: %s\n", err)
+	}
+}
+
+func (handler *SSRHandler) createDefaultIndexPageData() *IndexPageData {
+	return &IndexPageData{
+		BasePageConfig:       handler.basePageConfig,
+		SettingBounds:        handler.cfg.LobbySettingBounds,
+		Languages:            game.SupportedLanguages,
+		ScoreCalculations:    game.SupportedScoreCalculations,
+		LobbySettingDefaults: handler.cfg.LobbySettingDefaults,
+	}
+}
+
+// IndexPageData defines all non-static data for the lobby create page.
+type IndexPageData struct {
+	*BasePageConfig
+	config.LobbySettingDefaults
+	game.SettingBounds
+
+	Translation       *translations.Translation
+	Locale            string
+	Errors            []string
+	Languages         map[string]string
+	ScoreCalculations []string
+}
+
+// ssrCreateLobby allows creating a lobby, optionally returning errors that
+// occurred during creation.
+func (handler *SSRHandler) ssrCreateLobby(writer http.ResponseWriter, request *http.Request) {
+	if err := request.ParseForm(); err != nil {
+		http.Error(writer, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	scoreCalculation, scoreCalculationInvalid := api.ParseScoreCalculation(request.Form.Get("score_calculation"))
+	languageRawValue := request.Form.Get("language")
+	languageData, languageKey, languageInvalid := api.ParseLanguage(languageRawValue)
+	drawingTime, drawingTimeInvalid := api.ParseDrawingTime(handler.cfg, request.Form.Get("drawing_time"))
+	rounds, roundsInvalid := api.ParseRounds(handler.cfg, request.Form.Get("rounds"))
+	maxPlayers, maxPlayersInvalid := api.ParseMaxPlayers(handler.cfg, request.Form.Get("max_players"))
+	customWordsPerTurn, customWordsPerTurnInvalid := api.ParseCustomWordsPerTurn(handler.cfg, request.Form.Get("custom_words_per_turn"))
+	clientsPerIPLimit, clientsPerIPLimitInvalid := api.ParseClientsPerIPLimit(handler.cfg, request.Form.Get("clients_per_ip_limit"))
+	publicLobby, publicLobbyInvalid := api.ParseBoolean("public", request.Form.Get("public"))
+	wordsPerTurn, wordsPerTurnInvalid := api.ParseWordsPerTurn(handler.cfg, request.Form.Get("words_per_turn"))
+
+	if wordsPerTurn < customWordsPerTurn {
+		wordsPerTurnInvalid = errors.New("words per turn must be greater than or equal to custom words per turn")
+	}
+
+	var lowercaser cases.Caser
+	if languageInvalid != nil {
+		lowercaser = cases.Lower(language.English)
+	} else {
+		lowercaser = languageData.Lowercaser()
+	}
+	customWords, customWordsInvalid := api.ParseCustomWords(lowercaser, request.Form.Get("custom_words"))
+
+	// Prevent resetting the form, since that would be annoying as hell.
+	pageData := IndexPageData{
+		BasePageConfig: handler.basePageConfig,
+		SettingBounds:  handler.cfg.LobbySettingBounds,
+		LobbySettingDefaults: config.LobbySettingDefaults{
+			Public:             request.Form.Get("public"),
+			DrawingTime:        request.Form.Get("drawing_time"),
+			Rounds:             request.Form.Get("rounds"),
+			MaxPlayers:         request.Form.Get("max_players"),
+			CustomWords:        request.Form.Get("custom_words"),
+			CustomWordsPerTurn: request.Form.Get("custom_words_per_turn"),
+			ClientsPerIPLimit:  request.Form.Get("clients_per_ip_limit"),
+			Language:           request.Form.Get("language"),
+			ScoreCalculation:   request.Form.Get("score_calculation"),
+			WordsPerTurn:       request.Form.Get("words_per_turn"),
+		},
+		Languages:         game.SupportedLanguages,
+		ScoreCalculations: game.SupportedScoreCalculations,
+	}
+
+	if scoreCalculationInvalid != nil {
+		pageData.Errors = append(pageData.Errors, scoreCalculationInvalid.Error())
+	}
+	if languageInvalid != nil {
+		pageData.Errors = append(pageData.Errors, languageInvalid.Error())
+	}
+	if drawingTimeInvalid != nil {
+		pageData.Errors = append(pageData.Errors, drawingTimeInvalid.Error())
+	}
+	if roundsInvalid != nil {
+		pageData.Errors = append(pageData.Errors, roundsInvalid.Error())
+	}
+	if maxPlayersInvalid != nil {
+		pageData.Errors = append(pageData.Errors, maxPlayersInvalid.Error())
+	}
+	if customWordsInvalid != nil {
+		pageData.Errors = append(pageData.Errors, customWordsInvalid.Error())
+	}
+	if customWordsPerTurnInvalid != nil {
+		pageData.Errors = append(pageData.Errors, customWordsPerTurnInvalid.Error())
+	} else {
+		if languageRawValue == "custom" && len(customWords) == 0 {
+			pageData.Errors = append(pageData.Errors, "custom words must be provided when using custom language")
+		}
+	}
+	if clientsPerIPLimitInvalid != nil {
+		pageData.Errors = append(pageData.Errors, clientsPerIPLimitInvalid.Error())
+	}
+	if publicLobbyInvalid != nil {
+		pageData.Errors = append(pageData.Errors, publicLobbyInvalid.Error())
+	}
+	if wordsPerTurnInvalid != nil {
+		pageData.Errors = append(pageData.Errors, wordsPerTurnInvalid.Error())
+	}
+
+	translation, locale := determineTranslation(request)
+	pageData.Translation = translation
+	pageData.Locale = locale
+
+	if len(pageData.Errors) != 0 {
+		err := pageTemplates.ExecuteTemplate(writer, "index", pageData)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	playerName := api.GetPlayername(request)
+
+	lobbySettings := &game.EditableLobbySettings{
+		Rounds:             rounds,
+		DrawingTime:        drawingTime,
+		MaxPlayers:         maxPlayers,
+		CustomWordsPerTurn: customWordsPerTurn,
+		ClientsPerIPLimit:  clientsPerIPLimit,
+		Public:             publicLobby,
+		WordsPerTurn:       wordsPerTurn,
+	}
+	player, lobby, err := game.CreateLobby("", playerName, languageKey,
+		lobbySettings, customWords, scoreCalculation)
+	if err != nil {
+		pageData.Errors = append(pageData.Errors, err.Error())
+		if err := pageTemplates.ExecuteTemplate(writer, "index", pageData); err != nil {
+			handler.userFacingError(writer, err.Error(), translation)
+		}
+
+		return
+	}
+
+	lobby.WriteObject = api.WriteObject
+	lobby.WritePreparedMessage = api.WritePreparedMessage
+	player.SetLastKnownAddress(api.GetIPAddressFromRequest(request))
+	api.SetGameplayCookies(writer, request, player, lobby)
+
+	// We only add the lobby if we could do all necessary pre-steps successfully.
+	state.AddLobby(lobby)
+
+	http.Redirect(writer, request, handler.basePageConfig.RootPath+"/lobby/"+lobby.LobbyID, http.StatusFound)
+}

@@ -1,0 +1,157 @@
+:root {
+    --pane-background: #eee5e9;
+    --component-base-color: #ffffff;
+    --component-hover-background: rgb(250, 211, 252) !important;
+    --component-hover-lighter-background: rgb(252, 231, 253) !important;
+    --component-focus-background: rgb(244, 183, 247);
+    --component-active-background: rgb(192, 58, 200);
+    --component-border-radius: 0.5rem;
+
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+
+    color: #222;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+}
+
+* {
+    outline: none;
+}
+
+html,
+body {
+    min-height: 100vh;
+}
+
+body,
+body::backdrop,
+body:fullscreen {
+    margin: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(46, 46, 175, 1) 0%,
+        rgba(37, 79, 191, 1) 42%,
+        rgba(0, 170, 255, 1) 100%
+    );
+}
+
+body::before {
+    content: " ";
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    opacity: 0.5;
+    background: var(--scribble-background) repeat;
+    background-size: 400px 400px;
+    background-repeat: repeat;
+    z-index: -1;
+}
+
+footer,
+.help-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+}
+
+footer {
+    padding: 0.1rem;
+    background-color: lightslategray;
+    color: white;
+}
+
+.help-footer {
+    flex-wrap: wrap;
+}
+
+a:link,
+a:visited {
+    color: inherit;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+h1,
+h2 {
+    margin: 0;
+    text-align: center;
+    color: rgb(248, 148, 164);
+}
+
+h1 {
+    font-size: 6rem;
+}
+
+h2 {
+    font-size: 4rem;
+}
+
+ul {
+    margin: 0;
+}
+
+select,
+input,
+button,
+textarea {
+    background-color: var(--component-base-color);
+    color: inherit;
+    border-radius: var(--component-border-radius);
+    border: 2px hidden;
+}
+
+input:hover,
+button:hover,
+select:hover,
+textarea:hover {
+    background-color: var(--component-hover-background);
+}
+
+input:focus,
+button:focus,
+select:focus,
+textarea:focus {
+    background-color: var(--component-focus-background);
+}
+
+button:active {
+    background-color: var(--component-active-background);
+}
+
+input,
+select {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+}
+
+textarea {
+    padding-left: 0.4rem;
+    padding-top: 0.2rem;
+    min-width: 0;
+    resize: none;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.noscript {
+    display: flex;
+    font-size: 2.5rem;
+    font-weight: bold;
+    justify-content: center;
+    border-bottom: 1rem solid black;
+    padding: 10px;
+}

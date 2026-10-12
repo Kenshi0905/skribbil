@@ -1,0 +1,20 @@
+# Executable names
+/scribblers
+*.exe
+__debug_bin
+# IntelliJ state
+.idea/
+# Folder that contains code used for trying stuff locally
+playground/
+# Temporary output text files
+*.out
+# System metadata files
+.DS_Store
+# Configuration files
+.env
+# Anything temporary
+*.tmp
+# Profiling results
+*.pprof
+# Additional files for hosting. Workaround for now ig.
+public/

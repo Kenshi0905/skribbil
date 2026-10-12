@@ -1,0 +1,395 @@
+{{define "lobby-page"}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+
+<head>
+    <title>Skribbil - Game</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1, user-scalable=0">
+    {{template "non-static-css-decl" .}}
+    <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "root.css"}}' />
+    <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "lobby.css"}}' />
+    {{template "favicon-decl" .}}
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "your-turn.wav"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "pencil.svg"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "checkmark.svg"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "sound.svg"}}' />
+    <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "no-sound.svg"}}' />
+</head>
+
+<body {{if eq .Translation.IsRtl true}} dir="rtl" {{end}}>
+    <div id="app">
+        <noscript><span class="noscript">{{.Translation.Get "requires-js"}}</span></noscript>
+
+        <div id="league-toolbar" hidden>
+            <a href="/" class="league-home-link">✎ Skribbil league</a>
+            <button id="league-dislike-button" disabled title="Every other player must dislike before the artist loses 100 points.">Dislike drawing</button>
+            <span id="league-dislike-status" aria-live="polite">Choose a word to begin voting.</span>
+            <a id="league-results-link" href="/" hidden>Back to league · rematch &amp; results →</a>
+        </div>
+        <div id="lobby">
+            <div id="lobby-header">
+                <div id="round-container">
+                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "round.svg"}}' class="header-button-image"
+                        alt="{{.Translation.Get "round"}}" title="{{.Translation.Get "round"}}" />
+                    <span id="rounds"></span>
+                    <span id="max-rounds"></span>
+                </div>
+
+                <div id="lobby-header-center-element">
+                    <div id="menu-button-container">
+                        <button id="menu-button" popovertarget="menu" alt="Show menu" title="Show menu">
+                            <img src='{{.RootPath}}/resources/{{.WithCacheBust "menu.svg"}}'
+                                class="header-button-image" />
+                        </button>
+                        <div id="menu" popover>
+                            <div class="menu-list">
+                                <!-- this button is basically behaving like a checkbox, but in order to
+                have a uniform look with the other buttons in the header, we are not using
+                a checkbox anymore. -->
+                                <button id="toggle-sound-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "toggle-soundeffects"}}"
+                                    title="{{.Translation.Get "toggle-soundeffects"}}">
+                                    <img id="sound-toggle-label" class="header-button-image" />
+                                    {{.Translation.Get "toggle-soundeffects"}}
+                                </button>
+                                <button id="toggle-pen-pressure-button"
+                                    class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "toggle-pen-pressure"}}"
+                                    title="{{.Translation.Get "toggle-pen-pressure"}}">
+                                    <img id="pen-pressure-toggle-label" class="header-button-image" />
+                                    {{.Translation.Get "toggle-pen-pressure"}}
+                                </button>
+                                <button id="name-change-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "change-your-name"}}"
+                                    title="{{.Translation.Get "change-your-name"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "user.svg"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "change-your-name"}}
+                                </button>
+                                <button id="toggle-fullscreen-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "toggle-fullscreen"}}"
+                                    title="{{.Translation.Get "toggle-fullscreen"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "fullscreen.svg"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "toggle-fullscreen"}}
+                                </button>
+                                <button id="toggle-spectate-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "toggle-spectate"}}"
+                                    title="{{.Translation.Get "toggle-spectate"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "spectate.svg"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "toggle-spectate"}}
+                                </button>
+                                <button id="help-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "show-help"}}" title="{{.Translation.Get "show-help"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "help.svg"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "show-help"}}
+                                </button>
+                                <button id="kick-button" class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "votekick-a-player"}}"
+                                    title="{{.Translation.Get "votekick-a-player"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "kick.png"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "votekick-a-player"}}
+                                </button>
+                                <button id="lobby-settings-button" style="display: none;"
+                                    class="dialog-button menu-item header-button"
+                                    alt="{{.Translation.Get "change-lobby-settings-tooltip"}}"
+                                    title="{{.Translation.Get "change-lobby-settings-tooltip"}}">
+                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "settings.svg"}}'
+                                        class="header-button-image" />
+                                    {{.Translation.Get "change-lobby-settings-tooltip"}}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                  <div id="word-container" {{if eq .IsWordpackRtl true}} dir="rtl" {{else}} dir="ltr" {{end}}></div>
+                </div>
+                <div id="time-left">
+                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "clock.svg"}}' class="header-button-image" />
+                    <div id="time-left-value">∞</div>
+                </div>
+            </div>
+
+            <div id="player-container"></div>
+
+            <div id="drawing-board-wrapper">
+                <div id="drawing-board-inner-wrapper">
+                    <canvas id="drawing-board" width="1600" height="900"></canvas>
+
+                    <!-- The so called "center dialogs" are divs that float above the canvas.
+                    They are are always both horizontally and vertically. They can bever be
+                    as big as the canvas and are usually closable, as long as it makes sense.
+                    The can be seen as a new "window" and prevent touch and pointer events
+                    from reaching the canvas. Technically there could be more than one dialog
+                    visible at a time, but they'll be layered and there's no rule as to how. -->
+                    <div id="center-dialogs">
+                        <div id="word-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "choose-a-word"}}</span>
+                            <div class="center-dialog-content">
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: center">
+                                    <div>
+                                        <span>{{.Translation.Get "word-choice-warning"}}:</span>
+                                        <span id="word-preselected" style="font-weight: bold;"></span>
+                                    </div>
+                                    <div id="word-button-container"> </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="start-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "start-the-game"}}</span>
+                            <div class="center-dialog-content">
+                                <div style="display: flex; flex-direction:
+                                    column; gap: 0.5rem;">
+                                    <div style="display: flex; flex-direction:
+                                        row; gap: 0.5rem; align-items: center;">
+                                        {{.Translation.Get "change-your-name"}}:
+                                        <input class="namechange-field" type="text"
+                                            id="namechange-field-start-dialog"></input>
+                                        <button id="namechange-button-start-dialog"
+                                            class="dialog-button">{{.Translation.Get "apply"}}</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="button-bar">
+                                <div class="ready-check-box-wrapper">
+                                    <label class="ready-check-box" for="ready-state-start">
+                                        {{.Translation.Get "ready"}}
+                                        <input type="checkbox" name="ready-state-start" id="ready-state-start">
+                                        (<span class="ready-count">0</span>/<span class="ready-needed">0</span>)
+                                    </label>
+                                </div>
+                                <button id="force-start-button"
+                                    class="dialog-button">{{.Translation.Get "force-start"}}</button>
+                            </div>
+                        </div>
+
+                        <div id="waitchoose-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "waiting-for-word-selection"}}</span>
+                            <div class="center-dialog-content">
+                                <span id="waitchoose-drawer"></span>&nbsp;{{.Translation.Get "is-choosing-word"}}
+                            </div>
+                        </div>
+
+                        <div id="namechange-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "change-your-name"}}</span>
+                            <div class="center-dialog-content">
+                                <input class="namechange-field" type="text" id="namechange-field"></input>
+                            </div>
+                            <div class="button-bar">
+                                <button id="namechange-button" class="dialog-button">
+                                    {{.Translation.Get "save"}}</button>
+                                <button id="namechange-close-button"
+                                    class="dialog-button">{{.Translation.Get "close"}}</button>
+                            </div>
+                        </div>
+
+                        <div id="lobbysettings-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "change-lobby-settings-title"}}</span>
+                            <div class="center-dialog-content">
+                                <div class="input-container">
+                                    <b>{{.Translation.Get "drawing-time-setting"}}</b>
+                                    <input id="lobby-settings-drawing-time" class="input-item" type="number"
+                                        name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
+                                        value="{{.DrawingTime}}" />
+                                    <b>{{.Translation.Get "rounds-setting"}}</b>
+                                    <input id="lobby-settings-max-rounds" class="input-item" type="number" name="rounds"
+                                        min="{{.MinRounds}}" max="{{.MaxRounds}}" value="{{.Rounds}}" />
+                                    <b>{{.Translation.Get "max-players-setting"}}</b>
+                                    <input id="lobby-settings-max-players" type="number" name="max_players"
+                                        min="{{.MinMaxPlayers}}" max="{{.MaxMaxPlayers}}" value="{{.MaxPlayers}}" />
+                                    <b>{{.Translation.Get "public-lobby-setting"}}</b>
+                                    <input id="lobby-settings-public" type="checkbox" name="public" {{if eq
+                                            .Public true}}checked{{end}} />
+                                    <b>{{.Translation.Get "words-per-turn-setting"}}</b>
+                                    <input id="lobby-settings-words-per-turn" type="number" name="words_per_turn"
+                                        min="{{.MinWordsPerTurn}}" max="{{.MaxWordsPerTurn}}" value="{{.WordsPerTurn}}" />
+                                    <b>{{.Translation.Get "custom-words-per-turn-setting"}}</b>
+                                    <input id="lobby-settings-custom-words-per-turn" class="input-item" type="number"
+                                        name="custom_words_per_turn" min="{{.MinCustomWordsPerTurn}}"
+                                        max="{{.MaxWordsPerTurn}}" value="{{.CustomWordsPerTurn}}" />
+                                    <b>{{.Translation.Get "players-per-ip-limit-setting"}}</b>
+                                    <input id="lobby-settings-clients-per-ip-limit" type="number"
+                                        name="clients_per_ip_limit" min="{{.MinClientsPerIPLimit}}"
+                                        max="{{.MaxClientsPerIPLimit}}" value="{{.ClientsPerIPLimit}}" />
+                                </div>
+                            </div>
+                            <div class="button-bar">
+                                <button id="lobby-settings-save-button" class="dialog-button">
+                                    {{.Translation.Get "save-settings"}}
+                                </button>
+                                <button id="lobby-settings-close-button"
+                                    class="dialog-button">{{.Translation.Get "close"}}</button>
+                            </div>
+                        </div>
+
+                        <div id="game-over-dialog" class="center-dialog">
+                            <span id="game-over-dialog-title" class="dialog-title">Game over!</span>
+                            <div class="center-dialog-content">
+                                <div id="game-over-scoreboard"></div>
+                            </div>
+                            <div class="button-bar">
+                                <div class="ready-check-box-wrapper">
+                                    <label class="ready-check-box" for="ready-state-game-over">
+                                        Ready
+                                        <input type="checkbox" name="ready-state-game-over" id="ready-state-game-over">
+                                        (<span class="ready-count">0</span>/<span class="ready-needed">0</span>)
+                                    </label>
+                                </div>
+                                <button id="force-restart-button" class="dialog-button">{{.Translation.Get
+                                    "force-restart"}}</button>
+                            </div>
+                        </div>
+
+                        <div id="kick-dialog" class="center-dialog">
+                            <span class="dialog-title">{{.Translation.Get "votekick-a-player"}}</span>
+                            <div class="center-dialog-content">
+                                <div id="kick-dialog-players"></div>
+                            </div>
+                            <div class="button-bar">
+                                <button id="kick-close-button"
+                                    class="dialog-button">{{.Translation.Get "close"}}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="toolbox" style="display: none;">
+                <div class="color-button-container toolbox-group" alt="{{.Translation.Get "change-active-color"}}"
+                    title="{{.Translation.Get "change-active-color"}}">
+                    <!-- These buttons use !important for their color in order
+                to prevent hover and active colors to appear. -->
+                    <div id="first-color-button-row" class="color-button-row">
+                        <button class="color-button" style="background-color: #ffffff !Important"></button>
+                        <button class="color-button" style="background-color: #c1c1c1 !Important"></button>
+                        <button class="color-button" style="background-color: #ef130b !Important"></button>
+                        <button class="color-button" style="background-color: #ff7100 !Important"></button>
+                        <button class="color-button" style="background-color: #ffe400 !Important"></button>
+                        <button class="color-button" style="background-color: #00cc00 !Important"></button>
+                        <button class="color-button" style="background-color: #00b2ff !Important"></button>
+                        <button class="color-button" style="background-color: #231fd3 !Important"></button>
+                        <button class="color-button" style="background-color: #a300ba !Important"></button>
+                        <button class="color-button" style="background-color: #d37caa !Important"></button>
+                        <button class="color-button" style="background-color: #a0522d !Important"></button>
+                        <button class="color-button" style="background-color: #592f2a !Important"></button>
+                        <button class="color-button" style="background-color: #ecbcb4 !Important"></button>
+                    </div>
+                    <div id="second-color-button-row" class="color-button-row">
+                        <button class="color-button" style="background-color: #000000 !Important"></button>
+                        <button class="color-button" style="background-color: #4c4c4c !Important"></button>
+                        <button class="color-button" style="background-color: #740b07 !Important"></button>
+                        <button class="color-button" style="background-color: #c23800 !Important"></button>
+                        <button class="color-button" style="background-color: #e8a200 !Important"></button>
+                        <button class="color-button" style="background-color: #005510 !Important"></button>
+                        <button class="color-button" style="background-color: #00569e !Important"></button>
+                        <button class="color-button" style="background-color: #0e0865 !Important"></button>
+                        <button class="color-button" style="background-color: #550069 !Important"></button>
+                        <button class="color-button" style="background-color: #a75574 !Important"></button>
+                        <button class="color-button" style="background-color: #63300d !Important"></button>
+                        <button class="color-button" style="background-color: #492f31 !Important"></button>
+                        <button class="color-button" style="background-color: #d1a3a4 !Important"></button>
+                    </div>
+                </div>
+                <!--The following buttons als override onmousedown and onmouseup to make
+                selection more foolproof. This was done, because many people seem to
+                only make half a click (either up or down) in the right location.-->
+                <div class="pencil-sizes-container toolbox-group">
+                    <label for="tool-type-pencil">
+                        <input id="tool-type-pencil" class="custom-check-or-radio line-width-button" type="radio"
+                            name="tool-type" checked>
+                        <div id="tool-type-pencil-wrapper" class="line-width-button-content">
+                <img id="use-pencil-button-image" title="{{.Translation.Get "use-pencil"}} " alt="{{.Translation.Get "use-pencil"}}"
+                                src='{{.RootPath}}/resources/{{.WithCacheBust "pencil.svg"}}'
+                                style="transform: scaleX(-1)" />
+                        </div>
+                    </label>
+                    <label for="tool-type-fill">
+                        <input id="tool-type-fill" class="custom-check-or-radio line-width-button" type="radio"
+                            name="tool-type">
+                        <div id="tool-type-fill-wrapper" class="line-width-button-content">
+                            <img id="use-fill-bucket-button-image" alt="{{.Translation.Get "use-fill-bucket"}}"
+                  title="{{.Translation.Get "use-fill-bucket"}} "
+                                src='{{.RootPath}}/resources/{{.WithCacheBust "fill.svg"}}' />
+                        </div>
+                    </label>
+                    <label for="tool-type-rubber">
+                        <input id="tool-type-rubber" class="custom-check-or-radio line-width-button" type="radio"
+                            name="tool-type">
+                        <div id="tool-type-rubber-wrapper" class="line-width-button-content">
+                <img id="use-eraser-button-image" alt="{{.Translation.Get "use-eraser"}}" title="{{.Translation.Get "use-eraser"}} "
+                                src='{{.RootPath}}/resources/{{.WithCacheBust "rubber.svg"}}' />
+                        </div>
+                    </label>
+                </div>
+                <div id="size-buttons" class="pencil-sizes-container toolbox-group">
+                    <label for="size-8-button">
+                        <input id="size-8-button" class="custom-check-or-radio line-width-button" type="radio"
+                            name="line-width" checked>
+                        <div id="size-8-button-wrapper" class="line-width-button-content"
+                            alt="{{printf (.Translation.Get "change-pencil-size-to") "8"}}"
+                title="{{printf (.Translation.Get "change-pencil-size-to") "8"}} ">
+                            <div class="dot" style="width: 8px; height: 8px"></div>
+                        </div>
+                    </label>
+                    <label for="size-16-button">
+                        <input id="size-16-button" class="custom-check-or-radio line-width-button" type="radio"
+                            name="line-width">
+                        <div id="size-16-button-wrapper" class="line-width-button-content"
+                            alt="{{printf (.Translation.Get "change-pencil-size-to") "16"}}"
+                title="{{printf (.Translation.Get "change-pencil-size-to") "16"}} ">
+                            <div class="dot" style="width: 16px; height: 16px"></div>
+                        </div>
+                    </label>
+                    <label for="size-24-button">
+                        <input id="size-24-button" class="custom-check-or-radio line-width-button" type="radio"
+                            name="line-width">
+                        <div id="size-24-button-wrapper" class="line-width-button-content"
+                            alt="{{printf (.Translation.Get "change-pencil-size-to") "24"}}"
+                title="{{printf (.Translation.Get "change-pencil-size-to") "24"}} ">
+                            <div class="dot" style="width: 24px; height: 24px"></div>
+                        </div>
+                    </label>
+                    <label for="size-32-button">
+                        <input id="size-32-button" class="custom-check-or-radio line-width-button" type="radio"
+                            name="line-width">
+                        <div id="size-32-button-wrapper" class="line-width-button-content"
+                            alt="{{printf (.Translation.Get "change-pencil-size-to") "32"}}"
+                title="{{printf (.Translation.Get "change-pencil-size-to") "32"}} ">
+                            <div class="dot" style="width: 32px; height: 32px"></div>
+                        </div>
+                    </label>
+                </div>
+                <!--We won't make these two buttons easier to click, as there's no going back. -->
+                <button id="clear-canvas-button" class="canvas-button toolbox-group"
+                    alt="{{.Translation.Get "clear-canvas"}}" title="{{.Translation.Get "clear-canvas"}}">
+                    <img alt="{{.Translation.Get "clear-canvas"}}" title="{{.Translation.Get "clear-canvas"}}"
+                        src='{{.RootPath}}/resources/{{.WithCacheBust "trash.svg"}}' />
+                </button>
+                <!--We won't make this button easier to click, as there's no going back. -->
+                <button id="undo-button" class="canvas-button toolbox-group" alt="{{.Translation.Get "undo"}}"
+                    title="{{.Translation.Get "undo"}}">
+                    <img id="undo-button-image" alt="{{.Translation.Get "undo"}}" title="{{.Translation.Get "undo"}} "
+                        src='{{.RootPath}}/resources/{{.WithCacheBust "undo.svg"}}' />
+                </button>
+            </div>
+
+            <div id="chat">
+                <div id="message-container"></div>
+                <input id="message-input" type="text" autocomplete="off"
+                    placeholder="{{.Translation.Get "message-input-placeholder"}}" />
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src='{{.RootPath}}/resources/{{.WithCacheBust "draw.js"}}'></script>
+    <script type="module" src='{{.RootPath}}/{{.WithCacheBust "lobby.js"}}'></script>
+</body>
+
+</html>
+{{end}}

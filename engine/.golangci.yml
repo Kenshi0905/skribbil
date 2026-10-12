@@ -1,0 +1,105 @@
+linters:
+  enable-all: true
+  disable:
+    ## These are deprecated
+    - exportloopref
+
+    ## These are too strict for our taste
+    # Whitespace linter
+    - wsl
+    # Demands a newline before each return
+    - nlreturn
+    # Magic numbers
+    - mnd
+    # function, line and variable length
+    - funlen
+    - lll
+    - varnamelen
+    # testpackages must be named _test for reduced visibility to package
+    # details.
+    - testpackage
+    # I don't really care about cyclopmatic complexity
+    - cyclop
+    - gocognit
+    # I don't see the harm in returning an interface
+    - ireturn
+    # Too many false positives, due to easyjson rn
+    - recvcheck
+    # While aligned tags look nice, i can't be arsed doing it manually.
+    - tagalign
+
+    ## Useful, but we won't use it for now, maybe later
+    # Allows us to define rules for dependencies
+    - depguard
+    # For some reason, imports aren't sorted right now.
+    - gci
+    # For now, we'll stick with our globals and inits. Everything needs to be
+    # rewrite to be more testable and safe to teardown and reset.
+    - gochecknoglobals
+    - gochecknoinits
+    # Seems to be very useful, but is also a very common usecase, so we'll
+    # ignore it for now
+    - exhaustruct
+    # Requires certain types of tags, such as json or mapstructure.
+    # While very useful, I don't care right now.
+    - musttag
+    # Not wrapping errors
+    - err113
+    - wrapcheck
+    # Code duplications
+    - dupl
+
+    ## Provides no real value
+    - testifylint
+
+    # Broken
+    - goimports
+
+linters-settings:
+  govet:
+    disable:
+      - fieldalignment
+
+  gocritic:
+    disabled-checks:
+      # This has false positives and provides little value.
+      - ifElseChain
+
+  gosec:
+    excludes:
+      # weak number generator stuff; mostly false positives, as we don't do
+      # security sensitive things anyway.
+      - G404
+
+  revive:
+    rules:
+      - name: var-naming
+        disabled: true
+
+  stylecheck:
+    checks: ["all", "-ST1003"]
+
+run:
+  exclude-files:
+    - ".*_easyjson.go"
+
+issues:
+  exclude-rules:
+    - path: translations\\[^e][^n].*?\.go
+      linters:
+        # Too many potential false positives
+        - misspell
+    # Exclude some linters from running on tests files. In tests, we often have
+    # code that is rather unsafe and only has one purpose, or furthermore things
+    # that indicate an issue in production, but are fine for testing only small
+    # units.
+    - path: _test\.go
+      linters:
+        - funlen
+        - cyclop
+        - forcetypeassert
+        - varnamelen
+    # The tools aren't part of the actual production code and therefore we don't
+    # care about codequality much right now.
+    - path: tools/
+      text: .+

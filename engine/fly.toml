@@ -1,0 +1,37 @@
+# See https://fly.io/docs/reference/configuration/
+
+app = "scribblers"
+# "fra" is only for paying customers
+primary_region = "ams"
+
+[metrics]
+port = 8080
+path = "/v1/metrics"
+
+[build]
+dockerfile = "fly.Dockerfile"
+
+[deploy]
+strategy = "immediate"
+
+[env]
+ROOT_URL = "https://scribblers.bios-marcel.link"
+ALLOW_INDEXING = true
+SERVE_DIRECTORIES = ":/public"
+LOBBY_SETTING_BOUNDS_MAX_MAX_PLAYERS = 100
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+# Allows true scale to zero
+min_machines_running = 0
+processes = ["app"]
+
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+timeout = "5s"
+method = "GET"
+path = "/health"
