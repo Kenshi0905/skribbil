@@ -24,6 +24,10 @@ export async function openDatabase({ url = process.env.DATABASE_URL, dataDir = p
   if (mode === 'postgres') await driver.query(seed); else await driver.exec(seed);
   const runtime = await readFile(new URL('../database/runtime.sql', import.meta.url), 'utf8');
   if (mode === 'postgres') await driver.query(runtime); else await driver.exec(runtime);
+  for (const file of ['community.sql','rematch.sql']) {
+    const migration = await readFile(new URL(`../database/${file}`, import.meta.url), 'utf8');
+    if (mode === 'postgres') await driver.query(migration); else await driver.exec(migration);
+  }
   // Every query uses explicit schema qualification: pool connections need no mutable search_path.
   let tail = Promise.resolve();
   const transaction = async (fn) => {

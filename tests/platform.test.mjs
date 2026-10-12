@@ -30,7 +30,7 @@ test('platform HTTP integration: accounts, consent, authoritative results and ad
     const body = JSON.parse(Buffer.concat(parts).toString());
     controlRequests.push({ path: req.url, body });
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(req.url.endsWith('/cancel') ? { cancelled: true } : { lobbyId: `fixture-${body.matchId}` }));
+    res.end(JSON.stringify(req.url.endsWith('/cancel') ? { cancelled: true } : req.url.endsWith('/status') ? {exists:true} : { lobbyId: `fixture-${body.matchId}` }));
   });
   const engineUrl = await listen(engine);
   const config = { secret, engineUrl, origin: '', secure: false, ranked: false, production: false };
@@ -137,6 +137,12 @@ test('platform HTTP integration: accounts, consent, authoritative results and ad
       assert.equal(win.xp, 50); assert.equal(win.points, 0); assert.equal(win.history[0].score, 200);
       assert.deepEqual(win.achievements.map(a=>a.slug).sort(),['comeback-kid','mind-reader']);
       assert.equal((await api(`/api/matches/${room.data.matchId}/mvp`, { method: 'POST', cookie: artist.cookie, body: { nomineeId: guesser.data.user.id, category: 'best_drawing' } })).status, 200);
+      const absent=await api('/api/auth/register',{method:'POST',body:{username:'ticket_only',email:'absent@example.test',password}});
+      await db.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,'Ticket only')`,[room.data.matchId,absent.data.user.id]);
+      assert.equal((await api(`/api/matches/${room.data.matchId}`,{cookie:absent.cookie})).status,403);
+      assert.equal((await api(`/api/matches/${room.data.matchId}/mvp`,{method:'POST',cookie:absent.cookie,body:{nomineeId:artist.data.user.id,category:'community_mvp'}})).status,403);
+      assert.equal((await api(`/api/matches/${room.data.matchId}/mvp`,{method:'POST',cookie:artist.cookie,body:{nomineeId:absent.data.user.id,category:'community_mvp'}})).status,400);
+      assert.equal((await api('/api/disputes',{method:'POST',cookie:absent.cookie,body:{matchId:room.data.matchId,reason:'A ticket alone cannot create a dispute'}})).status,403);
     });
 
     await t.test('publication needs artist consent and administrator curation; revoked sessions fail', async () => {

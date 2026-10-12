@@ -225,3 +225,37 @@ func (handler *V1Handler) cancelLeagueRoom(w http.ResponseWriter, r *http.Reques
 	lobby.Shutdown()
 	_, _ = marshalToHTTPWriter(map[string]bool{"cancelled": true}, w)
 }
+
+// statusLeagueRoom gives the platform authoritative evidence that an in-memory
+// room disappeared. It intentionally exposes no prompt, roster or game state.
+// Finished rooms still exist while their final event is awaiting settlement.
+func (handler *V1Handler) statusLeagueRoom(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	secret := os.Getenv("SKRIBBIL_ENGINE_SECRET")
+	if len(secret) < 32 || !hmac.Equal([]byte(r.Header.Get("Authorization")), []byte("Bearer "+secret)) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var input struct {
+		MatchID string `json:"matchId"`
+		LobbyID string `json:"lobbyId"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&input) != nil || input.MatchID == "" || len(input.MatchID) > 128 || input.LobbyID == "" || len(input.LobbyID) > 200 {
+		http.Error(w, "invalid room status request", http.StatusBadRequest)
+		return
+	}
+	lobby := state.GetLobby(input.LobbyID)
+	exists := false
+	if lobby != nil {
+		lobby.Synchronized(func() {
+			exists = lobby.League != nil && lobby.League.MatchID == input.MatchID && !lobby.League.Cancelled
+		})
+	}
+	if !exists {
+		http.Error(w, "match not found", http.StatusNotFound)
+		return
+	}
+	_, _ = marshalToHTTPWriter(map[string]bool{"exists": true}, w)
+}

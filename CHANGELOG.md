@@ -40,6 +40,23 @@ designs are not treated as completed runtime features.
 
 Known gaps and launch gates are tracked in docs/feature-status.md.
 
+### Connected community flows
+- Added recipient-bound team invitations, roster management, captain transfers,
+  captain-only logos and registration of frozen team rosters in tournaments.
+- Added participant-private dispute submission and audited admin resolution.
+- Added bounded, server-reencoded PNG profile pictures and team logos; old media
+  access is revoked on replacement and removal, with deferred blob cleanup.
+- Added one shared quick-rematch room per completed match, preserving supported
+  settings with account admission locks and retry-safe engine provisioning.
+- Room creation now reserves the account before contacting Go, so concurrent
+  requests cannot allocate conflicting rooms; uncertain responses can be resumed.
+- Added database, media validation, privacy, concurrent admission and rematch tests.
+- Added authenticated room status and safe stale-room recovery for all participants.
+- MVP voting and disputes now require appearance in the accepted match result.
+- Retention claims blobs before deletion and isolates failed deletes; curation
+  cannot publish a blob whose deletion has begun.
+- Preserved final native private-room settings and the original league on rematch.
+
 ### Deployment
 - Deployment is pending owner review. Target: Cloudflare Pages frontend plus
   a separate long-running Go engine, platform service, and PostgreSQL.

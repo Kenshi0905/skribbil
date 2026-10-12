@@ -184,6 +184,30 @@ func TestMatchResultRetainsRemovedParticipants(t *testing.T) {
 	}
 }
 
+func TestCompletedMatchSnapshotsConfiguredPrivateRules(t *testing.T) {
+	l, _, _, _, _ := penaltyFixture()
+	l.Rounds = 5
+	l.MaxPlayers = 6
+	l.DrawingTime = 80
+	var event LeagueEvent
+	l.League.Emit = func(e LeagueEvent) bool { event = e; return true }
+	l.completeLeagueMatch()
+	settings := event.Payload.(map[string]any)["settings"].(map[string]int)
+	if settings["rounds"] != 5 || settings["drawTime"] != 80 || settings["maxPlayers"] != 6 {
+		t.Fatal("completed match did not capture native private settings")
+	}
+	// A setting changed during the final drawing takes effect next turn in
+	// the native game. It should take effect in a subsequent rematch as well.
+	l.DrawingTimeNew = 120
+	l.completeLeagueMatch()
+	settings = event.Payload.(map[string]any)["settings"].(map[string]int)
+	l.DrawingTimeNew = 160
+	l.Rounds = 9
+	if settings["drawTime"] != 120 || settings["rounds"] != 5 {
+		t.Fatal("emitted rules snapshot was stale or shared mutable state")
+	}
+}
+
 func TestCancellationCannotRacePastStartedGame(t *testing.T) {
 	l, _, _, _, _ := penaltyFixture()
 	if err := l.CancelLeagueBeforeStart("match"); err == nil {

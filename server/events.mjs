@@ -71,6 +71,21 @@ export async function acceptEngineEvent(platform,assets,event,raw) {
       requireValue(Array.isArray(p.participants)&&p.participants.length>=2&&p.participants.length<=24,'Invalid result roster.');
       requireValue(new Set(p.participants.map(v=>v.userId)).size===p.participants.length,'Duplicate result player.');
       if(p.deliveryFailed) {await db.query(`UPDATE skribbil.matches SET status='cancelled' WHERE id=$1`,[match.id]);return {cancelled:true,reason:'Engine reported incomplete event delivery.'};}
+      let finalRules=match.custom_rules;
+      // Older engine versions may omit this snapshot. New private completions
+      // preserve the owner's final native settings for the next rematch. The
+      // allowlist deliberately cannot change privacy, game or competitive mode.
+      if(p.settings!==undefined) {
+        const s=p.settings;
+        requireValue(s&&typeof s==='object'&&!Array.isArray(s)&&Number.isInteger(s.rounds)&&s.rounds>=1&&s.rounds<=20&&
+          Number.isInteger(s.drawTime)&&s.drawTime>=60&&s.drawTime<=300&&Number.isInteger(s.maxPlayers)&&s.maxPlayers>=2&&s.maxPlayers<=24,'Invalid final room settings.');
+        if(match.mode==='casual')finalRules={...match.custom_rules,rounds:s.rounds,drawTime:s.drawTime,maxPlayers:s.maxPlayers};
+        else {
+          const ruleSet=await one(db,`SELECT rules FROM skribbil.rule_sets WHERE id=$1`,[match.rule_set_id]);
+          requireValue(s.rounds===ruleSet.rules.rounds&&s.drawTime===ruleSet.rules.drawingTime&&s.maxPlayers===ruleSet.rules.maxPlayers,
+            'Competitive result settings differ from the locked rules.',409);
+        }
+      }
       const game=await one(db,`SELECT engine_revision FROM skribbil.games WHERE id=$1`,[match.game_id]);
       const result=await one(db,`INSERT INTO skribbil.match_results(match_id,version,source,engine_revision,payload_sha256,idempotency_key)
         VALUES($1,1,'engine',$2,$3,$4) RETURNING id`,[match.id,game.engine_revision,fingerprint,`engine:${event.eventId}`]);
@@ -97,7 +112,7 @@ export async function acceptEngineEvent(platform,assets,event,raw) {
           completed_at=CASE WHEN skribbil.challenge_progress.progress+1 >= (SELECT target FROM skribbil.challenge_windows WHERE id=excluded.window_id) THEN now() ELSE NULL END`,[v.userId,event.occurredAt,rank===1]);
         await platform.grantLevelRewards(db,v.userId);
       }
-      await db.query(`UPDATE skribbil.matches SET status='completed',accepted_result_id=$2,started_at=coalesce(started_at,created_at),ended_at=$3 WHERE id=$1`,[match.id,result.id,event.occurredAt]);
+      await db.query(`UPDATE skribbil.matches SET status='completed',accepted_result_id=$2,started_at=coalesce(started_at,created_at),ended_at=$3,custom_rules=$4 WHERE id=$1`,[match.id,result.id,event.occurredAt,JSON.stringify(finalRules)]);
     }
     return {accepted:true};
   });

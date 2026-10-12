@@ -102,7 +102,7 @@ Platform API ------------------------------> PostgreSQL
   | authenticated create-room request          ^
   | signed, short-lived account launch ticket  | receipts + result transaction
   v                                            |
-Go scribble.rs engine -- durable event outbox --+
+Go scribble.rs engine -- retrying disk outbox --+
   ^                         |
   | original WebSocket      +--> archive worker --> private object storage
   | drawing/guessing
@@ -138,10 +138,12 @@ projecting scores. Browser-submitted final scores are not an accepted API.
 Persist an event receipt and all result changes in one transaction. A retry of
 the same event is a successful no-op; a conflicting payload with the same ID is
 an error. A completed match cannot be finalized again under a new event ID.
-The engine outbox retries outages. An in-memory room itself is not crash-durable:
-after a process crash, completed outbox events recover, but interrupted games
-must be cancelled without granting rewards. Never promise live game recovery
-until snapshots and replay recovery have been tested.
+The engine outbox retries outages. An in-memory room itself is not crash-durable.
+Only events already flushed to a surviving outbox directory can recover after a
+process crash; there is a small RAM-before-fsync window. Free hosted containers
+also have ephemeral disks. Interrupted games must be cancelled without granting
+rewards. Ranked stays disabled in that deployment profile. Never promise live
+game recovery until snapshots and replay recovery have been tested.
 
 ## 4. Unanimous dislike and next-turn hard word
 

@@ -7,7 +7,7 @@ Nothing has been published to Cloudflare, Render or Supabase in this task.
 | --- | --- |
 | Original drawing / guesses / rooms | Actual pinned Go engine and original client, with a small isolated league extension; real two-client WebSocket/race tests |
 | Universal accounts | Durable PostgreSQL identities, scrypt password hashes, revocable HttpOnly sessions; username, display name, bio, colored avatar |
-| User-uploaded avatars / team logos | Metadata fields exist; uploads are not implemented in this first release |
+| User-uploaded avatars / team logos | Public profile pictures and captain-managed team logos; static PNG up to 1 MiB / 1024px, server-reencoded to 256px; 10 uploads per account/day, old URLs revoked on replacement |
 | Match history / XP / titles | Trusted match results, immutable XP, server-issued level rewards and owned title selection |
 | Challenges | Daily play-three and weekly win-three windows in UTC, server-side progress, one-time XP claims |
 | Achievement evidence | Native accepted-guess timing and final-round comeback telemetry; award evaluation in the result consumer |
@@ -15,9 +15,9 @@ Nothing has been published to Cloudflare, Render or Supabase in this task.
 | Ranked settings | Fixed rules enforced by Go and SQL; disabled by default until durability validation |
 | Tournaments | Individual/team registration, frozen rosters, knockout byes, round robin, groups then knockout, audited manual fixture results, champion/placement trophies |
 | Automatic tournament room orchestration | Not yet implemented; an admin records fixture outcomes; manual records are separate from trusted engine leaderboards |
-| Teams | Named teams/tags, initial captain membership; team roster/schema supported; member invitation and logo upload UI remain to be added |
+| Teams | Named teams/tags, logos, recipient-bound invitations, roster view, joining/leaving and captain transfer; frozen tournament rosters remain historical snapshots |
 | Moderation | Administrator role, bans/session revocation, immutable score-correction versions and audit trail, consent-gated gallery curation |
-| Disputes | Database model exists; player report submission and admin resolution UI still need implementation |
+| Disputes | Participant-only private reports, duplicate-open protection, personal status history and audited admin resolution; score correction remains an explicit separate operation |
 | Dislike | Atomic unanimous non-artist vote, exact -100 delta, frozen electorate, hard-word choices and timeout, cross-match account debt |
 | Private room controls | Rounds, draw time, participant limits, link access; locked ranked controls |
 | MVP | Participant-only voting for 24 hours, one vote per category, no self-votes |
@@ -28,7 +28,7 @@ Nothing has been published to Cloudflare, Render or Supabase in this task.
 | Replays | Final canonical operation sequence retained/downloadable; undo/clear are reflected in that sequence. Full timed stroke/undo chronology and an interactive replay player are not implemented |
 | Friends / parties | Account-targeted friendships requiring mutual acceptance; party membership and recipient-bound, expiring invitations |
 | Match cards | Downloadable client-rendered summary card, restricted to available participant-visible artwork |
-| Rematch / matchmaking | New room creation and existing room join; automatic group requeue/rematch voting remain to be added |
+| Rematch / matchmaking | One shared successor room per completed match, participant-only quick rematch and retry-safe provisioning; skill-based public matchmaking and unanimous rematch voting are not implemented |
 | Future games | Shared schema, game registry, versioned rules and adapter boundary are ready; only Skribbil is implemented |
 
 ## Reliability limits
@@ -38,6 +38,11 @@ resume a game. The disk outbox retries stored events, but there is a small
 RAM-before-fsync window in order to keep filesystem work out of the lobby mutex.
 The free deployment filesystem is also ephemeral. Ranked remains disabled there;
 do not advertise tournament-grade crash recovery.
+
+Room admission probes the authenticated engine control endpoint. Its explicit
+missing-room response cancels the stale reservation so any participant can start
+again, even if the old owner is absent. Timeouts, sleeping hosts and generic
+route-not-found responses do not cancel matches or award results.
 
 The development profile uses durable local PostgreSQL and private local assets.
 The production profile requires external PostgreSQL and private S3-compatible

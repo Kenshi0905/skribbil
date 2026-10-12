@@ -1,5 +1,7 @@
 -- Idempotent additions used by the first runnable adapter.
 BEGIN;
+INSERT INTO skribbil.asset_policies(id,description,retention_days,public_by_default)
+VALUES('profile-image','Public while equipped; replaced images removed after one day',NULL,true) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS skribbil.engine_receipts (
   event_id uuid PRIMARY KEY REFERENCES skribbil.engine_events(id),
   payload_sha256 text NOT NULL CHECK(payload_sha256 ~ '^[a-f0-9]{64}$')

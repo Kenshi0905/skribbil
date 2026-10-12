@@ -9,6 +9,10 @@ import { openDatabase } from './db.mjs';
 import { Platform } from './platform.mjs';
 import { Competition } from './competition.mjs';
 import { Social } from './social.mjs';
+import { Media } from './media.mjs';
+import { Community } from './community.mjs';
+import { Rematch } from './rematch.mjs';
+import { expireAssets } from './retention.mjs';
 import { AssetStore } from './assets.mjs';
 import { acceptEngineEvent } from './events.mjs';
 import { loadConfig } from './config.mjs';
@@ -28,6 +32,9 @@ export async function createApp({db,config,assets}={}) {
   const platform=new Platform(db),connections=new Map(),limits=new Map();
   const competition=new Competition(platform);
   const social=new Social(platform);
+  const media=new Media(platform,assets);
+  const community=new Community(platform);
+  const rematch=new Rematch({db,provision:payload=>engineRequest('/engine/internal/rooms',payload),admit,rankedEnabled:()=>config.ranked});
   const webRoot=resolve('web');let engineCache={at:0,available:false};
   const engineStatus=async()=>{
     if(Date.now()-engineCache.at>5000){
@@ -54,9 +61,24 @@ export async function createApp({db,config,assets}={}) {
   }
   async function admit(user,match,role='player') {
     requireValue(['player','spectator'].includes(role),'Invalid role.');
-    requireValue(['lobby','running'].includes(match.status),'This match has finished.',409);
+    requireValue(match&&['lobby','running'].includes(match.status),'This match has finished.',409);
+    if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
+    try {
+      const alive=await engineRequest('/engine/internal/rooms/status',{matchId:match.id,lobbyId:match.engine_room_id});
+      requireValue(alive?.exists===true,'The game server could not confirm this room. Try again shortly.',503);
+    }catch(error){
+      if(error.status!==404||error.message!=='match not found')throw error;
+      // Only a trusted engine 404 proves its in-memory room is gone. A timeout
+      // or sleeping host must never cancel a match. Any participant can recover.
+      await db.query(`UPDATE skribbil.matches SET status='cancelled' WHERE id=$1 AND status IN ('lobby','running')`,[match.id]);
+      throw new ApiError(409,'This room is no longer on the game server. You can create a new room.');
+    }
     await db.transaction(async tx=>{
-      await tx.query(`SELECT id FROM skribbil.users WHERE id=$1 FOR UPDATE`,[user.id]);
+      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR UPDATE`,[user.id]);
+      requireValue(account?.status==='active','This account is unavailable.',403);
+      match=await one(tx,`SELECT * FROM skribbil.matches WHERE id=$1 FOR UPDATE`,[match.id]);
+      requireValue(match&&['lobby','running'].includes(match.status),'This match has finished.',409);
+      if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
       if(role==='player') {
         const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
           WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND m.id<>$2 LIMIT 1`,[user.id,match.id]);
@@ -68,22 +90,36 @@ export async function createApp({db,config,assets}={}) {
     const token=signedTicket({userId:user.id,username:user.display_name,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,hardWordPending:debt?.pending||false},config.secret);
     return {url:`/engine/league/join?ticket=${encodeURIComponent(token)}`,matchId:match.id};
   }
+  async function provisionPending(match) {
+    if(!match.engine_room_id.startsWith('pending-'))return match;
+    requireValue(match.status==='lobby','This room is no longer available.',409);
+    const rules=match.custom_rules||{},ranked=match.mode==='ranked';
+    if(ranked)requireValue(config.ranked,'Ranked play is not open.',503);
+    const room=await engineRequest('/engine/internal/rooms',{matchId:match.id,mode:ranked?'ranked':'private',
+      rounds:ranked?3:rules.rounds||3,drawTime:ranked?80:rules.drawTime||80,maxPlayers:ranked?8:rules.maxPlayers||8});
+    const fresh=await one(db,`UPDATE skribbil.matches SET engine_room_id=$2 WHERE id=$1 AND status='lobby' RETURNING *`,[match.id,room.lobbyId]);
+    requireValue(fresh,'This room is no longer available.',409);return fresh;
+  }
   async function newRoom(user,input) {
     const mode=input.mode==='ranked'?'ranked':'private';
     if(mode==='ranked')requireValue(config.ranked,'Ranked play opens after deployment reliability checks. Private play is available.',503);
     const rounds=mode==='ranked'?3:Number(input.rounds||3),drawTime=mode==='ranked'?80:Number(input.drawTime||80),maxPlayers=mode==='ranked'?8:Number(input.maxPlayers||8);
     requireValue(Number.isInteger(rounds)&&rounds>=1&&rounds<=20&&Number.isInteger(drawTime)&&drawTime>=60&&drawTime<=300&&Number.isInteger(maxPlayers)&&maxPlayers>=2&&maxPlayers<=24,'Use 1–20 rounds, 60–300 seconds, and 2–24 players.');
-    const context=await platform.context(),id=randomUUID();
-    // API checks admission before allocating engine resources.
-    const active=await one(db,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.user_id=$1 AND m.status IN ('lobby','running') LIMIT 1`,[user.id]);
-    requireValue(!active,'Finish or cancel your current room before making another.',409);
-    await db.query(`INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,engine_room_id,engine_instance_id,custom_rules,private,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10)`,[id,context.game_id,mode==='ranked'?context.ranked_rules:context.private_rules,context.community_id,mode==='ranked'?context.season_id:null,mode==='ranked'?'ranked':'casual',`pending-${id}`,JSON.stringify(mode==='ranked'?{}:{rounds,drawTime,maxPlayers}),mode==='private'&&input.private!==false,user.id]);
-    try {
-      const room=await engineRequest('/engine/internal/rooms',{matchId:id,mode,rounds,drawTime,maxPlayers});
-      const match=await one(db,`UPDATE skribbil.matches SET engine_room_id=$2 WHERE id=$1 RETURNING *`,[id,room.lobbyId]);
-      return await admit(user,match);
-    } catch(error) {await db.query(`UPDATE skribbil.matches SET status='cancelled' WHERE id=$1`,[id]);throw error;}
+    const id=randomUUID();
+    // Reserve admission before the network call. Retries use the same opaque
+    // match ID; a timeout must not orphan a room that Go already created.
+    const reserved=await db.transaction(async tx=>{
+      const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR UPDATE`,[user.id]);
+      requireValue(account?.status==='active','This account is unavailable.',403);
+      const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.user_id=$1 AND m.status IN ('lobby','running') LIMIT 1`,[user.id]);
+      requireValue(!active,'Finish or cancel your current room before making another.',409);
+      const context=await platform.context(tx);
+      const match=await one(tx,`INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,engine_room_id,engine_instance_id,custom_rules,private,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10) RETURNING *`,[id,context.game_id,mode==='ranked'?context.ranked_rules:context.private_rules,context.community_id,mode==='ranked'?context.season_id:null,mode==='ranked'?'ranked':'casual',`pending-${id}`,JSON.stringify(mode==='ranked'?{}:{rounds,drawTime,maxPlayers}),mode==='private'&&input.private!==false,user.id]);
+      await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3)`,[id,user.id,user.display_name]);
+      return match;
+    });
+    return admit(user,await provisionPending(reserved));
   }
   async function getDrawing(user,id,kind) {
     requireValue(isUuid(id),'Invalid drawing.');
@@ -130,10 +166,19 @@ export async function createApp({db,config,assets}={}) {
         requireValue(req.headers['x-requested-with']==='Skribbil','Invalid request origin.',403);
         requireValue(!req.headers.origin||req.headers.origin===config.origin,'Invalid request origin.',403);
         requireValue((req.headers['content-type']||'').startsWith('application/json'),'Send application/json.',415);
-        const raw=await body(req);input=raw.length?JSON.parse(raw.toString()):{};
+        const imageUpload=path==='/api/profile/avatar'||/^\/api\/teams\/[a-f0-9-]+\/logo$/.test(path);
+        if(imageUpload){requireValue(user,'Sign in to continue.',401);rateLimit(req,'media',6);}
+        const raw=await body(req,imageUpload?1400000:32768);input=raw.length?JSON.parse(raw.toString()):{};
+        requireValue(input&&typeof input==='object'&&!Array.isArray(input),'Send a JSON object.');
       }
       if(path==='/api/bootstrap'&&req.method==='GET')return json(res,200,await platform.bootstrap(user,await engineStatus()));
       if(path==='/api/me'&&req.method==='GET')return json(res,200,{user:await platform.profile(user)});
+      const mediaAsset=path.match(/^\/api\/media\/([a-f0-9-]+)$/);
+      if(mediaAsset&&req.method==='GET'){
+        const asset=await media.read(mediaAsset[1]);
+        if(asset.url){res.writeHead(302,{Location:asset.url,'Cache-Control':'no-store'});res.end();}
+        else{res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});res.end(asset.body);}return;
+      }
       const bracket=path.match(/^\/api\/tournaments\/([a-f0-9-]+)\/bracket$/);
       if(bracket&&req.method==='GET'){
         const value=await competition.getTournament(bracket[1]);const {entries,fixtures,...tournament}=value;
@@ -152,6 +197,11 @@ export async function createApp({db,config,assets}={}) {
         else{res.writeHead(200,{'Content-Type':asset.type,'Cache-Control':'private, no-store'});res.end(asset.body);}return;
       }
       requireValue(user,'Sign in to continue.',401);
+      const teamLogo=path.match(/^\/api\/teams\/([a-f0-9-]+)\/logo$/);
+      if(path==='/api/profile/avatar'||teamLogo){
+        if(req.method==='POST')return json(res,200,await media.upload(user,input,teamLogo?.[1]));
+        if(req.method==='DELETE')return json(res,200,await media.remove(user,teamLogo?.[1]));
+      }
       if(path==='/api/party'&&req.method==='GET')return json(res,200,await social.getParty(user));
       if(path==='/api/party'&&req.method==='POST')return json(res,201,await social.createParty(user));
       if(path==='/api/party/leave'&&req.method==='POST')return json(res,200,await social.leaveParty(user));
@@ -164,22 +214,45 @@ export async function createApp({db,config,assets}={}) {
       const roomJoin=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/join$/);
       if(roomJoin&&req.method==='POST'){
         requireValue(isUuid(roomJoin[1]),'Invalid room.');const match=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1`,[roomJoin[1]]);
-        requireValue(match,'Room not found.',404);return json(res,200,await admit(user,match,input.role||'player'));
+        requireValue(match,'Room not found.',404);
+        if(match.engine_room_id.startsWith('pending-'))requireValue(await one(db,'SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2',[match.id,user.id]),'Only reserved participants can retry a room.',403);
+        return json(res,200,await admit(user,await provisionPending(match),input.role||'player'));
       }
       const cancel=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/cancel$/);
       if(cancel&&req.method==='POST'){
         requireValue(isUuid(cancel[1]),'Invalid room.');
-        const room=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running')`,[cancel[1],user.id]);
+        let room=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running')`,[cancel[1],user.id]);
         requireValue(room,'Only the owner can cancel an unstarted room.',409);
+        room=await provisionPending(room);
         try{await engineRequest('/engine/internal/rooms/cancel',{matchId:room.id,lobbyId:room.engine_room_id});}
         catch(error){if(error.status!==404)throw error;} // A disappeared in-memory room is abandoned, never finalized.
         const changed=await db.query(`UPDATE skribbil.matches SET status='cancelled' WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running') RETURNING id`,[cancel[1],user.id]);
         requireValue(changed.rows.length,'Only the owner can cancel an unstarted room.',409);return json(res,200,{ok:true});
       }
       if(path==='/api/teams'&&req.method==='POST')return json(res,201,{team:await platform.createTeam(user,input)});
+      if(path==='/api/teams/mine'&&req.method==='GET')return json(res,200,await community.getMyTeams(user));
+      const team=path.match(/^\/api\/teams\/([a-f0-9-]+)(?:\/(invites|leave|captain))?$/);
+      if(team){
+        if(!team[2]&&req.method==='GET')return json(res,200,await community.getTeam(user,team[1]));
+        if(req.method==='POST'&&team[2]==='invites')return json(res,201,await community.inviteTeam(user,team[1],input));
+        if(req.method==='POST'&&team[2]==='leave')return json(res,200,await community.leaveTeam(user,team[1]));
+        if(req.method==='POST'&&team[2]==='captain')return json(res,200,await community.transferCaptain(user,team[1],input));
+      }
+      const teamAccept=path.match(/^\/api\/teams\/invites\/([a-f0-9-]+)\/accept$/);
+      if(teamAccept&&req.method==='POST')return json(res,200,await community.acceptTeamInvite(user,teamAccept[1]));
+      if(path==='/api/disputes'){
+        if(req.method==='GET')return json(res,200,await community.getDisputes(user));
+        if(req.method==='POST')return json(res,201,await community.submitDispute(user,input));
+      }
+      const rematchRequest=path.match(/^\/api\/matches\/([a-f0-9-]+)\/rematch$/);
+      if(rematchRequest&&req.method==='POST'){rateLimit(req,'rooms',8);return json(res,200,await rematch.join(user,rematchRequest[1]));}
       if(path==='/api/friends'&&req.method==='POST'){await platform.friend(user,input);return json(res,200,{ok:true});}
       const tournament=path.match(/^\/api\/tournaments\/([a-f0-9-]+)\/register$/);
-      if(tournament&&req.method==='POST'){await platform.registerTournament(user,tournament[1]);return json(res,200,{ok:true});}
+      if(tournament&&req.method==='POST'){
+        if(input.teamId)await competition.registerTeam(user,tournament[1],input.teamId);
+        else await platform.registerTournament(user,tournament[1]);
+        return json(res,200,{ok:true});
+      }
       const claim=path.match(/^\/api\/challenges\/([a-f0-9-]+)\/claim$/);
       if(claim&&req.method==='POST'){await platform.claimChallenge(user,claim[1]);return json(res,200,{ok:true});}
       if(path==='/api/drawings/mine'&&req.method==='GET')return json(res,200,{drawings:(await db.query(`SELECT id,prompt_snapshot AS prompt,created_at AS date,visibility,(publication_consent_at IS NOT NULL AND consent_revoked_at IS NULL) AS consent,dislike_count AS dislikes,'/api/drawings/'||id||'/image' AS url,replay_asset_id IS NOT NULL AS "replayAvailable" FROM skribbil.drawings WHERE artist_id=$1 ORDER BY created_at DESC LIMIT 100`,[user.id])).rows});
@@ -197,10 +270,11 @@ export async function createApp({db,config,assets}={}) {
       if(detail){
         requireValue(isUuid(detail[1]),'Invalid match.');const match=await one(db,`SELECT id,status,mode,ended_at FROM skribbil.matches WHERE id=$1`,[detail[1]]);
         requireValue(match,'Match not found.',404);
-        requireValue(await one(db,`SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2`,[match.id,user.id]),'Only match participants can view this summary.',403);
+        requireValue(await one(db,`SELECT 1 FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id WHERE m.id=$1 AND p.user_id=$2`,[match.id,user.id]),'Only match participants can view this summary.',403);
         if(detail[2]&&req.method==='POST'){
           requireValue(match.status==='completed'&&new Date(match.ended_at).getTime()>Date.now()-86400000,'MVP voting is open for 24 hours after completion.',409);
           requireValue(isUuid(input.nomineeId)&&input.nomineeId!==user.id&&['best_drawing','fastest_guesser','community_mvp'].includes(input.category),'Choose another player and a valid award.');
+          requireValue(await one(db,`SELECT 1 FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id WHERE m.id=$1 AND p.user_id=$2`,[match.id,input.nomineeId]),'Choose a player from the completed result.');
           await db.query(`INSERT INTO skribbil.mvp_ballots(match_id,voter_id,nominee_id,category) VALUES($1,$2,$3,$4) ON CONFLICT(match_id,voter_id,category) DO NOTHING`,[match.id,user.id,input.nomineeId,input.category]);return json(res,200,{ok:true});
         }
         if(!detail[2]&&req.method==='GET')return json(res,200,{match,participants:(await db.query(`SELECT u.id,u.username,p.score,p.placement AS rank FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id JOIN skribbil.users u ON u.id=p.user_id WHERE m.id=$1 ORDER BY p.placement`,[match.id])).rows,
@@ -209,6 +283,9 @@ export async function createApp({db,config,assets}={}) {
       }
       if(path.startsWith('/api/admin')){
         await platform.admin(user);
+        if(path==='/api/admin/disputes'&&req.method==='GET')return json(res,200,await community.getDisputes(user,{admin:true}));
+        const resolution=path.match(/^\/api\/admin\/disputes\/([a-f0-9-]+)$/);
+        if(resolution&&req.method==='POST')return json(res,200,await community.resolveDispute(user,resolution[1],input));
         const context=await platform.context();
         if(path==='/api/admin/seasons'&&req.method==='POST')return json(res,201,await competition.createSeason(user,{
           ...input,leagueId:'00000000-0000-4000-8000-000000000040',reason:input.reason||'Create community season',
@@ -235,6 +312,8 @@ export async function createApp({db,config,assets}={}) {
             const drawing=await one(tx,`SELECT * FROM skribbil.drawings WHERE id=$1 FOR UPDATE`,[curate[1]]);requireValue(drawing,'Drawing not found.',404);
             if(input.hall){
               requireValue(drawing.publication_consent_at&&!drawing.consent_revoked_at,'The artist must consent to publication.',409);
+              const image=await one(tx,`SELECT state,expires_at FROM skribbil.object_assets WHERE id=$1 FOR UPDATE`,[drawing.image_asset_id]);
+              requireValue(image?.state==='ready'&&(!image.expires_at||new Date(image.expires_at)>new Date()),'This drawing has expired or is unavailable.',409);
               await tx.query(`UPDATE skribbil.drawings SET visibility='public' WHERE id=$1`,[drawing.id]);
               await tx.query(`INSERT INTO skribbil.gallery_entries(drawing_id,hall,title,caption,curated_by,published_at) VALUES($1,$2,$3,$4,$5,now())
                 ON CONFLICT(drawing_id,hall) DO UPDATE SET title=excluded.title,caption=excluded.caption,curated_by=excluded.curated_by,published_at=now(),unpublished_at=NULL`,[drawing.id,input.hall,textField(input.title||drawing.prompt_snapshot,1,100,'Title'),String(input.caption||'').slice(0,500),user.id]);
@@ -287,8 +366,7 @@ export async function createApp({db,config,assets}={}) {
   const cleanup=setInterval(async()=>{
     for(const [key,value]of limits)if(value.until<Date.now())limits.delete(key);
     try{
-      const expired=(await db.query(`SELECT id,object_key FROM skribbil.object_assets WHERE state='ready' AND NOT legal_hold AND expires_at<now() LIMIT 20`)).rows;
-      for(const a of expired){await assets.remove(a.object_key);await db.query(`UPDATE skribbil.object_assets SET state='deleted',deleted_at=now() WHERE id=$1`,[a.id]);}
+      await expireAssets(db,assets);
     }catch(error){console.error('Retention retry scheduled:',error.message);}
   },60000);cleanup.unref();
   server.on('close',()=>{clearInterval(cleanup);for(const id of connections.keys())disconnect(id);});

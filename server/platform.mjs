@@ -116,11 +116,11 @@ export class Platform {
       this.db.query(`SELECT w.id,d.title,d.cadence,d.metric,w.target,w.xp_reward AS xp,w.ends_at AS "endsAt",coalesce(p.progress,0) AS progress,
         p.reward_xp_event_id IS NOT NULL AS claimed FROM skribbil.challenge_windows w JOIN skribbil.challenge_definitions d ON d.id=w.challenge_id
         LEFT JOIN skribbil.challenge_progress p ON p.window_id=w.id AND p.user_id=$1 WHERE w.starts_at<=now() AND w.ends_at>now()`,[user?.id||null]),
-      this.db.query(`SELECT t.id,t.name,t.format,t.status,t.starts_at AS "startsAt",t.maximum_entries AS capacity,
+      this.db.query(`SELECT t.id,t.name,t.format,t.status,t.entry_type AS "entryType",t.starts_at AS "startsAt",t.maximum_entries AS capacity,
         (SELECT count(*) FROM skribbil.tournament_entries e WHERE e.tournament_id=t.id AND e.status<>'withdrawn') AS registered,
-        EXISTS(SELECT 1 FROM skribbil.tournament_entries e WHERE e.tournament_id=t.id AND e.user_id=$1) AS joined
+        EXISTS(SELECT 1 FROM skribbil.tournament_entries e WHERE e.tournament_id=t.id AND (e.user_id=$1 OR EXISTS(SELECT 1 FROM skribbil.tournament_rosters r WHERE r.entry_id=e.id AND r.user_id=$1))) AS joined
         FROM skribbil.tournaments t WHERE t.status<>'draft' ORDER BY t.starts_at LIMIT 20`,[user?.id||null]),
-      this.db.query(`SELECT t.id,t.name,t.tag,(SELECT count(*) FROM skribbil.team_members m WHERE m.team_id=t.id AND m.left_at IS NULL) AS members
+      this.db.query(`SELECT t.id,t.name,t.tag,t.logo_url AS "logoUrl",t.captain_id AS "captainId",(SELECT count(*) FROM skribbil.team_members m WHERE m.team_id=t.id AND m.left_at IS NULL) AS members
         FROM skribbil.teams t WHERE t.archived_at IS NULL ORDER BY t.created_at LIMIT 30`),
       user?this.db.query(`SELECT u.id,u.username,u.display_name AS name,f.status,f.requested_by=$1 AS outgoing FROM skribbil.friendships f
         JOIN skribbil.users u ON u.id=CASE WHEN f.user_low=$1 THEN f.user_high ELSE f.user_low END

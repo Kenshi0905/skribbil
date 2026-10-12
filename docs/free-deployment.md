@@ -79,6 +79,12 @@ PostgreSQL contains accounts, league history, standings and metadata. The privat
 
 The default retention design is 30 days for original drawings, 7 days for replay operations, and 90 days for share cards. Curated public artwork requires the artist's publication consent. A running retention worker must delete the actual object as well as update its metadata. When the free service sleeps, in-process jobs also stop; expired assets should remain inaccessible immediately by timestamp checks, and deletion resumes when the worker runs again. Usage must stay within the free quotas; pause uploads or shorten retention instead of upgrading automatically.
 
+Profile pictures and team logos are public while equipped. Only static PNG files
+up to 1 MiB and 1024 × 1024 are accepted, then reencoded to 256 × 256. An account
+can upload at most ten profile/team images daily. Replacing or removing an image
+immediately blocks new reads of its old URL; the object is deleted after one day.
+Already-issued signed URLs can remain valid for their 60-second lifetime.
+
 The current Go adapter queues events in memory before writing an outbox file. On the free host, even a flushed file is ephemeral. A crash can lose live state or unsettled events. **Ranked mode is deliberately disabled** in both the template and startup script. Enabling ranked requires a durable acknowledged event transport, recovery/deduplication tests, session and ban enforcement, replayable settlement and a documented operational recovery process. Changing an environment flag does not solve these issues.
 
 Use provider dashboards to monitor storage, database and network quotas manually. No paid scheduler or external keep-alive pinger is configured. For a zero-budget trial, accept suspension or a smaller player base when a quota is reached.

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/scribble-rs/scribble.rs/internal/config"
+	"github.com/scribble-rs/scribble.rs/internal/game"
 	"github.com/scribble-rs/scribble.rs/internal/state"
 )
 
@@ -113,5 +114,59 @@ func TestOutboxRetainsFailedDeliveryAndSignsExactBytes(t *testing.T) {
 	o.deliverPending(srv.Client())
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		t.Fatal("acknowledged event not removed")
+	}
+}
+
+func TestLeagueRoomStatusRequiresControlAuthAndOnlyReportsExistence(t *testing.T) {
+	secret := strings.Repeat("z", 32)
+	t.Setenv("SKRIBBIL_ENGINE_SECRET", secret)
+	h := NewHandler(&config.Default)
+	status := func(body, auth string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/engine/internal/rooms/status", strings.NewReader(body))
+		r.Header.Set("Authorization", auth)
+		w := httptest.NewRecorder()
+		h.statusLeagueRoom(w, r)
+		return w
+	}
+	body := `{"matchId":"status-control-test","lobbyId":"missing-lobby"}`
+	for _, auth := range []string{"", "Bearer incorrect-secret"} {
+		if w := status(body, auth); w.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthorized status returned %d", w.Code)
+		}
+	}
+	if w := status(body, "Bearer "+secret); w.Code != http.StatusNotFound {
+		t.Fatalf("missing room returned %d", w.Code)
+	}
+	if w := status(`{"matchId":"status-control-test"}`, "Bearer "+secret); w.Code != http.StatusBadRequest {
+		t.Fatalf("malformed request returned %d instead of 400", w.Code)
+	}
+	r := httptest.NewRequest("POST", "/engine/internal/rooms", strings.NewReader(`{"matchId":"status-control-test","mode":"private"}`))
+	r.Header.Set("Authorization", "Bearer "+secret)
+	w := httptest.NewRecorder()
+	h.postLeagueRoom(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatal(w.Body.String())
+	}
+	var room map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &room); err != nil {
+		t.Fatal(err)
+	}
+	lobby := state.GetLobby(room["lobbyId"])
+	defer lobby.Shutdown()
+	request, _ := json.Marshal(map[string]string{"matchId": "status-control-test", "lobbyId": lobby.LobbyID})
+	for _, state := range []game.State{game.Unstarted, game.Ongoing, game.GameOver} {
+		lobby.Synchronized(func() { lobby.State = state })
+		w := status(string(request), "Bearer "+secret)
+		if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"exists":true}` || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("existing room status exposed data or lost completed room: %d %s", w.Code, w.Body.String())
+		}
+	}
+	wrongMatch, _ := json.Marshal(map[string]string{"matchId": "other-match", "lobbyId": lobby.LobbyID})
+	if w := status(string(wrongMatch), "Bearer "+secret); w.Code != http.StatusNotFound {
+		t.Fatalf("mismatched match returned %d", w.Code)
+	}
+	lobby.Synchronized(func() { lobby.League.Cancelled = true })
+	if w := status(string(request), "Bearer "+secret); w.Code != http.StatusNotFound {
+		t.Fatalf("cancelled room returned %d", w.Code)
 	}
 }

@@ -2,6 +2,12 @@
 
 `database/schema.sql` is a transactional, extension-free PostgreSQL 16+ baseline. It creates the `skribbil` schema. Apply it once to a new database; future changes belong in numbered migrations. It also works with an embedded PostgreSQL runtime that implements the same SQL. The schema describes the complete target platform. A table's presence does not mean its corresponding HTTP endpoint, background worker, or game hook has been implemented.
 
+The runnable application then applies `seed.sql`, `runtime.sql`, `community.sql`
+and `rematch.sql` in that order. The latter additions are idempotent and add
+engine receipts, account hard-word state, public profile-image policies,
+recipient-bound team invitations and one successor room per completed match.
+Run `npm run db:migrate` to apply the same sequence outside application startup.
+
 ## Identity and game boundaries
 
 An account has one immutable UUID in `users`. The username has a case-insensitive unique index; `display_name` is separate from the login identifier. Deleting a membership or leaving a game does not replace this UUID. Future games receive the same account ID, community memberships, equipment, inventory, progression, and friendships.

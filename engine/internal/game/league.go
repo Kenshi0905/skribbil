@@ -205,7 +205,15 @@ func (lobby *Lobby) completeLeagueMatch() {
 		correct, fastest, comeback := lobby.leagueTelemetry(p, rank)
 		participants = append(participants, map[string]any{"userId": p.AccountID, "playerId": p.ID, "username": p.Name, "score": p.Score, "rank": rank, "correctGuesses": correct, "fastestGuessMs": fastest, "comebackWin": comeback})
 	}
-	lobby.emitLeague("match.completed", map[string]any{"participants": participants, "mode": lobby.League.Mode, "rulesVersion": "skribbil-ranked-v1", "deliveryFailed": lobby.LeagueDeliveryFailed})
+	// Owners may edit private room rules in the original lobby. Capture the
+	// configured duration (including an edit queued during the final turn) so a
+	// platform rematch can reuse those settings without inspecting live state.
+	drawTime := lobby.DrawingTime
+	if lobby.DrawingTimeNew != 0 {
+		drawTime = lobby.DrawingTimeNew
+	}
+	settings := map[string]int{"rounds": lobby.Rounds, "drawTime": drawTime, "maxPlayers": lobby.MaxPlayers}
+	lobby.emitLeague("match.completed", map[string]any{"participants": participants, "mode": lobby.League.Mode, "rulesVersion": "skribbil-ranked-v1", "deliveryFailed": lobby.LeagueDeliveryFailed, "settings": settings})
 }
 
 func (lobby *Lobby) leagueAccountIDs(ids map[uuid.UUID]bool) []string {
