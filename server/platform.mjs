@@ -181,10 +181,34 @@ export class Platform {
     requireValue(other && other.id!==user.id,'Choose another registered player.');
     const ids=[user.id,other.id].sort();
     await this.db.transaction(async db=>{
+      // Resolve concurrent first requests before reading the pair: PostgreSQL
+      // waits for a conflicting insert, then the next statement sees its row.
+      await db.query(`INSERT INTO skribbil.friendships(user_low,user_high,requested_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,[...ids,user.id]);
       const existing=await one(db,`SELECT * FROM skribbil.friendships WHERE user_low=$1 AND user_high=$2 FOR UPDATE`,ids);
-      if(!existing) await db.query(`INSERT INTO skribbil.friendships(user_low,user_high,requested_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`,[...ids,user.id]);
-      else if(existing.status==='pending' && existing.requested_by!==user.id) await db.query(`UPDATE skribbil.friendships SET status='accepted',updated_at=now() WHERE user_low=$1 AND user_high=$2`,ids);
+      if(existing.status==='pending' && existing.requested_by!==user.id) await db.query(`UPDATE skribbil.friendships SET status='accepted',updated_at=now() WHERE user_low=$1 AND user_high=$2`,ids);
+      // Only the recipient who declined may reopen the relationship, as a new
+      // outgoing request. The original sender cannot repeatedly request again.
+      else if(existing.status==='declined' && existing.requested_by!==user.id) await db.query(`UPDATE skribbil.friendships SET status='pending',requested_by=$3,updated_at=now() WHERE user_low=$1 AND user_high=$2`,[...ids,user.id]);
       else requireValue(existing.status==='accepted'||existing.status==='pending','This friendship is unavailable.',409);
+    });
+  }
+  async respondFriend(user,otherUserId,body) {
+    requireValue(isUuid(otherUserId),'Invalid player.');
+    otherUserId=otherUserId.toLowerCase();
+    requireValue(otherUserId!==user.id,'Choose another registered player.');
+    requireValue(body.action==='accept'||body.action==='decline','Choose accept or decline.');
+    const ids=[user.id,otherUserId].sort(),status=body.action==='accept'?'accepted':'declined';
+    await this.db.transaction(async db=>{
+      const existing=await one(db,`SELECT * FROM skribbil.friendships WHERE user_low=$1 AND user_high=$2 FOR UPDATE`,ids);
+      requireValue(existing,'Friend request not found.',404);
+      requireValue(existing.requested_by===otherUserId,'Only the request recipient can respond.',403);
+      // Repeating the same decision is safe; a stale or opposite decision must
+      // not undo an accepted friendship or a declined request.
+      if(existing.status===status)return;
+      requireValue(existing.status==='pending','This friend request is no longer pending.',409);
+      const updated=await db.query(`UPDATE skribbil.friendships SET status=$4,updated_at=now()
+        WHERE user_low=$1 AND user_high=$2 AND requested_by=$3 AND status='pending' RETURNING user_low`,[...ids,otherUserId,status]);
+      requireValue(updated.rows.length,'This friend request is no longer pending.',409);
     });
   }
   async registerTournament(user,id) {

@@ -315,6 +315,8 @@ export async function createApp({db,config,assets}={}) {
       const rematchRequest=path.match(/^\/api\/matches\/([a-f0-9-]+)\/rematch$/);
       if(rematchRequest&&req.method==='POST'){rateLimit(req,'rooms',8);return json(res,200,await rematch.join(user,rematchRequest[1]));}
       if(path==='/api/friends'&&req.method==='POST'){await platform.friend(user,input);return json(res,200,{ok:true});}
+      const friendResponse=path.match(/^\/api\/friends\/([^/]+)\/respond$/);
+      if(friendResponse&&req.method==='POST'){await platform.respondFriend(user,friendResponse[1],input);return json(res,200,{ok:true});}
       const tournament=path.match(/^\/api\/tournaments\/([a-f0-9-]+)\/register$/);
       if(tournament&&req.method==='POST'){
         if(input.teamId)await competition.registerTeam(user,tournament[1],input.teamId);

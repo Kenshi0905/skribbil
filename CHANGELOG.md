@@ -4,6 +4,18 @@ Each major milestone is committed and pushed separately under the repository
 owner's configured Git identity. Unreleased work is described honestly; feature
 designs are not treated as completed runtime features.
 
+## Friend request controls - 2026-10-13
+
+- Incoming friend requests now offer one-click Accept and Decline controls;
+  sent requests show Request sent. Only accepted connections count as friends.
+- Only the recipient can decide a pending request. Repeated decisions are safe,
+  and a declined request cannot be repeatedly reopened by its sender.
+- Preserved reciprocal Add Friend acceptance and corrected concurrent first
+  requests so they settle into one friendship.
+- Verified both actions through the browser, including a 390px phone layout with
+  fully visible 44px controls. HTTP and UI regression tests cover permissions,
+  retries, failed requests, refresh failures and account changes.
+
 ## Casual preview launch - 2026-10-13
 
 - Published [Skribbil](https://skribbil.pages.dev) on Cloudflare Pages Free, with

@@ -176,9 +176,9 @@ async function api(path, options = {}) {
 }
 function resetAccountViews() {
   state.accountEpoch = (state.accountEpoch || 0) + 1;
-  for (const key of ['admin','adminDisputes','adminDisputesError','disputes','activeDispute','match','myDrawings','myTeams','teamDetail','teamTournament','teamsError','partyState','partyError','clubhouseState','clubhouseDetail','clubhouseRequest','clubhouseRequests','clubhousesError','clubhouseRequestsError','roomClubhouseId','roomClubhouseName']) state[key] = null;
+  for (const key of ['admin','adminDisputes','adminDisputesError','disputes','activeDispute','match','myDrawings','myTeams','teamDetail','teamTournament','teamsError','partyState','partyError','clubhouseState','clubhouseDetail','clubhouseRequest','clubhouseRequests','clubhousesError','clubhouseRequestsError','roomClubhouseId','roomClubhouseName','friendDecision','friendsError']) state[key] = null;
   state.teamsLoaded = state.partyLoaded = state.clubhousesLoaded = false;
-  state.teamsLoading = state.partyLoading = state.clubhousesLoading = false;
+  state.teamsLoading = state.partyLoading = state.clubhousesLoading = state.friendsLoading = false;
 }
 async function refresh({silent = false} = {}) {
   try { const data = await api('/api/bootstrap'); if ((data.user?.id || null) !== (user()?.id || null)) { resetAccountViews(); if (state.modal && !['auth','room','invite'].includes(state.modal)) closeModal(); } state.data = data; state.error = null; }
@@ -302,7 +302,61 @@ function cosmeticsCollection(person) {
   return owned.length ? `<div class="cosmetics">${owned.map(item => `<div class="cosmetic ${item.equipped ? 'unlocked' : ''}">${icon(item.slot === 'frame' ? 'image' : 'crown')}<h4>${e(item.name || item.slug)}</h4><p>${e(item.slot || 'Decoration')} · ${item.equipped ? 'equipped' : 'in your collection'}</p></div>`).join('')}</div><p class="bracket-caption">Your collection belongs to you across community games.</p>` : empty('A little room for personal flair.','Your unlocked decorations will appear here as you earn them.');
 }
 
-function friendsPage() { const people = rows('friends'); const teams = rows('teams'); return `${heading('GOOD COMPANY. QUESTIONABLE GUESSES.','Better with your people.','Build a squad, start a rivalry, make it a regular thing.',button(state.socialTab === 'friends' ? 'Add a friend' : 'Create a team',state.socialTab === 'friends' ? 'add-friend' : 'create-team','plus','primary'))}<div class="toolbar"><div class="tabs" role="tablist" aria-label="Community connections"><button role="tab" aria-selected="${state.socialTab === 'friends'}" class="tab ${state.socialTab === 'friends' ? 'active' : ''}" data-action="social-tab" data-value="friends">Your friends${people.length ? ` · ${number(people.length)}` : ''}</button><button role="tab" aria-selected="${state.socialTab === 'teams'}" class="tab ${state.socialTab === 'teams' ? 'active' : ''}" data-action="social-tab" data-value="teams">Community teams${teams.length ? ` · ${number(teams.length)}` : ''}</button></div></div>${state.socialTab === 'teams' ? teamInvitationsPanel() : ''}${state.socialTab === 'friends' ? people.length ? `<div class="panel friend-list">${people.map(friend => `<div class="friend-row">${avatar(friend)}<div><h3>${e(displayName(friend))}</h3><p>${e(friend.title || 'A familiar face in the clubhouse')}</p></div>${tag(friend.status === 'pending' ? 'REQUEST PENDING' : 'YOUR FRIEND',friend.status === 'pending' ? 'yellow' : 'green')}</div>`).join('')}</div>` : empty(user() ? 'Your squad starts with one friend.' : 'Your people are waiting.','Add a friend by username. You’ll share the same community across Skribbil and the games that come next.',button(user() ? 'Find your first friend' : 'Join the community',user() ? 'add-friend' : 'auth','people','yellow')) : teams.length ? `<div class="team-grid">${teams.map(team => `<article class="team-card">${teamLogo(team)}<div><h3>${e(team.name)}</h3><p>${team.memberCount != null || team.members != null ? plural(team.memberCount ?? (Array.isArray(team.members) ? team.members.length : team.members),'member') : 'Member count unavailable'} · ${e(team.tag || 'Community squad')}</p></div><div class="team-card-actions">${(team.ownerId || team.captainId) === user()?.id ? tag('YOUR TEAM') : ''}${button('Meet the team','team-detail','arrow','outline',`data-id="${e(team.id)}"`)}</div></article>`).join('')}</div>` : empty('A legendary team name is calling.','Bring your friends together under one banner. Your team belongs to the community, across every game.',button('Create the first team','create-team','shield','yellow'))}${partyPanel()}<div class="info-card dashboard-secondary"><h3>Same squad. More possibilities.</h3><p>Clans are competitive tournament teams. Clubhouses are invite-only friend groups. Your account, friends, and team live at the community level. Skribbil is our first game; future games can use the same league identity, social connections, and cosmetic inventory.</p></div>`; }
+function friendsPage() { const accepted = rows('friends').filter(friend => friend.status === 'accepted'); const teams = rows('teams'); return `${heading('GOOD COMPANY. QUESTIONABLE GUESSES.','Better with your people.','Build a squad, start a rivalry, make it a regular thing.',button(state.socialTab === 'friends' ? 'Add a friend' : 'Create a team',state.socialTab === 'friends' ? 'add-friend' : 'create-team','plus','primary'))}<div class="toolbar"><div class="tabs" role="tablist" aria-label="Community connections"><button role="tab" aria-selected="${state.socialTab === 'friends'}" class="tab ${state.socialTab === 'friends' ? 'active' : ''}" data-action="social-tab" data-value="friends">Your friends · ${number(accepted.length)}</button><button role="tab" aria-selected="${state.socialTab === 'teams'}" class="tab ${state.socialTab === 'teams' ? 'active' : ''}" data-action="social-tab" data-value="teams">Community teams${teams.length ? ` · ${number(teams.length)}` : ''}</button></div>${state.socialTab === 'friends' && user() ? button(state.friendsLoading ? 'Refreshing…' : 'Refresh friends','refresh-friends','refresh','outline',state.friendsLoading || state.friendDecision ? 'disabled' : '') : ''}</div>${state.socialTab === 'teams' ? teamInvitationsPanel() : ''}${state.socialTab === 'friends' ? friendsPanel() : teams.length ? `<div class="team-grid">${teams.map(team => `<article class="team-card">${teamLogo(team)}<div><h3>${e(team.name)}</h3><p>${team.memberCount != null || team.members != null ? plural(team.memberCount ?? (Array.isArray(team.members) ? team.members.length : team.members),'member') : 'Member count unavailable'} · ${e(team.tag || 'Community squad')}</p></div><div class="team-card-actions">${(team.ownerId || team.captainId) === user()?.id ? tag('YOUR TEAM') : ''}${button('Meet the team','team-detail','arrow','outline',`data-id="${e(team.id)}"`)}</div></article>`).join('')}</div>` : empty('A legendary team name is calling.','Bring your friends together under one banner. Your team belongs to the community, across every game.',button('Create the first team','create-team','shield','yellow'))}${partyPanel()}<div class="info-card dashboard-secondary"><h3>Same squad. More possibilities.</h3><p>Clans are competitive tournament teams. Clubhouses are invite-only friend groups. Your account, friends, and team live at the community level. Skribbil is our first game; future games can use the same league identity, social connections, and cosmetic inventory.</p></div>`; }
+
+function friendRow(friend, kind) {
+  const name = displayName(friend);
+  const decision = state.friendDecision?.id === friend.id ? state.friendDecision.action : null;
+  const busy = !!state.friendDecision || !!state.friendsLoading;
+  const caption = kind === 'incoming' ? 'Wants to be your friend.' : kind === 'sent' ? 'Waiting for their reply.' : friend.title || 'A familiar face in the community';
+  return `<div class="friend-row" data-friend-id="${e(friend.id)}" aria-busy="${!!decision}">${avatar(friend)}<div class="friend-details"><h3>${e(name)}</h3><p>${e(caption)}</p></div>${kind === 'incoming' ? `<div class="friend-request-actions">${button(decision === 'accept' ? 'Accepting…' : 'Accept','respond-friend','check','primary',`data-id="${e(friend.id)}" data-response="accept" aria-label="${e(`Accept friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}${button(decision === 'decline' ? 'Declining…' : 'Decline','respond-friend','close','outline',`data-id="${e(friend.id)}" data-response="decline" aria-label="${e(`Decline friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}</div>` : tag(kind === 'sent' ? 'Request sent' : 'YOUR FRIEND',kind === 'sent' ? 'yellow' : 'green')}</div>`;
+}
+function friendsPanel() {
+  const people = rows('friends');
+  const incoming = people.filter(friend => friend.status === 'pending' && friend.outgoing === false);
+  const sent = people.filter(friend => friend.status === 'pending' && friend.outgoing === true);
+  const accepted = people.filter(friend => friend.status === 'accepted');
+  const section = (title, people, kind) => people.length ? `<section class="friend-section"><div class="section-heading"><h2>${icon(kind === 'incoming' ? 'heart' : 'people')}${e(title)} <span class="friend-section-count">${number(people.length)}</span></h2></div><div class="panel friend-list">${people.map(friend => friendRow(friend,kind)).join('')}</div></section>` : '';
+  return `<div class="friends-panel" aria-busy="${!!state.friendsLoading || !!state.friendDecision}">${state.friendsError ? `<div class="friend-request-error" role="alert">${icon('info')}<span>${e(state.friendsError)}</span></div>` : ''}${section('Incoming requests',incoming,'incoming')}${section('Sent requests',sent,'sent')}${section('Your friends',accepted,'accepted')}${!incoming.length && !sent.length && !accepted.length ? empty(user() ? 'Your squad starts with one friend.' : 'Your people are waiting.','Add a friend by username. You’ll share the same community across Skribbil and the games that come next.',button(user() ? 'Find your first friend' : 'Join the community',user() ? 'add-friend' : 'auth','people','yellow')) : !accepted.length ? '<p class="friends-note">Accepted requests appear in Your friends. Only accepted friends can receive party invitations.</p>' : ''}</div>`;
+}
+async function respondFriendRequest(otherUserId, action) {
+  if (!user()) { requireUser(() => {}); return; }
+  if (state.friendDecision || state.friendsLoading || !['accept','decline'].includes(action)) return;
+  const request = rows('friends').find(friend => friend.id === otherUserId && friend.status === 'pending' && friend.outgoing === false);
+  if (!request) return;
+  const accountId = user().id, accountEpoch = state.accountEpoch || 0;
+  const sameAccount = () => user()?.id === accountId && (state.accountEpoch || 0) === accountEpoch;
+  state.friendDecision = {id:otherUserId,action}; state.friendsError = null; render();
+  let saved = false;
+  try {
+    await api(`/api/friends/${encodeURIComponent(otherUserId)}/respond`,{method:'POST',body:JSON.stringify({action})});
+    if (!sameAccount()) return;
+    saved = true;
+    // Reflect the confirmed decision even if the following bootstrap refresh fails.
+    state.data.friends = action === 'accept' ? rows('friends').map(friend => friend.id === otherUserId ? {...friend,status:'accepted',outgoing:false} : friend) : rows('friends').filter(friend => friend.id !== otherUserId);
+    render();
+    await refresh({silent:true});
+    if (sameAccount()) toast(action === 'accept' ? 'Friend request accepted. Your squad just grew.' : 'Friend request declined.');
+  } catch(error) {
+    if (!sameAccount() || error.code === 'ACCOUNT_CHANGED') return;
+    state.friendsError = saved ? 'Your choice was saved, but the friend list could not refresh. Use Refresh friends to try again.' : error.message || 'That request could not be updated. Please try again.';
+    toast(state.friendsError,true);
+  } finally {
+    if (sameAccount()) {
+      state.friendDecision = null;
+      if (state.route === 'friends') { render(); if (!state.modal && state.socialTab === 'friends') $('[data-action="refresh-friends"]')?.focus(); }
+    }
+  }
+}
+async function refreshFriends() {
+  if (!user() || state.friendsLoading || state.friendDecision) return;
+  const accountId = user().id, accountEpoch = state.accountEpoch || 0;
+  const sameAccount = () => user()?.id === accountId && (state.accountEpoch || 0) === accountEpoch;
+  state.friendsLoading = true; state.friendsError = null; render();
+  try { await refresh({silent:true}); }
+  catch(error) { if (sameAccount() && error.code !== 'ACCOUNT_CHANGED') { state.friendsError = error.message || 'Your friend list could not refresh. Please try again.'; toast(state.friendsError,true); } }
+  finally { if (sameAccount()) { state.friendsLoading = false; if (state.route === 'friends') { render(); if (!state.modal && state.socialTab === 'friends') $('[data-action="refresh-friends"]')?.focus(); } } }
+}
 
 function adminPage() { if (!isAdmin()) return ''; const admin = state.admin; return `${heading('KEEP THE COMMUNITY KIND.','Behind the canvas.','Every correction has a reason. Every decision leaves a trail.')}<div class="admin-warning">Score corrections, bans, and gallery curation affect the shared community. Match scores are audited; use a clear reason for every adjustment.</div>${competitionActions()}<div class="admin-actions section-space">${button('Correct a score','adjust-score','pencil')}${button('Manage a ban','ban-player','shield','outline')}${button('Refresh audit log','refresh-admin','refresh','outline')}</div>${clubhouseAdminPanel()}${disputesAdminPanel()}${!admin ? empty('Loading the admin records…','The secure audit log will appear here shortly.') : `<div class="split-grid"><div class="info-card"><h3>Match result audit log</h3>${(admin.audit || admin.auditLog || admin.adjustments || []).length ? `<ul class="audit-list">${(admin.audit || admin.auditLog || admin.adjustments).slice(0,30).map(entry => `<li><strong>${e(entry.action || entry.type || 'Score adjustment')}</strong> ${e(entry.reason || '')}<small>${e(readableDate(entry.createdAt))} · ${e(entry.userId || entry.actorId || entry.matchId || '')}${entry.delta !== undefined ? ` · ${Number(entry.delta)>0?'+':''}${number(entry.delta)} points` : ''}</small></li>`).join('')}</ul>` : '<p>No administrative events have been recorded.</p>'}</div><div class="info-card"><h3>Gallery curation</h3>${(admin.drawings || rows('drawings')).length ? (admin.drawings || rows('drawings')).map(drawing => `<div class="section-space"><p><strong>${e(drawing.prompt || drawing.title || 'Untitled drawing')}</strong> · ${e(drawing.artistName || drawing.artist?.username || drawing.artist || '')}</p><div class="admin-actions">${button('Fame','curate','','outline',`data-id="${e(drawing.id)}" data-hall="fame"`)}${button('Shame','curate','','outline',`data-id="${e(drawing.id)}" data-hall="shame"`)}${button('Unlist','curate','','outline',`data-id="${e(drawing.id)}" data-hall=""`)}</div></div>`).join('') : '<p>Saved match drawings will appear here for review.</p>'}</div></div>`}`; }
 
@@ -533,6 +587,8 @@ async function handleAction(action, element) {
     case 'room-mode': state.roomMode = !state.roomClubhouseId && element.dataset.value === 'ranked' ? 'ranked' : 'private'; renderModal(); break;
     case 'edit-profile': requireUser(() => openModal('profile')); break;
     case 'add-friend': requireUser(() => openModal('friend')); break;
+    case 'respond-friend': await respondFriendRequest(element.dataset.id,element.dataset.response); break;
+    case 'refresh-friends': await refreshFriends(); break;
     case 'create-team': requireUser(() => openModal('team')); break;
     case 'refresh-clubhouse': await showClubhouse(state.clubhouseDetail.id); break;
     case 'cancel-clubhouse-room': element.disabled = true; try { await api('/api/rooms/'+encodeURIComponent(element.dataset.id)+'/cancel',{method:'POST',body:'{}'}); await showClubhouse(state.clubhouseDetail.id); await refresh({silent:true}); toast('Room closed. A fresh canvas is ready when you are.'); } finally { if (element.isConnected) element.disabled = false; } break;
