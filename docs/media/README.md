@@ -12,7 +12,7 @@ recording. Browser address bars, private launch URLs, and credentials are exclud
 
 | File | What it shows |
 | --- | --- |
-| [commons-desktop.jpg](commons-desktop.jpg) | The desktop commons: navigation, play card, progress, and room discovery. Clearly labeled example content can appear before real league results exist. |
+| [commons-desktop.jpg](commons-desktop.jpg) | The desktop commons: navigation, play card, and genuine empty community states. No example scores or rooms. |
 | [commons-phone.jpg](commons-phone.jpg) | The commons in a narrow browser viewport. |
 | [clubhouse.jpg](clubhouse.jpg) | A synthetic invite-only group, its private room list, and owner/member controls. Visible usernames are generated test identities. |
 | [gameplay-desktop.jpg](gameplay-desktop.jpg) | The actual Go-powered game client with a synchronized test drawing, roster, chat, and dislike controls. |

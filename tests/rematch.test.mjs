@@ -19,6 +19,11 @@ const launch = async (user, match) => ({ matchId: match.id, url: `/test-launch/$
 test('quick rematches preserve authority and reuse a durable successor', { timeout: 120000 }, async t => {
   const db = await openDatabase({ url: '', dataDir: ':memory:' });
   await db.query(await readFile(new URL('../database/rematch.sql', import.meta.url), 'utf8'));
+  // Historical seasons are test fixtures only; production seeds no schedule.
+  const historicalSeason = randomUUID();
+  await db.query(`INSERT INTO skribbil.seasons(id,league_id,community_id,name,starts_at,ends_at,status)
+    VALUES($1,'00000000-0000-4000-8000-000000000040',$2,'Historical rematch fixture',now()-interval '2 days',now()-interval '1 day','closed')`,[historicalSeason,communityId]);
+  await db.query(`INSERT INTO skribbil.season_games(season_id,game_id,rule_set_id,scoring_version,scoring_config) VALUES($1,$2,$3,1,'{}')`,[historicalSeason,gameId,rankedRules]);
   const user = async () => {
     const id = randomUUID(), name = `player_${id.slice(0, 8)}`;
     return one(db, 'INSERT INTO skribbil.users(id,username,display_name) VALUES($1,$2,$2) RETURNING *', [id, name]);
@@ -137,7 +142,7 @@ test('quick rematches preserve authority and reuse a durable successor', { timeo
     });
 
     await t.test('ranked gates remain authoritative and do not revive an old season', async () => {
-      const source = await completed({ mode: 'ranked', privateRoom: false, season: '00000000-0000-4000-8000-000000000050' });
+      const source = await completed({ mode: 'ranked', privateRoom: false, season: historicalSeason });
       const requests = [], provision = async payload => { requests.push(payload); return { lobbyId: `ranked-${payload.matchId}` }; };
       const blocked = new Rematch({ db, provision, admit: launch });
       await rejects(blocked.join(source.players[0], source.id), 503);
@@ -154,7 +159,7 @@ test('quick rematches preserve authority and reuse a durable successor', { timeo
     });
 
     await t.test('current season stays in the original league; tournament and unknown competitive rules are refused', async () => {
-      const source = await completed({ mode: 'ranked', privateRoom: false, season: '00000000-0000-4000-8000-000000000050' });
+      const source = await completed({ mode: 'ranked', privateRoom: false, season: historicalSeason });
       const seasonId = randomUUID();
       await db.query(`INSERT INTO skribbil.seasons(id,league_id,community_id,name,starts_at,ends_at,status)
         VALUES($1,'00000000-0000-4000-8000-000000000040',$2,'Current test season',now()-interval '1 day',now()+interval '1 day','active')`, [seasonId, communityId]);

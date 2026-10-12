@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { postgresOptions } from './db.mjs';
 try { process.loadEnvFile?.('.env'); } catch(e) { if(e.code!=='ENOENT')throw e; }
 export async function loadConfig() {
   const production=process.env.NODE_ENV==='production';
@@ -13,6 +14,7 @@ export async function loadConfig() {
   if(production&&(!process.env.DATABASE_URL||!process.env.S3_BUCKET||process.env.COOKIE_SECURE!=='true'||!process.env.PUBLIC_ORIGIN?.startsWith('https://')))
     throw new Error('Production requires external DATABASE_URL, private S3_BUCKET, COOKIE_SECURE=true and HTTPS PUBLIC_ORIGIN.');
   if(production){
+    postgresOptions({url:process.env.DATABASE_URL,production,caCert:process.env.DATABASE_CA_CERT});
     const origin=new URL(process.env.PUBLIC_ORIGIN);
     if(origin.origin!==process.env.PUBLIC_ORIGIN)throw new Error('PUBLIC_ORIGIN must be an exact HTTPS origin without a path or trailing slash.');
     if(!process.env.SKRIBBIL_ORIGIN_KEY||process.env.SKRIBBIL_ORIGIN_KEY.length<32||process.env.SKRIBBIL_ORIGIN_KEY===secret)

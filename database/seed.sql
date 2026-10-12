@@ -22,16 +22,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO leagues(id,community_id,name,slug)
 VALUES ('00000000-0000-4000-8000-000000000040','00000000-0000-4000-8000-000000000010',
   'Dussehra League','dussehra-league') ON CONFLICT DO NOTHING;
--- Setup dates, not a published or official tournament schedule. An admin activates it.
-INSERT INTO seasons(id,league_id,community_id,name,starts_at,ends_at,status)
-VALUES ('00000000-0000-4000-8000-000000000050','00000000-0000-4000-8000-000000000040',
-  '00000000-0000-4000-8000-000000000010','Dussehra setup season',
-  '2026-10-17T00:00:00+05:30','2026-11-01T00:00:00+05:30','scheduled') ON CONFLICT DO NOTHING;
-INSERT INTO season_games(season_id,game_id,rule_set_id,scoring_version,scoring_config)
-VALUES ('00000000-0000-4000-8000-000000000050','00000000-0000-4000-8000-000000000020',
-  '00000000-0000-4000-8000-000000000031',1,
-  '{"method":"placement","points":{"1":25,"2":18,"3":15,"4":12,"5":10,"6":8},"participation":5}')
-ON CONFLICT DO NOTHING;
+-- Actual seasons and tournaments are created by an administrator. Fresh
+-- installations have no placeholder schedules, entrants, activity or results.
 INSERT INTO cosmetic_definitions(id,slug,name,slot,metadata) VALUES
   ('00000000-0000-4000-8000-000000000060','rookie','Rookie','title','{"color":"#ffd34d"}'),
   ('00000000-0000-4000-8000-000000000062','violet-frame','Violet victory','frame','{"color":"#8064e8"}'),

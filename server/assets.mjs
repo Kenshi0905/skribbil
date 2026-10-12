@@ -35,6 +35,9 @@ export class AssetStore {
   constructor({root=process.env.ASSET_DIR||'.data/assets',bucket=process.env.S3_BUCKET}={}) { this.root=resolve(root);this.bucket=bucket||'local-private';this.backend=bucket?'s3':'local'; }
   async client() {
     if(!this.s3) { const {S3Client}=await import('@aws-sdk/client-s3');this.s3=new S3Client({region:process.env.S3_REGION||'us-east-1',endpoint:process.env.S3_ENDPOINT,forcePathStyle:true,
+      // Compatible stores need not implement AWS's optional checksum extensions.
+      // Retain normal SDK integrity defaults when using native AWS endpoints.
+      ...(process.env.S3_ENDPOINT?{requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'}:{}),
       credentials:process.env.S3_ACCESS_KEY_ID?{accessKeyId:process.env.S3_ACCESS_KEY_ID,secretAccessKey:process.env.S3_SECRET_ACCESS_KEY}:undefined}); }
     return this.s3;
   }

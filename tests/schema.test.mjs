@@ -47,6 +47,12 @@ test('baseline and configuration seed can initialize actual PostgreSQL and seed 
   assert.equal((await db.query('SELECT count(*)::int AS count FROM matches')).rows[0].count, 0);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM games')).rows[0].count, 1);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM credentials')).rows[0].count, 0);
+  assert.equal((await db.query("SELECT count(*)::int AS count FROM users WHERE username<>'skribbil_system'")).rows[0].count, 0);
+  for (const table of ['seasons','season_games','tournaments','auth_sessions','match_results','score_events','xp_events','drawings','challenge_progress']) {
+    assert.equal((await db.query(`SELECT count(*)::int AS count FROM ${table}`)).rows[0].count, 0, `${table} must not contain fabricated activity or schedules`);
+  }
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM leagues')).rows[0].count, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM challenge_definitions')).rows[0].count, 2);
 });
 
 test('usernames ignore case and equipment requires ownership', () => transaction(async () => {

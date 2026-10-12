@@ -1,5 +1,5 @@
 # Local configuration only. This file never deploys on its own.
-name = "skribbil-community"
+name = "skribbil"
 compatibility_date = "2026-10-12"
 pages_build_output_dir = "../../.deploy/pages"
 

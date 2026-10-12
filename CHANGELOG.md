@@ -4,6 +4,17 @@ Each major milestone is committed and pushed separately under the repository
 owner's configured Git identity. Unreleased work is described honestly; feature
 designs are not treated as completed runtime features.
 
+## Unreleased - Launch cleanup
+
+- Removed sample rooms, leaderboards, artwork, brackets, cosmetics, and player
+  progress from the live interface; empty and unavailable states are explicit.
+- Fresh databases keep required game catalogs but create no placeholder seasons,
+  player accounts, tournament entries, results, drawings, or earned progress.
+- Corrected tournament membership and PostgreSQL room/team count displays.
+- Enforced verified TLS for production PostgreSQL, including hostname checks and
+  optional provider CA configuration; unsafe SSL URL overrides are rejected.
+- Added conservative S3-compatible checksum settings with SDK request coverage.
+
 ## 0.2.0 - Private groups and mobile play, 2026-10-12
 
 - Added game-independent, invite-only Clubhouses. Platform admins create them

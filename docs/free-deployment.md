@@ -1,6 +1,6 @@
 # A free hosting path for Skribbil
 
-These are reviewable deployment files, not an active deployment. No service, subscription, public URL or cloud credential has been created. OMV is not part of this setup. The local app remains available without cloud accounts.
+Deployment is being configured with user authorization. The `skribbil` Pages project is reserved, and the dedicated **Skribbil Games** Supabase organization is on the Free plan. The public game is not yet verified live. OMV is not part of this setup; the local app remains available without cloud accounts.
 
 The proposed public preview uses Cloudflare Pages Free for the website, one Render Free service containing both the Node API and the original Go engine, and Supabase Free for PostgreSQL plus a private artwork bucket. This avoids running two services against Render's shared free-hour allowance. It is suitable for trying casual community games; ranked play stays disabled because the free server can restart and its event outbox is not durable across restarts.
 
@@ -41,9 +41,21 @@ Go sends signed events directly to the same container's Node process at `/api/in
 
 ## Configuration when publishing is authorized
 
-1. Create a Supabase project in a **Free** organization. Copy its PostgreSQL **Session pooler** connection string into Render's secret `DATABASE_URL`; do not put it in frontend code or source control. The session pooler supports IPv4 without buying the IPv4 add-on. Keep TLS enabled and validate its certificate. [Supabase database connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres).
+1. Create a Supabase project in a **Free** organization. Copy its PostgreSQL **Session pooler** connection string into Render's secret `DATABASE_URL`; do not put it in frontend code or source control. The session pooler supports IPv4 without buying the IPv4 add-on. Use a URL with no SSL query options or with `sslmode=verify-full`. Production code always enables TLS with certificate-chain and hostname verification; it rejects weaker SSL modes and URL-level certificate/socket overrides. If the provider needs its own trust root, download the database CA from Supabase Database settings and put the PEM text, including real line breaks, in Render's protected `DATABASE_CA_CERT` environment value. Without this option, Node's standard trusted roots are used. Do not disable verification to work around a certificate error. [Supabase database connection modes and SSL](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+   The app validates and removes `sslmode=verify-full` before handing the URL to `pg`, then supplies its verified TLS configuration directly. This prevents URL parsing from replacing the optional CA or verification settings. Do not add `sslrootcert`, `sslcert`, `sslkey`, `ssl`, or `uselibpqcompat` to the URL. [node-postgres SSL configuration precedence](https://node-postgres.com/features/ssl).
 
 2. Create a **private** Supabase Storage bucket called `skribbil-private`. Generate its server S3 credentials and copy the endpoint and region from the dashboard. The endpoint follows `https://PROJECT-REF.storage.supabase.co/storage/v1/s3`. Set these only on Render. S3 access keys are server credentials that bypass Storage RLS; the application must authorize asset access. [Supabase S3 authentication](https://supabase.com/docs/guides/storage/s3/authentication).
+
+   For a configured S3-compatible endpoint, the client uses AWS's `WHEN_REQUIRED`
+   request and response checksum settings. This avoids opting into optional AWS
+   checksum extensions while retaining HTTPS, request signing and the app's stored
+   SHA-256 metadata. Native AWS endpoints retain the SDK defaults. This is a
+   compatibility choice; successful local request-shape tests do not establish
+   that a particular live bucket accepts uploads. Verify upload, signed download
+   and deletion during deployment checks.
+   [AWS checksum controls](https://docs.aws.amazon.com/sdkref/latest/guide/feature-dataintegrity.html),
+   [Supabase S3 compatibility](https://supabase.com/docs/guides/storage/s3/compatibility).
 
 3. Choose the intended Pages project name and its free `pages.dev` origin. Review `infra/render.yaml` before applying it manually. It specifies `plan: free` and `autoDeployTrigger: off`; the latter prevents later commits from triggering automatic deployments, but creating the service itself will still initiate its first deployment. Do not create a Render database: this configuration uses the external Supabase project. [Render Blueprint settings](https://render.com/docs/blueprint-spec).
 
@@ -51,7 +63,8 @@ Go sends signed events directly to the same container's Node process at `/api/in
 
 | Variable | Value |
 | --- | --- |
-| `DATABASE_URL` | Supabase Session pooler URL, stored as a secret, with TLS enabled |
+| `DATABASE_URL` | Supabase Session pooler URL, stored as a secret; omit SSL parameters or use only `sslmode=verify-full` |
+| `DATABASE_CA_CERT` | Optional provider CA PEM bundle, at most 64 KiB, stored only in protected server runtime configuration |
 | `PUBLIC_ORIGIN` | Exact Pages origin, without a trailing path |
 | `SKRIBBIL_ENGINE_SECRET` | A generated random secret of at least 32 characters, shared only by Node and Go |
 | `SKRIBBIL_ORIGIN_KEY` | A different generated secret of at least 32 characters, shared by Pages and Node |
@@ -71,9 +84,22 @@ Render provides the Node `PORT`. The startup script sets the Go child `PORT=8080
 
 7. After an authorized manual deployment, verify a new account, login/logout, two-player private room, native drawing/guessing, spectator separation, dislike deduction, hard-word carryover, archived artwork access and denial of direct unauthorized Render access. Reconnect after a server restart and confirm the UI explains that the previous live room is gone. Run these checks before inviting the wider community.
 
+Render Free does not provide a service shell or one-off jobs. After a real account registers, an authorized operator can run `npm run admin -- <registered-username>` locally with `NODE_ENV=production`, the protected production `DATABASE_URL`, and `DATABASE_CA_CERT` when needed supplied to that process. The same verified TLS checks apply to this command and `npm run db:migrate`. Keep these values out of shell history, source files and browser code. [Render Free restrictions](https://render.com/docs/free).
+
 The template is intended for one instance. A free instance has limited memory/CPU, so no concurrency or tournament capacity is promised without measurement. Keep the standard room size at eight players and start with a small community trial.
 
 ## Data, retention and ranked play
+
+Initialize a fresh production database from the checked-in schema and seed; do
+not import a development database or playtest assets. The seed contains the
+credential-free system identity, Dussehra community and league, Skribbil rules,
+cosmetics, level thresholds, challenge and achievement definitions, and the word
+catalog. It creates no player accounts, seasons, tournaments, match results,
+drawings, XP or completed challenges. Administrators create actual seasons and
+tournaments after launch. Time-bounded challenge windows are generated by the
+application and are legitimate configuration, not fabricated player progress.
+The seed does not delete pre-existing data: any cleanup of an existing database
+must identify synthetic records separately and preserve real accounts and history.
 
 PostgreSQL contains accounts, league history, standings and metadata. The private bucket contains images and compressed canonical drawing operations. Canonical operations reproduce the final drawing; they do not promise the artist's original timing or a complete undo/clear history.
 
@@ -94,7 +120,7 @@ Use provider dashboards to monitor storage, database and network quotas manually
 These commands do not publish anything:
 
 ```text
-node --test tests/schema.test.mjs
+node --test tests/schema.test.mjs tests/database-tls.test.mjs
 node --test infra/tests/proxy.test.mjs
 node --check infra/cloudflare/_worker.js
 node infra/prepare-pages.mjs

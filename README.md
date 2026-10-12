@@ -12,8 +12,8 @@ engine. The community around them is new.
 
 ![The Skribbil commons: a paper-and-marker dashboard with game rooms, league progress, and a playful drawing card.](docs/media/commons-desktop.jpg)
 
-*The commons, captured from the running local app. Empty community screens use
-clearly labeled examples; example scores never enter the league.*
+*The commons, captured from the running local app. Rooms, rankings, artwork,
+and progress come from real community activity; new communities start empty.*
 
 [Run locally](#run-locally) · [Find your people](#find-your-people) ·
 [Watch the demo](#the-original-game-with-a-community-around-it) ·
