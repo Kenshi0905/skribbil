@@ -5,11 +5,12 @@ on **13 October 2026 (India time)**. It does not certify physical-phone
 compatibility, sustained production capacity or crash recovery. Feature boundaries
 remain in [implementation status](feature-status.md).
 
-## Live deployment
+## Initial live deployment
 
 [Skribbil is deployed on Cloudflare Pages](https://skribbil.pages.dev), with its
-Render backend and Supabase database/storage provisioned. The deployed revision
-is `dab93f41ebf34e979d9c7704d5cbae1bdecf1483`.
+Render backend and Supabase database/storage provisioned. The initial launch
+checks below used `dab93f41ebf34e979d9c7704d5cbae1bdecf1483`; they are historical
+launch evidence, separate from verification of subsequent updates.
 
 - Public health and bootstrap requests returned HTTP 200. The backend connected
   to the hosted PostgreSQL database with TLS certificate verification enabled.
@@ -42,6 +43,34 @@ the real administrators, their roles and their audit records were unchanged.
 No full production match, dislike penalty, hard-word assignment or authoritative
 result ingestion has been exercised. Those behaviors have the local evidence
 below; the live smoke did not generate permanent competitive ledger history.
+
+## Friend-request update
+
+Revision `4b8d013317ed301cc1ee12d9b262c84bd159c4dc` adds recipient-only Accept/Decline
+actions, distinct incoming/sent lists and an accepted-friend count. Render is
+**live at that exact revision**, and the matching
+[Pages deployment](https://9be020ea.skribbil.pages.dev) was published to
+[skribbil.pages.dev](https://skribbil.pages.dev). Live `app.js` and `styles.css`
+returned HTTP 200 and matched the tested files' SHA-256 hashes. Public bootstrap
+returned HTTP 200 with the engine available. Production had zero rooms immediately
+before deployment began.
+
+- All four jobs passed in [CI run 38297170524](https://github.com/Kenshi0905/skribbil/actions/runs/38297170524):
+  platform, Go race tests, ten-player multiplayer and production container build.
+- The local `npm test` run reported **123 tests: 122 passed and one optional
+  real-engine case skipped**, with no failures. The separate CI multiplayer job
+  passed; the local skip is not counted as a pass.
+- Desktop and **390 × 844** browser checks exercised Accept and Decline. The
+  44px action buttons stayed fully within their row; outgoing requests showed
+  status only, and the friend count included accepted connections only.
+- All four browser fixtures used an isolated local PGlite in-memory server. That
+  server was stopped and its temporary login file deleted after verification;
+  the browser checks did not create production accounts or friendships.
+
+Accept/Decline behavior was verified through isolated HTTP and browser tests.
+No production friendship mutation test was performed; existing production
+friendships were untouched. Live publication and asset checks do not substitute
+for a production Accept/Decline test.
 
 ## Real engine runs
 
@@ -84,7 +113,7 @@ those behaviors.
 
 ## Automated checks
 
-The [GitHub verification run for `dab93f4`](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168)
+The initial-launch [GitHub verification run for `dab93f4`](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168)
 passed all four jobs: platform, Go engine (including the full race suite),
 ten-player multiplayer run and production container build. The Pages proxy
 suite passed all five cases. Local Node checks and the separately run optional

@@ -4,15 +4,33 @@ The casual preview launched on **13 October 2026** at **[skribbil.pages.dev](htt
 
 The live preview uses Cloudflare Pages Free for the website, one Render Free Docker service in Singapore containing both the Node API and the original Go engine, and Supabase Free in the dedicated **Skribbil Games** organization for PostgreSQL plus a private artwork bucket. This avoids running two services against Render's shared free-hour allowance. It is suitable for trying casual community games; ranked play stays disabled because the free server can restart and its event outbox is not durable across restarts.
 
-## Verified launch state
+## Initial launch evidence
 
-- Deployed revision: [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4). All four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
+- Initial launch revision: [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4). All four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168). These checks describe the launch, not validation of a later update.
 - PostgreSQL certificate-chain and hostname verification succeeded using the provider CA. TLS verification remains enabled.
 - The private S3-compatible bucket passed upload, signed read, anonymous-read denial, and deletion checks.
 - Two real administrator accounts were provisioned privately; their credentials and identifying details are not part of this documentation.
 - Pages has production-only `API_ORIGIN`, `PUBLIC_ORIGIN`, and `SKRIBBIL_ORIGIN_KEY` bindings. Preview bindings are empty. Automatic deployments are off.
 - Live authentication and WSS passed with two players and one spectator in an unstarted private room: chat, spectator restrictions, and exact account-identity access checks. A separate two-player reconnect test passed with graceful close acknowledgement, preserved identity, an empty canvas, and zero scores.
-- A guarded transaction removed all five synthetic accounts and both unstarted test rooms while preserving the two real administrators. The final database has two real players and zero matches, results, or drawings. No full production match was started; the isolated local/CI ten-player playtest covers gameplay. See [verification](verification.md) for evidence and remaining checks.
+- A guarded transaction removed all five synthetic accounts and both unstarted test rooms while preserving the two real administrators. At completion of launch cleanup, the database had two real players and zero matches, results, or drawings. No full production match was started; the isolated local/CI ten-player playtest covers gameplay. See [verification](verification.md) for evidence and remaining checks.
+
+## Friend-request update
+
+Revision `4b8d013317ed301cc1ee12d9b262c84bd159c4dc` adds explicit recipient-only
+Accept/Decline controls and separates incoming, sent and accepted connections.
+All four [CI jobs passed](https://github.com/Kenshi0905/skribbil/actions/runs/38297170524).
+Local automated and desktop/390 × 844 browser checks passed; the four browser
+fixtures used an isolated in-memory database and were not production accounts.
+The production room count was zero immediately before this rollout.
+
+Render is **live at that exact revision**. The matching
+[Pages deployment](https://9be020ea.skribbil.pages.dev) was published to
+[skribbil.pages.dev](https://skribbil.pages.dev). Live `app.js` and `styles.css`
+returned HTTP 200 with SHA-256 hashes matching the tested files; bootstrap
+returned HTTP 200 with the engine available. Accept/Decline behavior was verified
+through isolated HTTP and browser tests, not production mutations. Existing
+production friendships were untouched. See the
+[update verification](verification.md#friend-request-update).
 
 ## Cost boundary
 

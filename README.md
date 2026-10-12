@@ -214,8 +214,8 @@ use Supabase Free in the Skribbil Games organization. All services use Free plan
 and automatic deployment is off. Pages backend bindings exist only in production;
 preview bindings are empty.
 
-The deployed revision is [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4).
-All four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
+The initial launch was verified at [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4),
+with all four jobs passing in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
 Live site/backend health checks, verified PostgreSQL TLS, and private S3 upload,
 signed read, anonymous-read denial, and deletion have passed. Two real administrator
 accounts were provisioned privately. No account credentials are published.
@@ -227,6 +227,15 @@ All five temporary accounts and both unstarted rooms were removed in a guarded
 transaction; the two real administrators remain, with zero matches, results, or
 drawings. No full production match was started. See the
 [verification record](docs/verification.md) for evidence and remaining checks.
+
+The friend-request update [`4b8d013`](https://github.com/Kenshi0905/skribbil/commit/4b8d013317ed301cc1ee12d9b262c84bd159c4dc)
+adds explicit Accept/Decline controls for incoming requests and separate sent
+requests. All four [CI jobs passed](https://github.com/Kenshi0905/skribbil/actions/runs/38297170524);
+desktop and 390 × 844 browser checks passed using isolated local accounts. Its
+Render backend and Pages frontend are live at that revision. Live assets match
+the tested files, and bootstrap reports the engine available. Accept/Decline
+behavior was tested locally; existing production friendships were untouched.
+[Update evidence](docs/verification.md#friend-request-update).
 
 Free hosting can sleep, restart, or suspend service at its quotas. Do not add a
 payment method or upgrade a plan to bypass those limits.
