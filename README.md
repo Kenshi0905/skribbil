@@ -1,17 +1,109 @@
 # Skribbil
 
-**Dussehra League of Skribbil** is a game-independent community platform wrapped
-around the original [scribble.rs](https://github.com/scribble-rs/scribble.rs) Go
-engine. The original real-time drawing, guessing, room locks, timers and
-WebSocket protocol remain in `engine/`. This is not a reimplementation of the
-game in the platform frontend.
+### Draw terribly. Guess brilliantly.
 
-The clubhouse uses original paper-and-marker artwork, flat cards and bold color.
-Accounts, communities, teams, leagues and cosmetics can be reused by later games.
+**Dussehra League of Skribbil** brings profiles, private friend groups, clans,
+tournaments, and a shared league around the original
+[scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
+The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
+engine. The community around them is new.
 
-## Start locally (free)
+**Playable locally · Free-only deployment plan · Ranked disabled by default**
 
-Requirements: Node.js 22+ (24 recommended), npm, Go 1.25+.
+![The Skribbil commons: a paper-and-marker dashboard with game rooms, league progress, and a playful drawing card.](docs/media/commons-desktop.jpg)
+
+*The commons, captured from the running local app. Empty community screens use
+clearly labeled examples; example scores never enter the league.*
+
+[Run locally](#run-locally) · [Find your people](#find-your-people) ·
+[Watch the demo](#the-original-game-with-a-community-around-it) ·
+[Architecture](docs/architecture.md) · [Feature status](docs/feature-status.md)
+
+## The original game, with a community around it
+
+Pick a word. Draw something questionable. Watch your friends guess everything
+except the answer. Skribbil keeps that experience inside the original Go engine,
+with a small league extension for identity, results, and the dislike penalty.
+
+[![An edited local gameplay demonstration showing the original drawing canvas and synchronized test players.](docs/media/gameplay.gif)](docs/media/gameplay.mp4)
+
+**[Play the silent demo →](docs/media/gameplay.mp4)**
+Use the MP4 link if your Markdown viewer does not animate or play the preview.
+
+<details>
+<summary>See the desktop game screen</summary>
+
+![The original game screen: player scores, drawing canvas, and guesses.](docs/media/gameplay-desktop.jpg)
+
+</details>
+
+The screenshots and animation are edited screen captures from an **automated
+local test with synthetic accounts**. They show the running application, not
+human play or a production launch. [Capture notes and evidence](docs/media/README.md).
+
+## Find your people
+
+| Place | What it is |
+| --- | --- |
+| **The commons** | The shared home: discover rooms, check progress, and find the next event. |
+| **Clubhouses** | Invite-only friend groups. A platform admin creates one or approves a player's request. Members can start, join, and watch private rooms together. |
+| **Clans / teams** | Competitive teams with a name, tag, logo, captain, and roster for team tournaments. A clan is separate from a Clubhouse. |
+| **The league** | Shared competition infrastructure: seasons, historical results, tournaments, and all-time records. |
+
+![A private Clubhouse with its room list, member roster, invitation controls, and owner actions.](docs/media/clubhouse.jpg)
+
+*A synthetic demonstration Clubhouse. Even with a room link, playing or spectating
+requires current membership. Platform admins who are not members cannot join.*
+
+Your account, friends, cosmetics, teams, and league identity belong to the
+community. **Skribbil is the only playable game today**; the schema and adapter
+boundary let future games share that identity and league.
+
+## A smaller screen, the same canvas
+
+<p align="center">
+  <img src="docs/media/commons-phone.jpg" width="230" alt="The commons in a narrow browser viewport, with a menu button and stacked game card." />
+  &nbsp;&nbsp;
+  <img src="docs/media/gameplay-phone.jpg" width="230" alt="The native game in a narrow browser viewport, with canvas, stacked chat, and a Send button." />
+</p>
+
+*Narrow browser captures. The sidebar scrolls, forms fit the viewport, and the
+game provides larger controls and pointer input. These are viewport checks,
+not physical-phone photographs or proof of real-device touch behavior.*
+
+## What you can do
+
+- **Make it yours:** profiles, uploaded avatars, owned titles and frames, match
+  history, XP, daily/weekly challenges, achievements, and trophies.
+- **Set the mood:** quieter pop effects, saved sound volume, and a one-click mute.
+- **Play together:** configurable private rooms, spectators, friends, parties,
+  Clubhouse invitations, team rosters, and a shared quick-rematch room.
+- **Run a competition:** individual/team registration, brackets, seasons,
+  standings, and audited tools for fixture results, disputes, and score corrections.
+- **Keep the good doodles:** automatic archives, artist-controlled publication
+  consent, curated Halls of Fame and Shame, MVP votes, and match summary cards.
+
+Tournament fixture results are currently entered by an admin. Replay downloads
+contain final canonical drawing operations, not timed stroke-by-stroke playback.
+See the [complete feature and limitation table](docs/feature-status.md).
+
+### The unanimous dislike penalty
+
+Each eligible player can dislike a drawing once. When **every player in the
+turn's frozen voting group** votes, the artist immediately loses exactly
+**100 points**, once, and faces a harder word on their next drawing turn.
+The artist and spectators do not vote; disconnecting never lowers the threshold.
+
+Go applies this under its existing room lock. All offered choices and the timeout
+choice use the hard pool, and the platform carries pending account-bound penalties
+across matches. [Implementation and delivery limits](docs/engine-integration.md).
+
+## Run locally
+
+Requires **Node.js 22+** (24 recommended), **npm**, and **Go 1.25+**.
+No hosted account or API key is needed.
+
+**macOS / Linux**
 
 ```sh
 npm ci
@@ -22,90 +114,110 @@ cd ..
 npm run dev
 ```
 
-On Windows, build to `../.tools/skribbil-engine.exe`. Open
-<http://localhost:3000>. The development launcher starts Go on port 4181 and the
-platform on port 3000. Set `ENGINE_PORT` or `PORT` to change them.
+**Windows PowerShell**
 
-No hosted account or API key is required to run locally. Embedded PostgreSQL
-persists in `.data/postgres`, private artwork in `.data/assets`, and the generated
-development signing secret in `.data/dev-secret`. All are Git-ignored. This is
-real local persistence, not browser-local fake authentication. Register through
-the website. The seed contains configuration, a non-login system identity and
-no fabricated match results. Clearly labeled example content illustrates empty
-community screens; it never enters competitive standings.
+```powershell
+npm ci
+New-Item -ItemType Directory -Force .tools
+Set-Location engine
+go build -o ../.tools/skribbil-engine.exe ./cmd/scribblers
+Set-Location ..
+npm run dev
+```
 
-To grant yourself local administrator access, stop the dev server first (the
-embedded database supports one process), then run:
+Open [Skribbil locally](http://localhost:3000), register, and create a private room.
+The launcher starts both services. `PORT` and `ENGINE_PORT` change their defaults,
+3000 and 4181. `npm start` runs only the platform; set `ENGINE_URL` if Go runs separately.
+
+Embedded PostgreSQL persists in `.data/postgres`, private artwork in
+`.data/assets`, and generated development secrets inside `.data/`. These paths
+are Git-ignored. Accounts and results use the database, not browser-only demo state.
+
+### Account settings and local administration
+
+Use the account menu → **Account settings** to edit your profile or change your
+password. Changes verify the current password, sign out other sessions, and keep
+the requesting browser signed in with a new session.
+
+To grant your registered account local admin access, **stop the dev server first**:
 
 ```sh
 npm run admin -- YOUR_REGISTERED_USERNAME
 npm run dev
 ```
 
-The admin can create seasons/tournaments, seed brackets, record fixture winners,
-curate consented artwork, suspend accounts and append score corrections.
+Replace the placeholder with your username. The embedded database allows one
+process at a time. Admins approve Clubhouse requests, manage competitions, review
+disputes, curate consented artwork, and record audited corrections.
 
-`npm start` runs only the platform. Set `ENGINE_URL` if Go runs separately. The
-`.env.example` file documents configuration; secrets belong in an ignored `.env`
-or your hosting provider's secret environment, never in Git.
+Configuration is in [.env.example](.env.example). Keep real passwords, tokens,
+personal data, and private assets out of Git. Use ignored local files or the
+host's secret environment, and review staged changes before pushing.
+Enable the included commit/push guards with
+`git config core.hooksPath .githooks`. The push guard inspects all outgoing commits,
+including intermediate versions. `npm run check:secrets` adds a repository check; it cannot guarantee that every
+possible secret or personal detail will be detected.
 
-## The requested design deliverables
+## Under the hood
 
-- [Complete PostgreSQL schema](database/schema.sql) and [data-model guide](docs/data-model.md).
-- [Architecture and storage recommendation](docs/architecture.md), including
-  privacy, bandwidth, NAT, availability and database trade-offs. OMV is deferred.
-- [Exact Go integration and dislike implementation](docs/engine-integration.md).
-- [Free deployment plan](docs/free-deployment.md) for a `pages.dev` frontend.
-- [Feature status and launch limitations](docs/feature-status.md).
+The plain JavaScript/CSS frontend talks to a Node platform for accounts,
+membership, progression, and results. The pinned Go engine owns drawing,
+guessing, timers, and concurrent rooms. The gateway streams WebSocket traffic
+without rewriting game packets; authenticated asynchronous results enter
+transactional receipts and ledgers that prevent duplicate awards.
 
-## How the penalty works
+Drawings normally expire after **30 days**, canonical replay data after **7 days**.
+Public artwork needs artist consent and admin selection; active curation and
+legal holds affect retention. Production uses PostgreSQL for metadata and a
+private object store for artwork. Local OMV hosting is deferred.
 
-The existing lobby mutex protects a frozen set of connected, non-artist,
-non-spectator voters. A dislike belongs to the current turn. Each eligible player
-can vote once; unanimity deducts exactly 100 points once, including below zero,
-and queues a hard word for the artist's next drawing turn. Disconnecting never
-shrinks the required vote count. Every offered word and the timeout selection
-come from the hard pool when the obligation is pending. Account-bound debt also
-travels through signed platform tickets; see the documented delivery limits.
+| Read next | What you'll find |
+| --- | --- |
+| [Schema](database/schema.sql) · [Data model](docs/data-model.md) | Universal accounts, game modules, social groups, seasons, and drawing metadata. |
+| [Architecture and storage](docs/architecture.md) | Service boundaries and OMV versus object storage: privacy, bandwidth, NAT, uptime, and database load. |
+| [Engine integration](docs/engine-integration.md) | Preserved Go flow, voting rules, harder words, and delivery guarantees. |
+| [Feature status](docs/feature-status.md) · [Verification](docs/verification.md) | Implemented behavior, incomplete features, and launch limitations. |
+| [Free deployment plan](docs/free-deployment.md) | Intended hosting and checks needed before provisioning. |
+| [Changelog](CHANGELOG.md) | Major implementation changes. |
 
-Normal drawing and guessing packets remain between the browser and Go. The
-Node service streams WebSocket traffic without interpreting it. Go sends
-HMAC-authenticated result events asynchronously. The platform atomically records
-event receipts, score ledgers, result versions, XP and standings; repeats cannot
-double-award a match. Drawings are rendered using the original pinned raster
-functions inside bounded workers, not browser-supplied screenshots.
+## Verification and launch status
 
-## Tests
+Local verification includes **10 real WebSocket player connections plus a
+spectator**. Three clients used mobile user-agent strings, which tests protocol
+behavior rather than phone input. Browser layouts were inspected at **360, 390,
+and 430 CSS pixels**, alongside automated pointer-event tests. Physical phone,
+stylus, and on-screen-keyboard testing remain outstanding.
 
 ```sh
 npm test
+npm run check
+npm run check:secrets
 node --test infra/tests/*.test.mjs
 cd engine
 go test -race ./...
 ```
 
-Go's race detector needs a supported C toolchain. On Windows use a 64-bit GCC
-toolchain with `CGO_ENABLED=1`. CI runs these on Ubuntu. HTTP integration tests
-open loopback sockets; a restrictive sandbox may require local-network permission.
+Go's race detector needs a supported C toolchain. On Windows, use suitable
+64-bit GCC and `CGO_ENABLED=1`; CI runs race checks on Ubuntu. These checks and
+media demonstrate local behavior, not production load capacity.
 
-## Deployment is intentionally pending review
+**Nothing is deployed yet. GitHub pushes do not trigger deployment.** The
+free-only plan targets Cloudflare Pages, a Render container, and Supabase
+PostgreSQL/private storage. Recheck provider limits before provisioning; do not
+add a payment method or upgrade a plan to bypass quotas.
 
-No deployment workflow is attached to GitHub pushes. The target is Cloudflare
-Pages Free + a Render Free container + Supabase Free PostgreSQL/private Storage.
-Never attach a payment method or upgrade a service as part of this free-only
-setup. Provider free-tier terms can change; recheck the linked official limits
-before provisioning. Exhausted quotas can interrupt the app.
+Ranked is disabled by default and forcibly disabled in the free preview profile.
+Live Go rooms are in memory, and container replacement can lose the local outbox.
+Official ranked launch needs durable result delivery and further validation.
+Production also requires external PostgreSQL and private object storage; it
+refuses ephemeral local storage as a substitute.
 
-The production container refuses to start with an ephemeral local database or
-local artwork store. Ranked is disabled by default and forcibly disabled in the
-free preview deployment: free Render can restart and its filesystem outbox is
-ephemeral. Casual multiplayer, local ranked testing, competition management and
-all architecture work are available. Official ranked launch needs a durable
-result-delivery design and validation first.
+## Credits and license
 
-## Attribution
+Skribbil builds on [scribble.rs](https://github.com/scribble-rs/scribble.rs).
+The original engine and required license notices are retained. The platform is
+[BSD-3-Clause licensed](LICENSE); see [third-party notices](THIRD_PARTY_NOTICES.md)
+and the [pinned upstream revision](engine/UPSTREAM.md).
 
-BSD-3-Clause for the platform; original upstream license and notices are retained.
-See [third-party notices](THIRD_PARTY_NOTICES.md) and the exact pinned revision in
-[engine/UPSTREAM.md](engine/UPSTREAM.md). Skribbil is independent; renaming does
-not waive third-party licenses. Upstream's excluded branding was replaced.
+This is an independent community project. The name **Skribbil** and new community
+artwork do not remove or replace upstream license obligations.

@@ -74,3 +74,8 @@ on-screen-keyboard testing.
 Docker configuration was reviewed but not executed locally because Docker
 Desktop's Linux daemon was not running. Hosted S3, Pages proxy WebSockets and
 Supabase production credentials need end-to-end verification after provisioning.
+
+The [0.2.0 code verification](https://github.com/Kenshi0905/skribbil/actions/runs/38287144653)
+passed platform tests, the Go race suite, the ten-player protocol playtest and
+the production Docker build. This is build/test evidence, not hosted deployment
+or physical-device verification.

@@ -25,6 +25,9 @@ designs are not treated as completed runtime features.
 - Added staged and outgoing-history secret guards and a CI container build; kept automatic deployment
   disabled and all runtime secrets, databases and test credentials Git-ignored.
 
+- Added real desktop/mobile screenshots, an animated gameplay preview and silent
+  MP4 to the README, with explicit synthetic-account and test-coverage notes.
+
 ## 0.1.0 - Local preview, 2026-10-12
 
 ### Architecture and foundation

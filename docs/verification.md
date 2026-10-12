@@ -45,7 +45,11 @@ those behaviors.
 
 ## Automated checks
 
-The full Go race suite passed. The Pages proxy suite passed all five cases.
+The [GitHub verification run for `1bf0b5a`](https://github.com/Kenshi0905/skribbil/actions/runs/38287144653)
+passed all four jobs: platform, Go engine (including the full race suite),
+ten-player multiplayer run and production container build. The Pages proxy
+suite passed all five cases. Local Node checks passed 91 tests, with the optional
+real-engine gateway case run separately and also passing.
 Node regression coverage includes authentication and password changes, Clubhouse
 approval/invitations, room privacy and revocation, encoded legacy engine paths,
 rematches, competitions, archival and retention. The complete Node regression
@@ -76,7 +80,7 @@ permission to connect to those local ports. They do not require hosted accounts.
 ## Remaining release checks
 
 The local Docker Linux daemon was unavailable, so the container build was not
-executed locally. CI container-build verification is pending. Cloudflare Pages,
+executed locally; the GitHub CI container build passed. Cloudflare Pages,
 Render and Supabase deployment, hosted WebSocket behavior and hosted storage
 verification are also pending; no production service was provisioned here.
 
