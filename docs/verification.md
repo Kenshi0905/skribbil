@@ -1,8 +1,47 @@
 # Milestone verification
 
-This record describes local evidence. It does not certify production deployment,
-physical-phone compatibility or crash recovery. Feature boundaries remain in
-[implementation status](feature-status.md).
+This record separates local verification from live deployment evidence collected
+on **13 October 2026 (India time)**. It does not certify physical-phone
+compatibility, sustained production capacity or crash recovery. Feature boundaries
+remain in [implementation status](feature-status.md).
+
+## Live deployment
+
+[Skribbil is deployed on Cloudflare Pages](https://skribbil.pages.dev), with its
+Render backend and Supabase database/storage provisioned. The deployed revision
+is `dab93f41ebf34e979d9c7704d5cbae1bdecf1483`.
+
+- Public health and bootstrap requests returned HTTP 200. The backend connected
+  to the hosted PostgreSQL database with TLS certificate verification enabled.
+- A PNG was uploaded to a private Supabase bucket. Its signed read returned the
+  same bytes, anonymous access was denied, and deletion was verified by a
+  subsequent HTTP 404.
+- Two administrator accounts were provisioned privately. Authentication and
+  administrator roles were verified, then their verification sessions were
+  revoked. No account identities, emails or credentials are recorded here.
+- Three synthetic accounts exercised authentication, logout/login and live WSS
+  connections. Two players and one spectator joined an unstarted private room.
+  Player chat propagated; spectator chat and drawing-line messages were
+  rejected. Reusing another account's native engine cookie returned HTTP 403.
+
+The focused two-account live reconnect test **passed**. A masked client
+`Close(1000)` received its graceful-close acknowledgement; the observing client
+received `connected:false` after 10,195 ms. Reconnection retained the same engine
+player identity, with the room still unstarted, an empty canvas and zero scores.
+The first smoke test's 10-second notification timeout was shorter than the
+observed disconnect propagation; no game-code change was needed.
+
+Both smoke rooms were cancelled and the synthetic sessions logged out.
+Transactional cleanup then removed exactly **five synthetic accounts and two
+unstarted matches**, including their sessions, memberships and welcome cosmetics.
+The cleanup guarded UUID references across all base tables and checked audit and
+outbox payload references. No immutable ledger rows were deleted. Final checks
+confirmed two real player accounts, zero matches, zero results and zero drawings;
+the real administrators, their roles and their audit records were unchanged.
+
+No full production match, dislike penalty, hard-word assignment or authoritative
+result ingestion has been exercised. Those behaviors have the local evidence
+below; the live smoke did not generate permanent competitive ledger history.
 
 ## Real engine runs
 
@@ -45,11 +84,11 @@ those behaviors.
 
 ## Automated checks
 
-The [GitHub verification run for `1bf0b5a`](https://github.com/Kenshi0905/skribbil/actions/runs/38287144653)
+The [GitHub verification run for `dab93f4`](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168)
 passed all four jobs: platform, Go engine (including the full race suite),
 ten-player multiplayer run and production container build. The Pages proxy
-suite passed all five cases. Local Node checks passed 91 tests, with the optional
-real-engine gateway case run separately and also passing.
+suite passed all five cases. Local Node checks and the separately run optional
+real-engine gateway case passed.
 Node regression coverage includes authentication and password changes, Clubhouse
 approval/invitations, room privacy and revocation, encoded legacy engine paths,
 rematches, competitions, archival and retention. The complete Node regression
@@ -80,9 +119,10 @@ permission to connect to those local ports. They do not require hosted accounts.
 ## Remaining release checks
 
 The local Docker Linux daemon was unavailable, so the container build was not
-executed locally; the GitHub CI container build passed. Cloudflare Pages,
-Render and Supabase deployment, hosted WebSocket behavior and hosted storage
-verification are also pending; no production service was provisioned here.
+executed locally; the GitHub CI container build passed. The hosted checks above
+cover deployment, private object storage, WebSocket access and reconnect identity.
+Synthetic fixture cleanup was verified. Full hosted gameplay, physical-phone
+interaction and production load/recovery testing remain outstanding.
 
 Ranked play remains disabled on the free hosting profile. Live rooms are held in
 engine memory, the event outbox has a small memory-before-fsync window, and the
@@ -90,8 +130,8 @@ free container filesystem is ephemeral. Process or host replacement can lose an
 active room or an event that was not made durable. These runs do not establish
 tournament-grade recovery or sustained production capacity.
 
-No actual administrator credentials are included in source or Git. Administrator
-account/role provisioning is an operator step at deployment; there is no shared
-default admin password. Keep account data, database files, session material and
+No actual administrator credentials are included in source or Git. The two live
+administrators were provisioned privately; there is no shared default admin
+password. Keep account data, database files, session material and
 deployment secrets in protected runtime storage. See the
 [free deployment guide](free-deployment.md) for setup and its remaining checks.

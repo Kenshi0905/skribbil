@@ -1,9 +1,11 @@
 # Implementation status
 
 This file distinguishes running features from schema support and deployment work.
-Nothing has been published to Cloudflare, Render or Supabase in this task.
+[Skribbil is live](https://skribbil.pages.dev) on Cloudflare Pages with a Render
+backend and Supabase database/private storage, provisioned on 13 October 2026.
 The [milestone verification record](verification.md) lists the observed engine
-runs, browser viewports, automated checks and remaining release tests.
+runs, live transport/storage checks, browser viewports, automated checks and
+remaining release tests. Full production gameplay remains unverified.
 
 | Feature | Current implementation |
 | --- | --- |
@@ -72,10 +74,17 @@ found no horizontal page overflow, preserved the 16:9 canvas and verified 44px
 chat/Send controls. These visual checks do not replace physical touch, stylus or
 on-screen-keyboard testing.
 Docker configuration was reviewed but not executed locally because Docker
-Desktop's Linux daemon was not running. Hosted S3, Pages proxy WebSockets and
-Supabase production credentials need end-to-end verification after provisioning.
+Desktop's Linux daemon was not running; the production container build passed in
+CI. Live health/bootstrap, verified-TLS database access, private Supabase PNG
+upload/signed read/anonymous denial/deletion, and Pages-proxied WSS checks passed.
+The live transport checks covered authentication, two-player chat, spectator
+restrictions, rejection of a borrowed native cookie and reconnect identity in an
+unstarted room. All five synthetic accounts and two unstarted smoke matches were
+removed transactionally; real administrator roles and audit records were
+preserved. Full hosted gameplay, load/recovery and physical-device testing remain
+outstanding.
 
-The [0.2.0 code verification](https://github.com/Kenshi0905/skribbil/actions/runs/38287144653)
+The [verification for deployed commit `dab93f4`](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168)
 passed platform tests, the Go race suite, the ten-player protocol playtest and
-the production Docker build. This is build/test evidence, not hosted deployment
-or physical-device verification.
+the production Docker build. These CI results are separate from the live checks
+above and do not establish physical-device compatibility or production capacity.

@@ -1,8 +1,18 @@
-# A free hosting path for Skribbil
+# Skribbil live deployment on free hosting
 
-Deployment is being configured with user authorization. The `skribbil` Pages project is reserved, and the dedicated **Skribbil Games** Supabase organization is on the Free plan. The public game is not yet verified live. OMV is not part of this setup; the local app remains available without cloud accounts.
+The casual preview launched on **13 October 2026** at **[skribbil.pages.dev](https://skribbil.pages.dev)**. The backend is [skribbil.onrender.com](https://skribbil.onrender.com). The website and backend health checks returned HTTP 200. OMV is not involved; the local app remains available without cloud accounts.
 
-The proposed public preview uses Cloudflare Pages Free for the website, one Render Free service containing both the Node API and the original Go engine, and Supabase Free for PostgreSQL plus a private artwork bucket. This avoids running two services against Render's shared free-hour allowance. It is suitable for trying casual community games; ranked play stays disabled because the free server can restart and its event outbox is not durable across restarts.
+The live preview uses Cloudflare Pages Free for the website, one Render Free Docker service in Singapore containing both the Node API and the original Go engine, and Supabase Free in the dedicated **Skribbil Games** organization for PostgreSQL plus a private artwork bucket. This avoids running two services against Render's shared free-hour allowance. It is suitable for trying casual community games; ranked play stays disabled because the free server can restart and its event outbox is not durable across restarts.
+
+## Verified launch state
+
+- Deployed revision: [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4). All four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
+- PostgreSQL certificate-chain and hostname verification succeeded using the provider CA. TLS verification remains enabled.
+- The private S3-compatible bucket passed upload, signed read, anonymous-read denial, and deletion checks.
+- Two real administrator accounts were provisioned privately; their credentials and identifying details are not part of this documentation.
+- Pages has production-only `API_ORIGIN`, `PUBLIC_ORIGIN`, and `SKRIBBIL_ORIGIN_KEY` bindings. Preview bindings are empty. Automatic deployments are off.
+- Live authentication and WSS passed with two players and one spectator in an unstarted private room: chat, spectator restrictions, and exact account-identity access checks. A separate two-player reconnect test passed with graceful close acknowledgement, preserved identity, an empty canvas, and zero scores.
+- A guarded transaction removed all five synthetic accounts and both unstarted test rooms while preserving the two real administrators. The final database has two real players and zero matches, results, or drawings. No full production match was started; the isolated local/CI ten-player playtest covers gameplay. See [verification](verification.md) for evidence and remaining checks.
 
 ## Cost boundary
 
@@ -35,11 +45,13 @@ Render can bill supplementary bandwidth or build usage when a payment method is 
 | `infra/cloudflare/wrangler.toml` | Pages build output configuration, with no stored secrets |
 | `infra/prepare-pages.mjs` | Copies the website and proxy into `.deploy/pages`; does not upload anything |
 
-The browser uses one origin, for example `https://YOUR-PROJECT.pages.dev`. The Pages Function forwards `/api/*` and `/engine/*` to `https://YOUR-SERVICE.onrender.com`, adding a secret origin header. The Node server validates that header, validates account sessions and forwards engine traffic to `127.0.0.1:8080`. The Go engine's HTTP and WebSocket handlers keep their existing concurrency model. The Function returns an upgrade response directly; it does not parse or regenerate drawing frames. Cloudflare documents this API in [Pages advanced mode](https://developers.cloudflare.com/pages/functions/advanced-mode/) and [Workers WebSocket support](https://developers.cloudflare.com/workers/examples/websockets/).
+The browser uses one origin, `https://skribbil.pages.dev`. The Pages Function forwards `/api/*` and `/engine/*` to `https://skribbil.onrender.com`, adding a secret origin header. The Node server validates that header, validates account sessions and forwards engine traffic to `127.0.0.1:8080`. The Go engine's HTTP and WebSocket handlers keep their existing concurrency model. The Function returns an upgrade response directly; it does not parse or regenerate drawing frames. Cloudflare documents this API in [Pages advanced mode](https://developers.cloudflare.com/pages/functions/advanced-mode/) and [Workers WebSocket support](https://developers.cloudflare.com/workers/examples/websockets/).
 
 Go sends signed events directly to the same container's Node process at `/api/internal/engine-events`. This route and `/engine/internal/*` are blocked at the public Pages proxy. Only the Node `$PORT` is exposed by the container; the Go port listens on loopback. Preserve the Pages `Origin` header and the matching public host when proxying a WebSocket handshake.
 
-## Configuration when publishing is authorized
+## Deployment configuration and manual updates
+
+The following describes how to reproduce or update the deployed setup. Changes require an intentional manual deployment; a repository push does not publish them.
 
 1. Create a Supabase project in a **Free** organization. Copy its PostgreSQL **Session pooler** connection string into Render's secret `DATABASE_URL`; do not put it in frontend code or source control. The session pooler supports IPv4 without buying the IPv4 add-on. Use a URL with no SSL query options or with `sslmode=verify-full`. Production code always enables TLS with certificate-chain and hostname verification; it rejects weaker SSL modes and URL-level certificate/socket overrides. If the provider needs its own trust root, download the database CA from Supabase Database settings and put the PEM text, including real line breaks, in Render's protected `DATABASE_CA_CERT` environment value. Without this option, Node's standard trusted roots are used. Do not disable verification to work around a certificate error. [Supabase database connection modes and SSL](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
@@ -51,9 +63,9 @@ Go sends signed events directly to the same container's Node process at `/api/in
    request and response checksum settings. This avoids opting into optional AWS
    checksum extensions while retaining HTTPS, request signing and the app's stored
    SHA-256 metadata. Native AWS endpoints retain the SDK defaults. This is a
-   compatibility choice; successful local request-shape tests do not establish
-   that a particular live bucket accepts uploads. Verify upload, signed download
-   and deletion during deployment checks.
+   compatibility choice; local request-shape tests alone do not establish live
+   bucket behavior. Upload, signed read, anonymous-read denial, and deletion were
+   verified for this deployment; repeat them after changing storage configuration.
    [AWS checksum controls](https://docs.aws.amazon.com/sdkref/latest/guide/feature-dataintegrity.html),
    [Supabase S3 compatibility](https://supabase.com/docs/guides/storage/s3/compatibility).
 
@@ -80,9 +92,9 @@ Render provides the Node `PORT`. The startup script sets the Go child `PORT=8080
 
 5. Prepare the frontend locally with `node infra/prepare-pages.mjs`. Configure the Pages output directory as `.deploy/pages`, with the repository root as the build root and `node infra/prepare-pages.mjs` as the build command if using a future Git-connected deployment. The generated `_worker.js` must be included; a plain file upload that ignores Functions cannot proxy the game.
 
-6. Configure **production-only** Pages bindings: `API_ORIGIN` is the HTTPS Render origin; `PUBLIC_ORIGIN` is the exact Pages origin; `SKRIBBIL_ORIGIN_KEY` is a secret equal to Render's value. Do not copy database, engine-HMAC or object-store credentials into Pages. The proxy fails closed on an unconfigured or different origin, so preview deployments do not inherit access to the live backend. Keep production branch auto-deployment and preview deployment disabled until intentionally publishing.
+6. Configure **production-only** Pages bindings: `API_ORIGIN` is the HTTPS Render origin; `PUBLIC_ORIGIN` is the exact Pages origin; `SKRIBBIL_ORIGIN_KEY` is a secret equal to Render's value. Do not copy database, engine-HMAC or object-store credentials into Pages. The proxy fails closed on an unconfigured or different origin, so preview deployments do not inherit access to the live backend. Keep production branch auto-deployment and preview deployment disabled. In Wrangler 4.149.0, `pages secret bulk` without `--env` targets production only; verify preview binding names remain empty after updates.
 
-7. After an authorized manual deployment, verify a new account, login/logout, two-player private room, native drawing/guessing, spectator separation, dislike deduction, hard-word carryover, archived artwork access and denial of direct unauthorized Render access. Reconnect after a server restart and confirm the UI explains that the previous live room is gone. Run these checks before inviting the wider community.
+7. After a manual deployment, record public health, authentication, private-lobby WebSocket, spectator, reconnect, and access-boundary checks in [verification](verification.md). The launch lobby and focused reconnect checks have passed. Use the isolated local/CI playtest for drawing, guessing, dislike penalties, hard-word carryover, and archive settlement. Playing a real production match creates audit and result records; do not present isolated test results as proof of a live match or erase immutable ledgers to clean up a test.
 
 Render Free does not provide a service shell or one-off jobs. After a real account registers, an authorized operator can run `npm run admin -- <registered-username>` locally with `NODE_ENV=production`, the protected production `DATABASE_URL`, and `DATABASE_CA_CERT` when needed supplied to that process. The same verified TLS checks apply to this command and `npm run db:migrate`. Keep these values out of shell history, source files and browser code. [Render Free restrictions](https://render.com/docs/free).
 
@@ -127,4 +139,4 @@ node infra/prepare-pages.mjs
 docker build -f infra/Dockerfile -t skribbil-preview .
 ```
 
-The Node tests exercise routing, session-cookie forwarding, origin-secret replacement, blocked internal routes, redirect rewriting and WebSocket-response preservation. A successful local test does not establish real Cloudflare/Render connectivity. A Docker build requires Docker plus network access to package registries; if unavailable, report that limitation rather than treating the image as validated.
+The Node tests exercise routing, session-cookie forwarding, origin-secret replacement, blocked internal routes, redirect rewriting and WebSocket-response preservation. Local proxy tests do not establish public WebSocket connectivity. The live HTTP, database TLS, and storage checks listed above have passed; consult the verification record for the separate live lobby result. A Docker build requires Docker plus network access to package registries; if unavailable, report that limitation rather than treating the image as validated.

@@ -4,7 +4,31 @@ Each major milestone is committed and pushed separately under the repository
 owner's configured Git identity. Unreleased work is described honestly; feature
 designs are not treated as completed runtime features.
 
-## Unreleased - Launch cleanup
+## Casual preview launch - 2026-10-13
+
+- Published [Skribbil](https://skribbil.pages.dev) on Cloudflare Pages Free, with
+  [one Render Free Docker service](https://skribbil.onrender.com) in Singapore
+  running Node and Go, and Supabase Free PostgreSQL/private storage in the
+  Skribbil Games organization.
+- Deployed revision [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4);
+  all four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
+- Verified live site/backend health, PostgreSQL TLS with hostname and CA checks,
+  and private storage upload, signed read, anonymous-read denial, and deletion.
+- Privately provisioned two real administrator accounts without publishing credentials.
+- Configured Pages backend bindings only for production, left preview bindings
+  empty, and kept automatic deployments off.
+- Kept ranked disabled: free hosting can sleep or restart, live rooms are in
+  memory, and the event outbox is not durable across container replacement.
+- Passed live authentication and WSS checks with two players and one spectator
+  in an unstarted private room: chat, spectator restrictions, and identity access.
+  A focused two-player reconnect check passed with graceful close acknowledgement,
+  preserved identity, an empty canvas, and zero scores.
+- Removed all five synthetic accounts and both unstarted test rooms in a guarded
+  transaction, preserving both real administrators. Final database: two real
+  players, zero matches, results, or drawings. No full production match was
+  started; gameplay is covered by the isolated local/CI ten-player playtest.
+  See [verification](docs/verification.md). README media remains an edited local
+  demonstration, and no physical-phone test coverage is claimed.
 
 - Removed sample rooms, leaderboards, artwork, brackets, cosmetics, and player
   progress from the live interface; empty and unavailable states are explicit.
@@ -93,5 +117,5 @@ Known gaps and launch gates are tracked in docs/feature-status.md.
 - Preserved final native private-room settings and the original league on rematch.
 
 ### Deployment
-- Deployment is pending owner review. Target: Cloudflare Pages frontend plus
-  a separate long-running Go engine, platform service, and PostgreSQL.
+- At this local-preview milestone, deployment awaited owner review. The actual
+  free-hosted launch and combined Node/Go service are recorded above.

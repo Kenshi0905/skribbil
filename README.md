@@ -8,7 +8,12 @@ tournaments, and a shared league around the original
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
 engine. The community around them is new.
 
-**Playable locally · Free-only deployment plan · Ranked disabled by default**
+**[Play Skribbil →](https://skribbil.pages.dev)**
+
+**Live casual preview · Free hosting · Ranked disabled**
+
+Register at the live site and create a private room. The free backend may need
+about a minute to wake after inactivity.
 
 ![The Skribbil commons: a paper-and-marker dashboard with game rooms, league progress, and a playful drawing card.](docs/media/commons-desktop.jpg)
 
@@ -40,7 +45,7 @@ provide an inline player for repository MP4 files.
 
 The screenshots and animation are edited screen captures from an **automated
 local test with synthetic accounts**. They show the running application, not
-human play or a production launch. [Capture notes and evidence](docs/media/README.md).
+human matches or captures of the deployed service. [Capture notes and evidence](docs/media/README.md).
 
 ## Find your people
 
@@ -178,7 +183,7 @@ private object store for artwork. Local OMV hosting is deferred.
 | [Architecture and storage](docs/architecture.md) | Service boundaries and OMV versus object storage: privacy, bandwidth, NAT, uptime, and database load. |
 | [Engine integration](docs/engine-integration.md) | Preserved Go flow, voting rules, harder words, and delivery guarantees. |
 | [Feature status](docs/feature-status.md) · [Verification](docs/verification.md) | Implemented behavior, incomplete features, and launch limitations. |
-| [Free deployment plan](docs/free-deployment.md) | Intended hosting and checks needed before provisioning. |
+| [Live deployment](docs/free-deployment.md) | Hosting, production configuration, verified checks, and free-tier limits. |
 | [Changelog](CHANGELOG.md) | Major implementation changes. |
 
 ## Verification and launch status
@@ -202,10 +207,29 @@ Go's race detector needs a supported C toolchain. On Windows, use suitable
 64-bit GCC and `CGO_ENABLED=1`; CI runs race checks on Ubuntu. These checks and
 media demonstrate local behavior, not production load capacity.
 
-**Nothing is deployed yet. GitHub pushes do not trigger deployment.** The
-free-only plan targets Cloudflare Pages, a Render container, and Supabase
-PostgreSQL/private storage. Recheck provider limits before provisioning; do not
-add a payment method or upgrade a plan to bypass quotas.
+**The casual preview launched on 13 October 2026 at [skribbil.pages.dev](https://skribbil.pages.dev).**
+Cloudflare Pages serves the website; [the Render service](https://skribbil.onrender.com)
+runs Node and Go together in Singapore. PostgreSQL and private artwork storage
+use Supabase Free in the Skribbil Games organization. All services use Free plans,
+and automatic deployment is off. Pages backend bindings exist only in production;
+preview bindings are empty.
+
+The deployed revision is [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4).
+All four jobs passed in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
+Live site/backend health checks, verified PostgreSQL TLS, and private S3 upload,
+signed read, anonymous-read denial, and deletion have passed. Two real administrator
+accounts were provisioned privately. No account credentials are published.
+Live authentication and WSS checks passed with two players and one spectator in
+an unstarted private room, including chat, spectator restrictions, and account
+identity enforcement. A separate two-player reconnect check passed with graceful
+close acknowledgement, preserved identity, an empty canvas, and zero scores.
+All five temporary accounts and both unstarted rooms were removed in a guarded
+transaction; the two real administrators remain, with zero matches, results, or
+drawings. No full production match was started. See the
+[verification record](docs/verification.md) for evidence and remaining checks.
+
+Free hosting can sleep, restart, or suspend service at its quotas. Do not add a
+payment method or upgrade a plan to bypass those limits.
 
 Ranked is disabled by default and forcibly disabled in the free preview profile.
 Live Go rooms are in memory, and container replacement can lose the local outbox.
