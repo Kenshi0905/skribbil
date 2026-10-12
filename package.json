@@ -1,0 +1,20 @@
+{
+  "name": "dussehra-league-of-skribbil",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A cross-game community league built around the original scribble.rs engine",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node --watch server/index.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server/index.mjs && node --check web/app.js",
+    "db:migrate": "node scripts/migrate.mjs",
+    "admin": "node scripts/admin.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "pg": "^8.16.3"
+  }
+}
