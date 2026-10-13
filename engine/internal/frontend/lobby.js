@@ -2010,6 +2010,12 @@ const connectToWebsocket = () => {
                     "Kicked",
                     `You have been kicked from the lobby.`,
                 );
+            } else if (event.code === 4001) {
+                showTextDialog(
+                    reconnectDialogId,
+                    "Room opened elsewhere",
+                    "You’re connected to this room in another tab. Continue playing there, or refresh this page to return here.",
+                );
             } else {
                 console.log("Attempting to reestablish socket connection.");
                 showReconnectDialogIfNotShown();
@@ -2033,7 +2039,7 @@ connectToWebsocket();
 //players could be killed and even cause the lobby being closed. Since
 //that's very frustrating, we want to avoid that.
 window.setInterval(() => {
-    if (socket) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "keep-alive" }));
     }
 }, 5000);

@@ -10,12 +10,105 @@ import (
 
 	"github.com/lxzan/gws"
 	"github.com/scribble-rs/scribble.rs/internal/config"
+	"github.com/scribble-rs/scribble.rs/internal/game"
 	"github.com/scribble-rs/scribble.rs/internal/state"
 )
 
 type testSocketEvents struct {
 	gws.BuiltinEventHandler
 	events chan map[string]any
+}
+
+func TestRoomCreatorRejoinsWhilePreviousSocketIsStillConnected(t *testing.T) {
+	secret := strings.Repeat("r", 32)
+	t.Setenv("SKRIBBIL_ENGINE_SECRET", secret)
+	cfg := config.Default
+	cfg.RootPath = "engine"
+	handler := NewHandler(&cfg)
+	create := httptest.NewRequest("POST", "/engine/internal/rooms", strings.NewReader(`{"matchId":"owner-reconnect","mode":"private","rounds":1,"drawTime":60,"maxPlayers":2}`))
+	create.Header.Set("Authorization", "Bearer "+secret)
+	created := httptest.NewRecorder()
+	handler.postLeagueRoom(created, create)
+	if created.Code != http.StatusOK {
+		t.Fatal(created.Body.String())
+	}
+	var room map[string]string
+	_ = json.Unmarshal(created.Body.Bytes(), &room)
+	lobby := state.GetLobby(room["lobbyId"])
+	t.Cleanup(func() { state.RemoveLobby(lobby.LobbyID) })
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /engine/v1/lobby/{lobby_id}/ws", handler.websocketUpgrade)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	ticket := signTestTicket(joinTicket{UserID: "owner-account", Username: "Owner", MatchID: "owner-reconnect", LobbyID: lobby.LobbyID, ExpiresAt: time.Now().Add(time.Minute).Unix()}, secret)
+	admit := func() string {
+		t.Helper()
+		r := httptest.NewRequest("GET", "/engine/league/join?ticket="+ticket, nil)
+		r.Header.Set("X-Skribbil-User", "owner-account")
+		r.Header.Set("X-Skribbil-Gateway-Key", secret)
+		w := httptest.NewRecorder()
+		handler.joinLeagueRoom(w, r)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("creator cannot rejoin: %d %s", w.Code, w.Body.String())
+		}
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "usersession" {
+				return c.Name + "=" + c.Value
+			}
+		}
+		t.Fatal("missing gameplay session")
+		return ""
+	}
+	connect := func(cookie string) (*gws.Conn, map[string]any) {
+		t.Helper()
+		events := &testSocketEvents{events: make(chan map[string]any, 100)}
+		client, _, err := gws.NewClient(events, &gws.ClientOption{
+			Addr:          strings.Replace(server.URL, "http://", "ws://", 1) + "/engine/v1/lobby/" + lobby.LobbyID + "/ws",
+			RequestHeader: http.Header{"Cookie": {cookie}, "Origin": {server.URL}, "X-Skribbil-User": {"owner-account"}, "X-Skribbil-Gateway-Key": {secret}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go client.ReadLoop()
+		t.Cleanup(func() { _ = client.WriteClose(1000, nil) })
+		return client, waitSocketEvent(t, events, "ready")["data"].(map[string]any)
+	}
+	cookie := admit()
+	_, first := connect(cookie)
+	var player *game.Player
+	var previous *gws.Conn
+	lobby.Synchronized(func() {
+		player = lobby.GetPlayers()[0]
+		previous = player.GetWebsocket()
+		player.Score = 42
+		player.HardWordPending = true
+	})
+	if next := admit(); next != cookie {
+		t.Fatal("rejoin replaced the player's identity")
+	}
+	_, second := connect(cookie)
+	if first["playerId"] != second["playerId"] || first["ownerId"] != second["ownerId"] {
+		t.Fatal("reconnect changed the owner's seat")
+	}
+	// Delayed callbacks and queued packets from the old connection are harmless.
+	lobby.OnSocketDisconnect(player, previous)
+	if err := lobby.HandleSocketEvent(game.EventTypeToggleReadiness, []byte(`{"type":"toggle-readiness"}`), player, previous); err != nil {
+		t.Fatal(err)
+	}
+	var current *gws.Conn
+	lobby.Synchronized(func() {
+		current = player.GetWebsocket()
+		if !player.Connected || current == previous || len(lobby.GetPlayers()) != 1 || len(lobby.League.Roster) != 1 || player.Score != 42 || !player.HardWordPending || player.State != game.Standby {
+			t.Error("replacement lost player state or duplicated the roster")
+		}
+	})
+	// A fully disconnected player can return using the same seat as well.
+	lobby.OnSocketDisconnect(player, current)
+	_ = current.WriteClose(1000, nil)
+	_, third := connect(admit())
+	if third["playerId"] != first["playerId"] || third["ownerId"] != first["ownerId"] {
+		t.Fatal("disconnected creator lost ownership")
+	}
 }
 
 func (h *testSocketEvents) OnMessage(_ *gws.Conn, m *gws.Message) {

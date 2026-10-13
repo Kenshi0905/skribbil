@@ -68,6 +68,12 @@ type SettingBounds struct {
 }
 
 func (lobby *Lobby) HandleEvent(eventType string, payload []byte, player *Player) error {
+	return lobby.HandleSocketEvent(eventType, payload, player, nil)
+}
+
+// HandleSocketEvent ignores queued messages from a connection replaced by a
+// reconnect. Socket identity and game mutations share the same lobby lock.
+func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *Player, socket *gws.Conn) error {
 	if eventType == EventTypeKeepAlive {
 		// This is a known dummy event in order to avoid accidental websocket
 		// connection closure. However, no action is required on the server.
@@ -77,6 +83,9 @@ func (lobby *Lobby) HandleEvent(eventType string, payload []byte, player *Player
 
 	lobby.mutex.Lock()
 	defer lobby.mutex.Unlock()
+	if socket != nil && player.ws != socket {
+		return nil
+	}
 
 	// For all followup unmarshalling of the already unmarshalled Event, we
 	// use mapstructure instead. It's cheaper in terms of CPU usage and
@@ -1205,10 +1214,16 @@ func (lobby *Lobby) OnPlayerConnectUnsynchronized(player *Player) {
 }
 
 func (lobby *Lobby) OnPlayerDisconnect(player *Player) {
+	lobby.OnSocketDisconnect(player, nil)
+}
+
+// OnSocketDisconnect leaves a newer connection intact when the old socket's
+// close callback arrives after a reconnect.
+func (lobby *Lobby) OnSocketDisconnect(player *Player, socket *gws.Conn) {
 	lobby.mutex.Lock()
 	defer lobby.mutex.Unlock()
 	// We want to avoid calling the handler twice.
-	if player.ws == nil {
+	if player.ws == nil || (socket != nil && player.ws != socket) {
 		return
 	}
 

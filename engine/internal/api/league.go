@@ -160,10 +160,8 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 				break
 			}
 		}
-		if player != nil && player.Connected {
-			http.Error(w, "account already connected", 409)
-			return
-		}
+		// A fresh admission reuses the account's seat even if a suspended tab's
+		// socket has not timed out yet. The next upgrade replaces that socket.
 		if player == nil {
 			for _, former := range lobby.League.Roster {
 				if former.AccountID == ticket.UserID {

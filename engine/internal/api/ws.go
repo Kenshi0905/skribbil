@@ -75,8 +75,8 @@ func (handler *V1Handler) websocketUpgrade(writer http.ResponseWriter, request *
 			http.Error(writer, "platform account does not match engine session", http.StatusForbidden)
 			return
 		}
-		if lobby.League != nil && (player.AccountID == "" || player.Connected) {
-			http.Error(writer, "account missing or already connected", http.StatusUnauthorized)
+		if lobby.League != nil && player.AccountID == "" {
+			http.Error(writer, "account missing", http.StatusUnauthorized)
 			return
 		}
 		socket, err := upgrader.Upgrade(writer, request)
@@ -87,10 +87,16 @@ func (handler *V1Handler) websocketUpgrade(writer http.ResponseWriter, request *
 
 		metrics.TrackPlayerConnect()
 
+		previous := player.GetWebsocket()
 		player.SetWebsocket(socket)
 		socket.Session().Store("player", player)
 		socket.Session().Store("lobby", lobby)
 		lobby.OnPlayerConnectUnsynchronized(player)
+		if previous != nil {
+			// Close outside the lobby lock; its callback must not disconnect the
+			// replacement connection or reset the player's game state.
+			go previous.WriteClose(4001, []byte("Connected from another tab"))
+		}
 
 		go socket.ReadLoop()
 	})
@@ -131,7 +137,7 @@ func (c *socketHandler) OnClose(socket *gws.Conn, _ error) {
 	}
 
 	metrics.TrackPlayerDisconnect()
-	lobby.OnPlayerDisconnect(player)
+	lobby.OnSocketDisconnect(player, socket)
 }
 
 func (c *socketHandler) OnPing(socket *gws.Conn, _ []byte) {
@@ -157,10 +163,14 @@ func (c *socketHandler) OnMessage(socket *gws.Conn, message *gws.Message) {
 	}
 
 	bytes := message.Bytes()
-	handleIncommingEvent(lobby, player, bytes)
+	handleSocketEvent(lobby, player, bytes, socket)
 }
 
 func handleIncommingEvent(lobby *game.Lobby, player *game.Player, data []byte) {
+	handleSocketEvent(lobby, player, data, nil)
+}
+
+func handleSocketEvent(lobby *game.Lobby, player *game.Player, data []byte, socket *gws.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("Error occurred in incomming event listener.\n\tError: %s\n\tPlayer: %s(%s)\nStack %s\n", err, player.Name, player.ID, string(debug.Stack()))
@@ -173,6 +183,9 @@ func handleIncommingEvent(lobby *game.Lobby, player *game.Player, data []byte) {
 		log.Printf("Error unmarshalling message: %s\n", err)
 		var err error
 		lobby.Synchronized(func() {
+			if socket != nil && player.GetWebsocket() != socket {
+				return
+			}
 			err = WriteObject(player, game.Event{
 				Type: game.EventTypeSystemMessage,
 				Data: fmt.Sprintf("error parsing message, please report this issue via Github: %s!", err),
@@ -184,7 +197,7 @@ func handleIncommingEvent(lobby *game.Lobby, player *game.Player, data []byte) {
 		return
 	}
 
-	if err := lobby.HandleEvent(event.Type, data, player); err != nil {
+	if err := lobby.HandleSocketEvent(event.Type, data, player, socket); err != nil {
 		log.Printf("Error handling event: %s\n", err)
 	}
 }
