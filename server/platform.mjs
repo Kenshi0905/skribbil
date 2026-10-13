@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { avatarUrl, avatarFromUrl } from '../web/avatar.js';
 import { ApiError, requireValue, textField, isUuid, hash, passwordHash, passwordMatches, newSession } from './security.mjs';
 
 const one = async (db, sql, args = []) => (await db.query(sql, args)).rows[0];
@@ -33,7 +34,7 @@ export class Platform {
     const trophies=(await this.db.query(`SELECT title,placement,awarded_at AS "awardedAt" FROM skribbil.trophies WHERE user_id=$1 ORDER BY awarded_at DESC`,[user.id])).rows;
     const totals=await one(this.db,`SELECT count(*) AS played,count(*) FILTER(WHERE p.won) AS wins,coalesce(avg(p.score),0)::int AS average
       FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id WHERE p.user_id=$1`,[user.id]);
-    return { ...row, xp:Number(row.xp), points:Number(row.points),gamesPlayed:Number(totals.played),wins:Number(totals.wins),averageScore:totals.average,
+    return { ...row, avatarPreset:avatarFromUrl(row.avatarUrl), xp:Number(row.xp), points:Number(row.points),gamesPlayed:Number(totals.played),wins:Number(totals.wins),averageScore:totals.average,
       title:inventory.find(i=>i.slot==='title'&&i.equipped)?.name || 'Rookie',frame:inventory.find(i=>i.slot==='frame'&&i.equipped)?.slug||null, inventory, history,achievements,trophies };
   }
   async session(db, userId) {
@@ -103,8 +104,21 @@ export class Platform {
     const bio=textField(body.bio ?? user.bio,0,280,'Bio');
     const color=body.avatarColor || user.avatar_color;
     requireValue(/^#[a-f0-9]{6}$/i.test(color),'Choose a valid avatar color.');
+    let presetUrl;
+    if (Object.hasOwn(body,'avatarPreset')) {
+      try { presetUrl=avatarUrl(body.avatarPreset); }
+      catch(error) { throw new ApiError(400,error.message); }
+    }
     await this.db.transaction(async db=>{
-      await db.query(`UPDATE skribbil.users SET display_name=$2,bio=$3,avatar_color=$4 WHERE id=$1`,[user.id,displayName,bio,color]);
+      if (presetUrl) {
+        const current=await one(db,`SELECT avatar_url,status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[user.id]);
+        requireValue(current?.status==='active','This account is unavailable.',403);
+        await db.query(`UPDATE skribbil.users SET avatar_url=$2 WHERE id=$1`,[user.id,presetUrl]);
+        const old=current.avatar_url?.match(/^\/api\/media\/([a-f0-9-]+)$/)?.[1];
+        if (old) await db.query(`UPDATE skribbil.object_assets SET expires_at=now()+interval '1 day' WHERE id=$1 AND policy_id='profile-image'`,[old]);
+      }
+      await db.query(`UPDATE skribbil.users SET display_name=coalesce($2,display_name),bio=coalesce($3,bio),avatar_color=coalesce($4,avatar_color) WHERE id=$1`,
+        [user.id,body.displayName!=null?displayName:null,body.bio!=null?bio:null,body.avatarColor?color:null]);
       if(body.title) {
         const owned=await one(db,`SELECT d.id,d.slot FROM skribbil.user_inventory i JOIN skribbil.cosmetic_definitions d ON d.id=i.cosmetic_id
           WHERE i.user_id=$1 AND d.slot='title' AND (d.name=$2 OR d.slug=$2)`,[user.id,body.title]);
@@ -133,9 +147,9 @@ export class Platform {
     const context=await this.context();
     const [profile,leaderboard,seasonBoard,challenges,tournaments,teams,friends,rooms,drawings,season] = await Promise.all([
       this.profile(user),
-      this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",s.total_points AS points,s.wins,s.matches_played AS played
+      this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",s.total_points AS points,s.wins,s.matches_played AS played
         FROM skribbil.all_time_game_standings s JOIN skribbil.users u ON u.id=s.user_id WHERE s.game_id=$1 AND u.status<>'erased' ORDER BY s.total_points DESC,s.wins DESC,u.username LIMIT 50`,[context.game_id]),
-      this.db.query(`SELECT u.id,u.username,u.display_name AS name,s.league_points AS points,s.wins,s.matches_played AS played
+      this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",s.league_points AS points,s.wins,s.matches_played AS played
         FROM skribbil.season_standings s JOIN skribbil.users u ON u.id=s.user_id WHERE s.season_id=$1 ORDER BY s.league_points DESC,s.wins DESC,u.username LIMIT 50`,[context.season_id]),
       this.db.query(`SELECT w.id,d.title,d.cadence,d.metric,w.target,w.xp_reward AS xp,w.ends_at AS "endsAt",coalesce(p.progress,0) AS progress,
         p.reward_xp_event_id IS NOT NULL AS claimed FROM skribbil.challenge_windows w JOIN skribbil.challenge_definitions d ON d.id=w.challenge_id
@@ -146,7 +160,7 @@ export class Platform {
         FROM skribbil.tournaments t WHERE t.status<>'draft' ORDER BY t.starts_at LIMIT 20`,[user?.id||null]),
       this.db.query(`SELECT t.id,t.name,t.tag,t.logo_url AS "logoUrl",t.captain_id AS "captainId",(SELECT count(*) FROM skribbil.team_members m WHERE m.team_id=t.id AND m.left_at IS NULL) AS members
         FROM skribbil.teams t WHERE t.archived_at IS NULL ORDER BY t.created_at LIMIT 30`),
-      user?this.db.query(`SELECT u.id,u.username,u.display_name AS name,f.status,f.requested_by=$1 AS outgoing FROM skribbil.friendships f
+      user?this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",f.status,f.requested_by=$1 AS outgoing FROM skribbil.friendships f
         JOIN skribbil.users u ON u.id=CASE WHEN f.user_low=$1 THEN f.user_high ELSE f.user_low END
         WHERE (f.user_low=$1 OR f.user_high=$1) AND f.status IN ('pending','accepted')`,[user.id]):{rows:[]},
       this.db.query(`SELECT m.id,m.engine_room_id AS code,m.mode,m.status,

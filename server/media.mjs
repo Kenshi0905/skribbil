@@ -21,8 +21,40 @@ export function validatePng(png) {
   requireValue(ended && at === bytes.length, 'Invalid PNG data.');
   return bytes;
 }
+export function validateImage(image) {
+  requireValue(typeof image === 'string' && image.length <= 1398104 && /^[A-Za-z0-9+/]+={0,2}$/.test(image), 'Upload a PNG or JPG of at most 1 MiB.');
+  const bytes = Buffer.from(image, 'base64');
+  requireValue(bytes.length <= 1048576, 'Upload a PNG or JPG of at most 1 MiB.');
+  if (bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return validatePng(image);
+  requireValue(bytes.length >= 12 && bytes.readUInt16BE(0) === 0xffd8 && bytes.readUInt16BE(bytes.length-2) === 0xffd9, 'Choose a valid PNG or JPG image.');
+  // Read JPEG frame dimensions before invoking the decoder, just as for PNG.
+  // Skip metadata segments without trusting the filename or browser MIME type.
+  const frames = new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
+  let at=2, foundFrame=false;
+  while (at < bytes.length-2) {
+    requireValue(bytes[at++] === 0xff, 'Invalid JPG data.');
+    while (bytes[at] === 0xff) at++;
+    const marker=bytes[at++];
+    requireValue(marker !== undefined && marker !== 0 && marker !== 0xd8 && marker !== 0xd9 && at+2 <= bytes.length, 'Invalid JPG data.');
+    const length=bytes.readUInt16BE(at);
+    requireValue(length >= 2 && at+length <= bytes.length-2, 'Invalid JPG data.');
+    if (frames.has(marker)) {
+      requireValue(length >= 8, 'Invalid JPG frame.');
+      const height=bytes.readUInt16BE(at+3), width=bytes.readUInt16BE(at+5);
+      requireValue(width > 0 && height > 0 && width <= 1024 && height <= 1024, 'JPG dimensions must be at most 1024 × 1024.');
+      foundFrame=true;
+    }
+    if (marker === 0xda) break;
+    at+=length;
+  }
+  requireValue(foundFrame, 'Invalid JPG frame.');
+  return bytes;
+}
 export async function normalizePng(png) {
-  const bytes = validatePng(png);
+  return normalizeImage(png, validatePng);
+}
+export async function normalizeImage(image, validate = validateImage) {
+  const bytes = validate(image);
   requireValue(active < 2, 'Image uploads are busy. Please retry shortly.', 503);
   active++;
   return new Promise((resolve,reject) => {
@@ -60,7 +92,7 @@ export class Media {
   }
   async upload(user, input, teamId = null) {
     await this.target(this.db,user,teamId);
-    const bytes = await normalizePng(input.png), id = randomUUID();
+    const bytes = await normalizeImage(input.image ?? input.png), id = randomUUID();
     const uploaded = await this.assets.put(`${id}/image.png`,bytes,'image/png');
     try {
       return await this.db.transaction(async db => {

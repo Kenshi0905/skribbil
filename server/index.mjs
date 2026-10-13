@@ -17,6 +17,7 @@ import { expireAssets } from './retention.mjs';
 import { AssetStore } from './assets.mjs';
 import { acceptEngineEvent } from './events.mjs';
 import { loadConfig } from './config.mjs';
+import { avatarFromUrl, renderAvatar } from '../web/avatar.js';
 import { ApiError,requireValue,isUuid,textField,sessionToken,setSession,signedTicket,readTicket,verifySignature } from './security.mjs';
 
 const one=async(db,sql,args=[]) => (await db.query(sql,args)).rows[0];
@@ -175,6 +176,13 @@ export async function createApp({db,config,assets}={}) {
       const url=requestUrl(req.url),path=decodedPath(url);
       originGuard(req,path);
       if(path==='/api/health')return json(res,200,{ok:true,service:'Skribbil',database:db.mode,revision:config.revision||null});
+      if(path.startsWith('/api/avatar-presets/')) {
+        requireValue(req.method==='GET'||req.method==='HEAD','Method not allowed.',405);
+        const preset=avatarFromUrl(path);
+        requireValue(preset,'Avatar preset not found.',404);
+        res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'public, max-age=31536000, immutable','Content-Security-Policy':"default-src 'none'; style-src 'none'; sandbox"});
+        res.end(req.method==='HEAD'?undefined:renderAvatar(preset));return;
+      }
       if(path==='/api/internal/engine-events') {
         requireValue(!config.production||['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress),'Not found.',404);
         requireValue(req.method==='POST','Method not allowed.',405);

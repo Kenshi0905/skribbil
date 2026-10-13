@@ -81,6 +81,10 @@ not physical-phone photographs or proof of real-device touch behavior.*
 
 - **Make it yours:** profiles, uploaded avatars, owned titles and frames, match
   history, XP, daily/weekly challenges, achievements, and trophies.
+  In **Your profile → Avatar**, build a character from preset hair, eyes, brows,
+  mouths, accessories, and colors, or upload your own PNG/JPG photo. Preview,
+  randomize, and reset your character before saving. Save your
+  look to use it across the account menu, friends list, and leaderboards.
 - **Set the mood:** quieter pop effects, saved sound volume, and a one-click mute.
 - **Play together:** configurable private rooms, spectators, friends, parties,
   Clubhouse invitations, team rosters, and a shared quick-rematch room.

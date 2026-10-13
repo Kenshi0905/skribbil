@@ -10,5 +10,5 @@ parentPort.on('message', async bytes => {
     ctx.drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, 256, 256);
     // Reencoding strips text chunks, location metadata and any trailing payload.
     parentPort.postMessage({bytes: canvas.toBuffer('image/png')});
-  } catch { parentPort.postMessage({error: 'Choose a valid PNG image.'}); }
+  } catch { parentPort.postMessage({error: 'Choose a valid PNG or JPG image.'}); }
 });
