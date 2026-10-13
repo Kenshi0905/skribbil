@@ -174,7 +174,7 @@ export async function createApp({db,config,assets}={}) {
     try {
       const url=requestUrl(req.url),path=decodedPath(url);
       originGuard(req,path);
-      if(path==='/api/health')return json(res,200,{ok:true,service:'Skribbil',database:db.mode});
+      if(path==='/api/health')return json(res,200,{ok:true,service:'Skribbil',database:db.mode,revision:config.revision||null});
       if(path==='/api/internal/engine-events') {
         requireValue(!config.production||['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress),'Not found.',404);
         requireValue(req.method==='POST','Method not allowed.',405);

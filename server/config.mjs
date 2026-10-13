@@ -22,7 +22,8 @@ export async function loadConfig() {
     const engine=new URL(process.env.ENGINE_URL||'http://127.0.0.1:8080');
     if(!['127.0.0.1','localhost','[::1]'].includes(engine.hostname))throw new Error('The production engine must listen on loopback.');
   }
-  return {secret,production,port:Number(process.env.PORT||3000),host:process.env.HOST||'127.0.0.1',
+  const revision=/^[a-f0-9]{40}$/.test(process.env.RENDER_GIT_COMMIT||'')?process.env.RENDER_GIT_COMMIT:null;
+  return {secret,production,revision,port:Number(process.env.PORT||3000),host:process.env.HOST||'127.0.0.1',
     engineUrl:process.env.ENGINE_URL||'http://127.0.0.1:8080',origin:process.env.PUBLIC_ORIGIN||'http://localhost:3000',
     secure:process.env.COOKIE_SECURE==='true',originKey:process.env.SKRIBBIL_ORIGIN_KEY,
     ranked:process.env.SKRIBBIL_RANKED_ENABLED==='true'};

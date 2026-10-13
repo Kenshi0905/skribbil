@@ -55,3 +55,49 @@ jobs:
       - run: node tests/playtest-10.mjs
         env:
           ENGINE_BINARY: .tools/skribbil-engine
+  deploy:
+    needs: [platform, engine, container, multiplayer]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Kenshi0905/skribbil'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: skribbil-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Skip superseded commits
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/Kenshi0905/skribbil/git/ref/heads/main --jq .object.sha)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check deployment credentials
+        if: steps.release.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing Cloudflare Pages deployment secret'; exit 1; }
+          test -n "$RENDER_DEPLOY_HOOK_URL" || { echo 'Missing Render deployment secret'; exit 1; }
+      - name: Deploy server and wait for this revision
+        if: steps.release.outputs.current == 'true'
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: node infra/deploy-render.mjs
+      - name: Prepare website
+        if: steps.release.outputs.current == 'true'
+        run: node infra/prepare-pages.mjs
+      - name: Publish Cloudflare Pages
+        if: steps.release.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 54df6812a1aa44d5c5d75aef5b75f0b5
+        run: npx --yes wrangler@4.150.0 pages deploy .deploy/pages --project-name skribbil --branch main --commit-hash "$GITHUB_SHA" --commit-dirty=false

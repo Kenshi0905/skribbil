@@ -23,7 +23,7 @@ Local automated and desktop/390 × 844 browser checks passed; the four browser
 fixtures used an isolated in-memory database and were not production accounts.
 The production room count was zero immediately before this rollout.
 
-Render is **live at that exact revision**. The matching
+Render was deployed at that exact revision for this update. The matching
 [Pages deployment](https://9be020ea.skribbil.pages.dev) was published to
 [skribbil.pages.dev](https://skribbil.pages.dev). Live `app.js` and `styles.css`
 returned HTTP 200 with SHA-256 hashes matching the tested files; bootstrap
@@ -31,6 +31,43 @@ returned HTTP 200 with the engine available. Accept/Decline behavior was verifie
 through isolated HTTP and browser tests, not production mutations. Existing
 production friendships were untouched. See the
 [update verification](verification.md#friend-request-update).
+
+## Dark mode and automatic updates
+
+The dark theme from `28d237e`, merged as `a33850a`, was released on 13 October
+2026 to both Render and [Pages](https://559119c9.skribbil.pages.dev).
+The live toggle persisted after reloading the website. Drawing colors and the
+original Go game loop are unchanged.
+
+The `Verify Skribbil` workflow now includes production deployment after all four
+verification jobs succeed on a push to this repository's `main` branch. Pull
+requests never run deployment. Older commits are skipped if a newer commit is
+already on `main`; production deployments are serialized and not cancelled in
+the middle of a rollout.
+
+GitHub Actions uses two encrypted repository secrets: `CLOUDFLARE_API_TOKEN`
+(Cloudflare Pages Edit on the hosting account) and `RENDER_DEPLOY_HOOK_URL`
+(deployment access to the existing Skribbil service). Neither value belongs in
+Git. Repository collaborators who can change workflows must be trusted with this
+deployment access. Database and administrator credentials remain outside Actions.
+
+The workflow sends Render the exact tested commit, waits for `/api/health` to
+report that revision, then publishes the matching Pages artifact. A failed or
+timed-out server rollout prevents Pages publication. Check the workflow's `deploy`
+job and Render logs when an update does not appear. Render's own Auto-Deploy
+setting stays off to avoid duplicate releases; GitHub Actions owns the sequence.
+Cloudflare remains a direct-upload project with production-only proxy secrets.
+Forks and preview URLs do not receive production credentials.
+
+This uses the existing free services and GitHub's public-repository runners.
+Each server deployment restarts the in-memory game engine, so merge releases
+between games. This does not provide room migration or a maintenance drain.
+For an emergency stop, disable the workflow in GitHub Actions; a manual Render
+deployment and Wrangler Pages upload remain available. Revoking the Pages token
+or regenerating the Render hook requires updating the corresponding Actions secret.
+
+References: [Cloudflare direct upload from CI](https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/)
+and [Render deployment hooks](https://render.com/docs/deploy-hooks).
 
 ## Cost boundary
 
@@ -43,7 +80,7 @@ The current limits were checked on 12 October 2026:
 | Render Free | 750 instance hours per workspace per calendar month; sleeps after 15 minutes without inbound traffic; wake-up takes about a minute | One combined service; users may wait for a cold start. Active WebSocket messages count as inbound traffic. |
 | Render Free filesystem | Local writes disappear on restart, redeploy or sleep; no free persistent disk | Use remote PostgreSQL and object storage. A live room and an unshipped outbox event can be lost. |
 | Supabase Free | 500 MB database per project, 1 GB object storage, 5 GB included egress | Archive compressed operations and private PNGs; apply retention and watch usage. |
-| Cloudflare Pages Free | 500 builds monthly | Disable automatic publishing while reviewing changes. |
+| Cloudflare Pages Free | 500 builds monthly | Publish tested main-branch releases only. |
 | Pages Functions on Workers Free | Shared allowance of 100,000 requests daily; static requests that bypass Functions are free | Only `/api/*` and `/engine/*` invoke the proxy; ordinary website assets stay static. |
 
 Sources: [Render free service limits](https://render.com/docs/free), [Supabase free quotas](https://supabase.com/docs/guides/platform/billing-on-supabase), [Pages build limits](https://developers.cloudflare.com/pages/platform/limits/), [Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/).
@@ -69,7 +106,8 @@ Go sends signed events directly to the same container's Node process at `/api/in
 
 ## Deployment configuration and manual updates
 
-The following describes how to reproduce or update the deployed setup. Changes require an intentional manual deployment; a repository push does not publish them.
+The following describes how to reproduce the setup or perform a manual update.
+For this repository, tested pushes to `main` use the automatic workflow above.
 
 1. Create a Supabase project in a **Free** organization. Copy its PostgreSQL **Session pooler** connection string into Render's secret `DATABASE_URL`; do not put it in frontend code or source control. The session pooler supports IPv4 without buying the IPv4 add-on. Use a URL with no SSL query options or with `sslmode=verify-full`. Production code always enables TLS with certificate-chain and hostname verification; it rejects weaker SSL modes and URL-level certificate/socket overrides. If the provider needs its own trust root, download the database CA from Supabase Database settings and put the PEM text, including real line breaks, in Render's protected `DATABASE_CA_CERT` environment value. Without this option, Node's standard trusted roots are used. Do not disable verification to work around a certificate error. [Supabase database connection modes and SSL](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
