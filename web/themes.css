@@ -1,0 +1,95 @@
+/* The original palette is the default. Dark mode keeps its marker accents. */
+:root { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #242528;
+  --white: #303135;
+  --ink: #f1eff5;
+  --muted: #b9b5c6;
+  --line: #4a4952;
+  --purple: #b1a5ff;
+  --purple-dark: #44359a;
+  --purple-light: #3c3654;
+  --yellow: #ffdc72;
+  --orange: #ffa36b;
+  --green: #83d4ad;
+  --shadow: 0 4px 0 #18191c;
+  --surface: #303135;
+  --surface-raised: #38393e;
+  --accent-fill: #6654d4;
+  --on-accent: #fff;
+  --on-yellow: #292536;
+  --yellow-tint: #443d2c;
+  --orange-tint: #49372d;
+  --green-tint: #2d443a;
+  background: var(--paper);
+  color: var(--ink);
+}
+.theme-toggle { gap: 7px; min-height: 38px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.topbar-actions>.theme-toggle { display: flex; }
+.theme-toggle[aria-pressed="true"] { background: var(--purple-light); color: var(--purple); }
+@media (max-width: 760px) {
+  .theme-toggle { min-width: 44px; min-height: 44px; }
+  .theme-toggle .theme-toggle-label { display: none; }
+}
+html[data-theme="dark"] :is(.sidebar,.topbar) { background: #292a2e; }
+html[data-theme="dark"] :is(.stat-card,.panel,.podium-card,.tournament-card,.info-card,.art-card,.profile-header,.team-card,.party-invites,.party-member,.owned-team-link,.dispute-card,.clubhouse-card,.clubhouse-request,.room-mode,.search-wrap,.tab.active,.bracket-match,.bracket-fixture,.toast,.nav-count,.modal,.dashboard-grid .panel>.empty-state) { background: var(--surface); border-color: var(--line); }
+html[data-theme="dark"] :is(.tabs,.panel-footer,.data-table th,.empty-state,.cosmetic,.rules-box,.bracket,.team-roster,.dispute-resolution,.request-decision) { background: var(--surface-raised); border-color: var(--line); }
+html[data-theme="dark"] :is(.league-season,.own-rooms,.party-panel,.admin-competition,.team-membership-panel,.room-mode.selected,.clubhouse-room-banner,.modal-icon,.room-icon,.status-pill,.team-logo) { background: var(--purple-light); border-color: var(--line); }
+html[data-theme="dark"] :is(.season-card,.podium-card.winner,.cosmetic.unlocked,.admin-warning,.engine-banner,.archive-disclosure,.tournament-cover,.hero-art) { background: var(--yellow-tint); border-color: #6a5a35; }
+html[data-theme="dark"] .hero-art { background-image: radial-gradient(#65583a 1px,transparent 1px); }
+html[data-theme="dark"] .event-card { background: var(--orange-tint); border-color: #73533e; }
+html[data-theme="dark"] :is(.stat-icon.yellow,.tag.yellow,.challenge-icon) { background: var(--yellow-tint); color: var(--yellow); }
+html[data-theme="dark"] :is(.stat-icon.orange,.tag.orange,.room-icon.orange) { background: var(--orange-tint); color: var(--orange); }
+html[data-theme="dark"] :is(.stat-icon.green,.tag.green,.room-icon.green) { background: var(--green-tint); color: var(--green); }
+html[data-theme="dark"] .tag.gray { background: var(--surface-raised); color: var(--muted); }
+html[data-theme="dark"] :is(.nav-link.active,.button-primary,.hero-copy) { background: var(--accent-fill); color: var(--on-accent); }
+html[data-theme="dark"] .nav-link.active { box-shadow: 0 3px 0 var(--purple-dark); }
+html[data-theme="dark"] .nav-link:hover:not(.active) { background: var(--purple-light); color: var(--purple); }
+html[data-theme="dark"] .button-yellow { color: var(--on-yellow); border-color: var(--on-yellow); box-shadow: 0 3px 0 var(--on-yellow); }
+html[data-theme="dark"] :is(.button-white,.event-card>.button) { background: var(--surface-raised); color: var(--purple); border-color: var(--line); box-shadow: 0 3px 0 #18191c; }
+html[data-theme="dark"] :is(.hero,.modal) { border-color: var(--line); box-shadow: 0 5px 0 #18191c; }
+html[data-theme="dark"] .clubhouse-card { box-shadow: 0 3px 0 #18191c; }
+html[data-theme="dark"] :is(.form-field input,.form-field select,.form-field textarea,.media-upload-section input[type=file]::file-selector-button) { background: var(--surface-raised); border-color: var(--line); color: var(--ink); }
+html[data-theme="dark"] :is(.form-field input::placeholder,.form-field textarea::placeholder) { color: var(--muted); }
+html[data-theme="dark"] :is(.room-row,.challenge-row,.leaderboard-row,.data-table td,.rule-list li,.friend-row,.own-room-row+.own-room-row,.party-invite,.bracket-match div+div,.art-bottom,.team-roster-row,.media-upload-section,.clubhouse-invite+.clubhouse-invite,.clubhouse-roster,.clubhouse-member+.clubhouse-member,.clubhouse-leave,.account-security,.team-transfer-form) { border-color: var(--line); }
+html[data-theme="dark"] .progress-track { background: #45414f; }
+html[data-theme="dark"] .form-error { background: #4a302f; border-color: #8d5651; color: #ffb5a9; }
+html[data-theme="dark"] .friend-request-error { background: var(--orange-tint); border-color: #73533e; color: #ffbd92; }
+html[data-theme="dark"] .avatar { color: #5347d9; }
+html[data-theme="dark"] .avatar.frame-violet { box-shadow: 0 0 0 6px var(--purple-light); }
+html[data-theme="dark"] .avatar.lg.frame-violet { box-shadow: 0 0 0 9px var(--purple-light); }
+/* Keep artwork and the paper illustration faithful to their original colors. */
+html[data-theme="dark"] :is(.drawing-board,.guess-bubble) { color: #242540; border-color: #242540; }
+html[data-theme="dark"] .guess-bubble.yes { color: #398b69; }
+html[data-theme="dark"] .color-dot.selected { outline-color: #242540; }
+html[data-theme="dark"] :is(.brand-sub,.nav-label,.nav-link:not(.active),.sidebar-footer,.breadcrumb,.breadcrumb strong,.icon-button:not(.theme-toggle),.page-heading .date-note,.stat-sub,.section-note,.room-desc,.room-population,.panel-footer,.challenge-row p,.challenge-progress small,.reset-note,.rank:not(.first),.player-title,.player-points small,.content-footer,.content-footer button,.content-footer a,.tab:not(.active),.league-season p,.data-table th,.table-rank,.podium-card p,.podium-label,.tournament-meta span,.tournament-details>p,.info-card p,.rule-list li,.bracket-round h4,.bracket-match div,.bracket-caption,.art-details p,.art-artist,.art-bottom>span,.empty-state,.profile-header p,.profile-progress>span,.cosmetic p,.cosmetic>span,.team-card p,.friend-row p,.audit-list li,.audit-list small,.modal>p,.form-field label,.form-field small,.form-checkbox,.form-note,.auth-toggle,.room-mode p,.rules-box,.toast,.help-copy p,.own-room-row p,.personal-drawing p,.admin-competition p,.bracket-fixture p,.bracket-fixture code,.connection-note,.party-header p,.party-member span:not(.avatar),.party-note,.party-invite p,.award-row p,.award-row small,.owned-team-link small,.team-detail-heading p,.team-roster-row small,.media-upload-section>p,.dispute-card>p,.dispute-card small,.dispute-resolution>p,.clubhouse-card p,.clubhouse-card-bottom small,.clubhouse-detail-meta>span:not(.tag),.clubhouse-request>p,.clubhouse-request small,.clubhouse-invite p,.clubhouse-member-name small) { color: var(--muted); }
+html[data-theme="dark"] :is(.empty-state h3,.rules-box strong,.team-logo,.status-pill) { color: var(--ink); }
+html[data-theme="dark"] :is(.season-card .tiny,.season-card p,.xp-label,.rank.first,.podium-card.winner .podium-label,.tournament-cover p,.admin-warning,.engine-banner,.archive-disclosure,.archive-disclosure strong,.doodle-note) { color: var(--yellow); }
+html[data-theme="dark"] :is(.event-label,.event-card p) { color: #ffc89d; }
+
+/* League game chrome shares the palette; canvas pixels and color swatches stay intact. */
+.league-theme-toggle { padding: 7px 11px; border: 1px solid #8a7cc3; border-radius: 6px; cursor: pointer; font: inherit; }
+.league-theme-toggle[aria-pressed="true"] { background: var(--purple-light); color: var(--purple); }
+html[data-theme="dark"]:has(body[data-league-mode]) {
+  --pane-background: var(--surface-raised);
+  --component-base-color: var(--surface);
+  --component-hover-background: #49415f !important;
+  --component-hover-lighter-background: #403b50 !important;
+  --component-focus-background: #514969;
+  --component-active-background: var(--accent-fill);
+}
+html[data-theme="dark"] body[data-league-mode],
+html[data-theme="dark"] body[data-league-mode]::backdrop,
+html[data-theme="dark"] body[data-league-mode]:fullscreen { background: var(--paper); }
+html[data-theme="dark"] body[data-league-mode]::before { opacity: .08; }
+html[data-theme="dark"] body[data-league-mode] :is(#lobby-header>*,#menu-button-container,#word-container,#message-container,.player,.center-dialog,.gameover-scoreboard-entry) { background: var(--surface); color: var(--ink); }
+html[data-theme="dark"] body[data-league-mode] :is(.message:nth-child(2n),kbd) { background: var(--surface-raised); color: var(--ink); }
+html[data-theme="dark"] body[data-league-mode] #league-toolbar { background: var(--surface); color: var(--ink); border-color: var(--line); box-shadow: 0 3px 0 #18191c; }
+html[data-theme="dark"] body[data-league-mode] #league-toolbar a { color: var(--purple); }
+html[data-theme="dark"] body[data-league-mode] :is(.player-ready,.ready-check-box:has(input:checked)) { background: var(--yellow-tint); color: var(--yellow); }
+html[data-theme="dark"] body[data-league-mode] .player-done { background: var(--green-tint); color: var(--green); }
+html[data-theme="dark"] body[data-league-mode] :is(.last-turn-score,footer) { color: var(--muted); }
+html[data-theme="dark"] body[data-league-mode] footer { background: var(--surface); }
+html[data-theme="dark"] body[data-league-mode] .system-message { color: #ffb5a9; }
+html[data-theme="dark"] body[data-league-mode] :is(button,input,select,textarea):focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
