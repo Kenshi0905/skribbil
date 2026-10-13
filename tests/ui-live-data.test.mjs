@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Run the production renderers with an inert DOM. Test rows below are synthetic
 // server responses used only by these tests, never shipped as UI fallback data.
-const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8').replace(/^import .* from '\.\/avatar\.js';\n/m, '');
 const renderers = source.slice(0, source.indexOf("document.addEventListener('click'"));
 function client(data = {}) {
   const nodes = new Map();
