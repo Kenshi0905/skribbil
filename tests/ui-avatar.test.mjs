@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { avatarOptions, defaultAvatar, avatarFromUrl, avatarUrl, renderAvatar, randomAvatar } from '../web/avatar.js';
 
-const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace(/^import .* from '\.\/avatar\.js';\n/m,'');
+const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace(/^import .* from '\.\/avatar\.js';\r?\n/m,'');
 const beforeListeners=source.slice(0,source.indexOf("document.addEventListener('click'"));
 function setup(saved=null,failSave=false) {
   const nodes=new Map(),calls=[],focused=[];

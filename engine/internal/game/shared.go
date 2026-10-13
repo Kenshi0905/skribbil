@@ -252,7 +252,9 @@ func (r *Ring[T]) Latest() T {
 
 // Player represents a participant in a Lobby.
 type Player struct {
-	AccountID       string `json:"-"`
+	AccountID string `json:"-"`
+	// AvatarURL is an optional same-origin community image, set by signed admission only.
+	AvatarURL       string `json:"avatarUrl,omitempty"`
 	SpectatorOnly   bool   `json:"-"`
 	HardWordPending bool   `json:"hardWordPending,omitempty"`
 	// userSession uniquely identifies the player.

@@ -5,6 +5,33 @@ on **13 October 2026 (India time)**. It does not certify physical-phone
 compatibility, sustained production capacity or crash recovery. Feature boundaries
 remain in [implementation status](feature-status.md).
 
+## Clubhouse identity and player avatars — pre-push checks
+
+The hygiene update starts from merged `main` revision `65d8ea8`, preserving the
+new friend directory, unified account settings, avatar editor and reconnect fixes.
+Clubhouse is the shared home and Skribbil has its own nested game route. Private
+groups remain at the existing `#/clubhouses` route; account and league schemas
+are unchanged. The supplied caped-hero branding has transparent light/dark variants.
+
+Before pushing: 141 application tests passed with one optional integration test
+skipped; all eight infrastructure tests and the full Go race suite passed. The
+ten-player isolated protocol playtest completed 20 turns, archived 20 drawings
+and produced ten authoritative results. Three clients used mobile User-Agent
+headers. Saved avatar URLs survived signed admission and reconnect. Penalty,
+hard-word carryover, spectator restrictions and account-binding checks passed.
+
+Browser checks exercised login, the game link from Clubhouse, private group room
+controls, and the original game roster with three loaded preset avatars plus
+initials fallbacks. Light/dark and 390-pixel mobile checks confirmed the player
+cards fit without horizontal overflow and the mobile navigation still works.
+These are browser viewport checks, not physical phone tests. The local fixtures
+used an isolated memory database; no production accounts or matches were created.
+Windows CRLF compatibility was repaired in the existing UI test harnesses.
+
+The checks above are local evidence; the existing CI workflow repeats checks
+before deploying a pushed revision. They do not claim that a future live rollout
+has already succeeded.
+
 ## Initial live deployment
 
 [Skribbil is deployed on Cloudflare Pages](https://skribbil.pages.dev), with its

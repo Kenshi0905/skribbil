@@ -509,6 +509,15 @@ kbd {
     margin-top: 5px;
 }
 
+/* Account cosmetics wrap the native ranking and score layout without changing canvas behavior. */
+.player.community-player { grid-template-columns: 2rem 2.6rem minmax(0, 1fr); column-gap: .35rem; }
+.community-player .rank { grid-column: 1; width: 2rem; }
+.community-player .score-and-status { grid-column: 3; grid-row: 1; min-width: 0; }
+.community-player .playername { grid-column: 3; grid-row: 2; min-width: 0; }
+.community-player .playerscore-group { flex-wrap: wrap; }
+.community-player-avatar { grid-column: 2; grid-row: 1 / 3; align-self: center; position: relative; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: .65rem; overflow: hidden; background: #eee6ff; color: #5342c7; font: bold .8rem system-ui, sans-serif; }
+.community-player-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
 .playername {
     text-overflow: ellipsis;
     white-space: nowrap;

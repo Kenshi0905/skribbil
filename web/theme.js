@@ -6,6 +6,9 @@
     const dark = value === 'dark';
     root.dataset.theme = dark ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#242528' : '#4b45d4');
+    document.querySelectorAll('[data-community-logo]').forEach(image => {
+      image.src = dark ? '/assets/skribbil-communities.png' : '/assets/skribbil-communities-light.png';
+    });
     document.querySelectorAll('[data-theme-toggle]').forEach(button => {
       button.setAttribute('aria-pressed', String(dark));
       button.title = dark ? 'Switch to the original theme' : 'Switch to dark mode';

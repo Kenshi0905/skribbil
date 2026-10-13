@@ -125,6 +125,7 @@ const connect = async (client, ticketUrl) => {
   await client.ws.connect(new URL(`/engine/v1/lobby/${lobbyId}/ws`, base), `${client.cookie}; ${client.nativeCookie}`, base, client.ua);
   const ready = (await client.ws.wait('ready')).data;
   assert.equal(ready.playerName, client.user.display_name);
+  assert.equal(ready.players.find(player => player.id === ready.playerId)?.avatarUrl || '', client.avatarUrl || '', 'signed admission carries the saved avatar, including after reconnect');
   if (client.playerId) assert.equal(ready.playerId, client.playerId, 'reconnect keeps engine identity');
   client.playerId = ready.playerId; return ready;
 };
@@ -133,7 +134,9 @@ try {
   for (let i = 0; i < 11; i++) {
     const name = `play_${i}_${randomBytes(4).toString('hex')}`;
     const { user, token } = await app.platform.register({ username: name, email: `${name}@example.invalid`, password: randomBytes(32).toString('hex') });
-    clients.push({ user, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
+    const avatarUrl = i < 3 ? `/api/avatar-presets/v1/${i}-0-0-0-0-1-1-0-0.svg` : '';
+    if (avatarUrl) await db.query('UPDATE skribbil.users SET avatar_url=$2 WHERE id=$1',[user.id,avatarUrl]);
+    clients.push({ user, avatarUrl, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
   }
   if (demo) {
     const name = `viewer_${randomBytes(4).toString('hex')}`, password = randomBytes(24).toString('hex');

@@ -138,6 +138,15 @@ The inherited test suite is retained. Added tests exercise quorum, duplicates, s
 
 ## Touch input and reproducible playtest
 
+Managed room admission includes an optional `avatarUrl` taken from the
+authenticated account, inside the existing signed ticket. The engine accepts
+only local preset-avatar and profile-media paths, sets the cosmetic field under
+the lobby mutex, and includes it in the existing player snapshot. No new socket
+message or game-loop change is needed. Re-admission refreshes the saved avatar;
+changing it elsewhere does not continuously update an already open room. Missing
+or failed images display initials. Uploaded image permissions still go through
+the existing media endpoint. Native unmanaged rooms retain their original layout.
+
 The original canvas now uses a single Pointer Events adapter for mouse, pen and touch. It captures one primary pointer, handles cancellation and lost capture, draws a tap exactly once, supports fill taps and coalesced pen pressure samples, and bounds CSS coordinates before the unchanged native canvas conversion. Only the canvas suppresses touch scrolling; page zoom remains available elsewhere. Phone layouts retain the canvas aspect ratio, provide 44px tools and horizontally scrollable colors/players, and place usable chat with an explicit Send button below the board. Input unit tests are in `tests/canvas-input.test.mjs`; they are not physical-device tests.
 
 Run `node tests/playtest-10.mjs` with `ENGINE_BINARY` pointing to a current engine build. It creates a private local engine/API, an in-memory database and runtime-generated synthetic credentials, drives 10 authenticated players plus a spectator through two rounds, and removes its data afterward. Three connections have mobile User-Agent headers, which is protocol coverage only; real touch and mobile layout require browser/device testing. It checks readiness, chat, line/fill fan-out, reconnection, account binding, unanimous penalty, hard-word consumption, 20 archives and 10 authoritative results.

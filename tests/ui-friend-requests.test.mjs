@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace(/^import .* from '\.\/avatar\.js';\n/m,'');
+const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace(/^import .* from '\.\/avatar\.js';\r?\n/m,'');
 const beforeListeners=source.slice(0,source.indexOf("document.addEventListener('click'"));
 const account={id:'recipient-test',username:'recipient_test'};
 const incoming={id:'incoming-test',username:'incoming_test',status:'pending',outgoing:false};

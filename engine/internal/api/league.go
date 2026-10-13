@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,10 +21,12 @@ import (
 )
 
 var leagueCreateMutex sync.Mutex
+var leagueAvatarPath = regexp.MustCompile(`^/api/(avatar-presets/v1/([0-9]{1,2}-){8}[0-9]{1,2}\.svg|media/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$`)
 
 type joinTicket struct {
 	UserID          string `json:"userId"`
 	Username        string `json:"username"`
+	AvatarURL       string `json:"avatarUrl,omitempty"`
 	MatchID         string `json:"matchId"`
 	LobbyID         string `json:"lobbyId"`
 	ExpiresAt       int64  `json:"expiresAt"`
@@ -55,6 +58,10 @@ func verifyJoinTicket(token, secret string, now time.Time) (*joinTicket, error) 
 	var t joinTicket
 	if json.Unmarshal(data, &t) != nil || t.ExpiresAt <= now.Unix() || t.ExpiresAt > now.Add(5*time.Minute).Unix() || t.UserID == "" || t.Username == "" || t.MatchID == "" || t.LobbyID == "" || (t.Role != "" && t.Role != "player" && t.Role != "spectator") {
 		return nil, errors.New("invalid or expired ticket")
+	}
+	// Cosmetic data must never make the browser contact a third-party image host.
+	if t.AvatarURL != "" && !leagueAvatarPath.MatchString(t.AvatarURL) {
+		return nil, errors.New("invalid avatar path")
 	}
 	return &t, nil
 }
@@ -202,6 +209,7 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "role cannot change within a match", 409)
 			return
 		}
+		player.AvatarURL = ticket.AvatarURL
 		player.SetLastKnownAddress(GetIPAddressFromRequest(r))
 		SetGameplayCookies(w, r, player, lobby)
 		success = true

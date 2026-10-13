@@ -118,7 +118,8 @@ export async function createApp({db,config,assets}={}) {
       } else await tx.query(`INSERT INTO skribbil.spectator_sessions(match_id,user_id,delay_ms) VALUES($1,$2,0)`,[match.id,user.id]);
     });
     const debt=await one(db,`SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1 AND game_id=$2`,[user.id,match.game_id]);
-    const token=signedTicket({userId:user.id,username:user.display_name,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,hardWordPending:debt?.pending||false},config.secret);
+    const avatarUrl=/^\/api\/(?:avatar-presets\/v1\/(?:\d{1,2}-){8}\d{1,2}\.svg|media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(user.avatar_url||'')?user.avatar_url:'';
+    const token=signedTicket({userId:user.id,username:user.display_name,avatarUrl,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,hardWordPending:debt?.pending||false},config.secret);
     return {url:`/engine/league/join?ticket=${encodeURIComponent(token)}`,matchId:match.id};
   }
   async function provisionPending(match) {

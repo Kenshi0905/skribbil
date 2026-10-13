@@ -1,12 +1,21 @@
-# Skribbil
+# Skribbil Communities
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/assets/skribbil-communities.png">
+  <img src="web/assets/skribbil-communities-light.png" width="520" alt="Skribbil Communities — the red-caped doodle hero">
+</picture>
 
 ### Draw terribly. Guess brilliantly.
 
-**Dussehra League of Skribbil** brings profiles, private friend groups, clans,
-tournaments, and a shared league around the original
+The **Clubhouse** is our community home: shared profiles, private friend groups,
+clans, tournaments, and the **Dussehra League**. **Skribbil** is its first game,
+with the original
 [scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
-engine. The community around them is new.
+engine. Accounts and community identity are shared foundations for future games;
+only Skribbil is playable today. Open **Clubhouse → Skribbil** to play, or
+**Your Clubhouses** to find invite-only groups. Saved avatars appear beside
+players' ranks and scores inside the game.
 
 **[Play Skribbil →](https://skribbil.pages.dev)**
 

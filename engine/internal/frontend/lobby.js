@@ -1643,6 +1643,11 @@ function applyPlayers(players) {
         rankSpan.innerText = player.rank;
         playerDiv.appendChild(rankSpan);
 
+        if (document.body.dataset.leagueMode) {
+            playerDiv.classList.add("community-player");
+            playerDiv.appendChild(createCommunityAvatar(player));
+        }
+
         const playernameSpan = document.createElement("span");
         playernameSpan.classList.add("playername");
         playernameSpan.innerText = player.name;
@@ -1669,6 +1674,21 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+}
+
+function createCommunityAvatar(player) {
+    const avatar = document.createElement("span");
+    avatar.classList.add("community-player-avatar");
+    avatar.setAttribute("aria-hidden", "true");
+    avatar.textContent = Array.from(player.name || "?").slice(0, 2).join("").toUpperCase();
+    if (/^\/api\/(?:avatar-presets\/v1\/(?:\d{1,2}-){8}\d{1,2}\.svg|media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(player.avatarUrl || "")) {
+        const image = document.createElement("img");
+        image.alt = "";
+        image.src = player.avatarUrl;
+        image.addEventListener("error", () => image.remove(), { once: true });
+        avatar.appendChild(image);
+    }
+    return avatar;
 }
 
 function createPlayerStateImageNode(path) {

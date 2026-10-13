@@ -48,6 +48,25 @@ func TestJoinTicketRejectsForgeryExpiredAndExcessiveLifetime(t *testing.T) {
 	}
 }
 
+func TestJoinTicketAvatarPathsStayOnCommunityOrigin(t *testing.T) {
+	secret := strings.Repeat("s", 32)
+	now := time.Now()
+	ticket := joinTicket{UserID: "user", Username: "Scribbler", MatchID: "match", LobbyID: "lobby", ExpiresAt: now.Add(time.Minute).Unix()}
+	for _, avatar := range []string{"", "/api/avatar-presets/v1/2-0-0-0-0-1-1-0-0.svg", "/api/media/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"} {
+		ticket.AvatarURL = avatar
+		got, err := verifyJoinTicket(signTestTicket(ticket, secret), secret, now)
+		if err != nil || got.AvatarURL != avatar {
+			t.Fatalf("valid avatar rejected: %v", err)
+		}
+	}
+	for _, avatar := range []string{"https://example.com/track.png", "//example.com/track.png", "data:image/svg+xml,test", "/api/media/../logout", "/api/avatar-presets/v1/2-0-0-0-0-1-1-0-0.svg?redirect=outside"} {
+		ticket.AvatarURL = avatar
+		if _, err := verifyJoinTicket(signTestTicket(ticket, secret), secret, now); err == nil {
+			t.Fatal("unsafe avatar accepted")
+		}
+	}
+}
+
 func TestRankedRulesIgnoreCallerSettingsAndRequireSecret(t *testing.T) {
 	secret := strings.Repeat("s", 32)
 	t.Setenv("SKRIBBIL_ENGINE_SECRET", secret)
