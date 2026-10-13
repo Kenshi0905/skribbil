@@ -125,7 +125,7 @@ For this repository, tested pushes to `main` use the automatic workflow above.
    [AWS checksum controls](https://docs.aws.amazon.com/sdkref/latest/guide/feature-dataintegrity.html),
    [Supabase S3 compatibility](https://supabase.com/docs/guides/storage/s3/compatibility).
 
-3. Choose the intended Pages project name and its free `pages.dev` origin. Review `infra/render.yaml` before applying it manually. It specifies `plan: free` and `autoDeployTrigger: off`; the latter prevents later commits from triggering automatic deployments, but creating the service itself will still initiate its first deployment. Do not create a Render database: this configuration uses the external Supabase project. [Render Blueprint settings](https://render.com/docs/blueprint-spec).
+3. Choose the intended Pages project name and its free `pages.dev` origin. Review `infra/render.yaml` before applying it manually. It specifies `plan: free` and `autoDeployTrigger: off`; the latter disables Render's independent Git trigger, while the Actions workflow above uses a deployment hook. Creating the service itself still initiates its first deployment. Do not create a Render database: this configuration uses the external Supabase project. [Render Blueprint settings](https://render.com/docs/blueprint-spec).
 
 4. Configure the following Render environment values. `infra/start.sh` refuses to run this public-preview profile without external PostgreSQL and object storage:
 

@@ -211,8 +211,10 @@ media demonstrate local behavior, not production load capacity.
 Cloudflare Pages serves the website; [the Render service](https://skribbil.onrender.com)
 runs Node and Go together in Singapore. PostgreSQL and private artwork storage
 use Supabase Free in the Skribbil Games organization. All services use Free plans,
-and automatic deployment is off. Pages backend bindings exist only in production;
-preview bindings are empty.
+with automatic deployment after all four CI checks pass on `main`. GitHub Actions
+deploys the tested server revision before publishing the website. Pages backend
+bindings exist only in production; preview bindings are empty. The **Dark** toggle
+in the top bar remembers your theme, including in game rooms.
 
 The initial launch was verified at [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4),
 with all four jobs passing in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
