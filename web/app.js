@@ -180,7 +180,7 @@ async function api(path, options = {}) {
 function resetAccountViews() {
   state.avatarDraft = null;
   state.accountEpoch = (state.accountEpoch || 0) + 1;
-  for (const key of ['admin','adminDisputes','adminDisputesError','disputes','activeDispute','match','myDrawings','myTeams','teamDetail','teamTournament','teamsError','partyState','partyError','clubhouseState','clubhouseDetail','clubhouseRequest','clubhouseRequests','clubhousesError','clubhouseRequestsError','roomClubhouseId','roomClubhouseName','friendDecision','friendsError']) state[key] = null;
+  for (const key of ['admin','adminDisputes','adminDisputesError','disputes','activeDispute','match','myDrawings','myTeams','teamDetail','teamTournament','teamsError','partyState','partyError','clubhouseState','clubhouseDetail','clubhouseRequest','clubhouseRequests','clubhousesError','clubhouseRequestsError','roomClubhouseId','roomClubhouseName','friendDecision','friendsError','friendProfile','friendProfileError','friendProfileId','friendProfileRequest','friendSearch']) state[key] = null;
   state.teamsLoaded = state.partyLoaded = state.clubhousesLoaded = false;
   state.teamsLoading = state.partyLoading = state.clubhousesLoading = state.friendsLoading = false;
 }
@@ -312,16 +312,49 @@ function friendRow(friend, kind) {
   const name = displayName(friend);
   const decision = state.friendDecision?.id === friend.id ? state.friendDecision.action : null;
   const busy = !!state.friendDecision || !!state.friendsLoading;
-  const caption = kind === 'incoming' ? 'Wants to be your friend.' : kind === 'sent' ? 'Waiting for their reply.' : friend.title || 'A familiar face in the community';
-  return `<div class="friend-row" data-friend-id="${e(friend.id)}" aria-busy="${!!decision}">${avatar(friend)}<div class="friend-details"><h3>${e(name)}</h3><p>${e(caption)}</p></div>${kind === 'incoming' ? `<div class="friend-request-actions">${button(decision === 'accept' ? 'Accepting…' : 'Accept','respond-friend','check','primary',`data-id="${e(friend.id)}" data-response="accept" aria-label="${e(`Accept friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}${button(decision === 'decline' ? 'Declining…' : 'Decline','respond-friend','close','outline',`data-id="${e(friend.id)}" data-response="decline" aria-label="${e(`Decline friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}</div>` : tag(kind === 'sent' ? 'Request sent' : 'YOUR FRIEND',kind === 'sent' ? 'yellow' : 'green')}</div>`;
+  const caption = kind === 'incoming' ? 'Wants to be your friend.' : kind === 'sent' ? 'Waiting for their reply.' : friend.title || 'Your community friend';
+  const identity = `${avatar(friend)}<span class="friend-details"><span class="friend-name">${e(name)}</span><span class="friend-username">@${e(friend.username)}</span><span class="friend-caption">${e(caption)}</span></span>`;
+  return `<div class="friend-row friend-row-${kind}" data-friend-id="${e(friend.id)}" aria-busy="${!!decision}">${kind === 'accepted' ? `<button class="friend-profile-link" data-action="friend-profile" data-id="${e(friend.id)}" aria-label="${e(`View ${name}’s profile`)}">${identity}<span class="friend-profile-hint">View profile ${icon('arrow')}</span></button>` : `<div class="friend-identity">${identity}</div>`}${kind === 'incoming' ? `<div class="friend-request-actions">${button(decision === 'accept' ? 'Accepting…' : 'Accept','respond-friend','check','primary',`data-id="${e(friend.id)}" data-response="accept" aria-label="${e(`Accept friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}${button(decision === 'decline' ? 'Declining…' : 'Decline','respond-friend','close','outline',`data-id="${e(friend.id)}" data-response="decline" aria-label="${e(`Decline friend request from ${name}`)}" ${busy ? 'disabled' : ''}`)}</div>` : kind === 'sent' ? tag('Request sent','yellow') : ''}</div>`;
+}
+function friendListContent() {
+  const query = (state.friendSearch || '').trim().toLowerCase();
+  const accepted = rows('friends').filter(friend => friend.status === 'accepted').sort((a,b) => displayName(a).localeCompare(displayName(b)));
+  const filtered = accepted.filter(friend => `${displayName(friend)} ${friend.username}`.toLowerCase().includes(query));
+  return filtered.length ? filtered.map(friend => friendRow(friend,'accepted')).join('') : query ? empty('No friends found.','Try another name or username.') : empty('Good company starts here.','Add a friend by username. Once they accept, you can open their profile here.',button('Find a friend','add-friend','plus','primary'));
 }
 function friendsPanel() {
+  if (!user()) return empty('Your people are waiting.','Sign in to connect with friends and keep your requests in one place.',button('Join the community','auth','people','yellow'));
   const people = rows('friends');
   const incoming = people.filter(friend => friend.status === 'pending' && friend.outgoing === false);
   const sent = people.filter(friend => friend.status === 'pending' && friend.outgoing === true);
   const accepted = people.filter(friend => friend.status === 'accepted');
-  const section = (title, people, kind) => people.length ? `<section class="friend-section"><div class="section-heading"><h2>${icon(kind === 'incoming' ? 'heart' : 'people')}${e(title)} <span class="friend-section-count">${number(people.length)}</span></h2></div><div class="panel friend-list">${people.map(friend => friendRow(friend,kind)).join('')}</div></section>` : '';
-  return `<div class="friends-panel" aria-busy="${!!state.friendsLoading || !!state.friendDecision}">${state.friendsError ? `<div class="friend-request-error" role="alert">${icon('info')}<span>${e(state.friendsError)}</span></div>` : ''}${section('Incoming requests',incoming,'incoming')}${section('Sent requests',sent,'sent')}${section('Your friends',accepted,'accepted')}${!incoming.length && !sent.length && !accepted.length ? empty(user() ? 'Your squad starts with one friend.' : 'Your people are waiting.','Add a friend by username. You’ll share the same community across Skribbil and the games that come next.',button(user() ? 'Find your first friend' : 'Join the community',user() ? 'add-friend' : 'auth','people','yellow')) : !accepted.length ? '<p class="friends-note">Accepted requests appear in Your friends. Only accepted friends can receive party invitations.</p>' : ''}</div>`;
+  const requests = (title, people, kind, note) => `<section class="panel friend-section friend-requests-section"><div class="friend-section-header"><h2>${icon(kind === 'incoming' ? 'heart' : 'clock')}${e(title)}<span class="friend-section-count">${number(people.length)}</span></h2><p>${e(note)}</p></div><div class="friend-list">${people.length ? people.map(friend => friendRow(friend,kind)).join('') : `<div class="friend-quiet-state">${icon('check')}<div><h3>No requests waiting</h3><p>Requests you send will appear here until they’re accepted.</p></div></div>`}</div></section>`;
+  return `<div class="friends-panel" aria-busy="${!!state.friendsLoading || !!state.friendDecision}">${state.friendsError ? `<div class="friend-request-error" role="alert">${icon('info')}<span>${e(state.friendsError)}</span></div>` : ''}<div class="friends-columns"><section class="panel friend-section friends-main"><div class="friend-section-header"><h2>${icon('people')}Your friends<span class="friend-section-count">${number(accepted.length)}</span></h2><p>Your regulars, all in one place. Select a friend to see their profile.</p><label class="friend-search" for="friend-search">${icon('search')}<input id="friend-search" type="search" placeholder="Search by name or username" value="${e(state.friendSearch || '')}" aria-label="Search your friends"/></label></div><div id="friends-list" class="friend-list" aria-live="polite">${friendListContent()}</div></section><aside class="friends-requests" aria-label="Friend requests">${incoming.length ? requests('Incoming requests',incoming,'incoming','A few new faces would like to connect.') : ''}${requests('Sent requests',sent,'sent','Your invitations, waiting for a reply.')}<p class="friends-note">${icon('info')}Accepted friends can join your party. Send a party invitation below to play together.</p></aside></div></div>`;
+}
+async function openFriendProfile(id) {
+  if (!user() || !rows('friends').some(friend => friend.id === id && friend.status === 'accepted')) return;
+  const epoch = state.accountEpoch || 0;
+  const request = {};
+  state.friendProfileRequest = request;
+  state.friendProfile = null;
+  state.friendProfileError = null;
+  state.friendProfileId = id;
+  openModal('friend-profile');
+  try {
+    const result = await api(`/api/friends/${encodeURIComponent(id)}/profile`);
+    if (state.friendProfileRequest !== request || (state.accountEpoch || 0) !== epoch || state.modal !== 'friend-profile') return;
+    state.friendProfile = result.profile;
+  } catch (error) {
+    if (state.friendProfileRequest !== request || (state.accountEpoch || 0) !== epoch || state.modal !== 'friend-profile') return;
+    state.friendProfileError = error.message || 'This profile could not be loaded.';
+  }
+  if (state.friendProfileRequest === request && state.modal === 'friend-profile') renderModal();
+}
+function friendProfileModal() {
+  const person = state.friendProfile;
+  if (state.friendProfileError) return `<div class="modal-icon">${icon('user')}</div><h2 id="modal-title">Profile unavailable</h2><p role="alert">${e(state.friendProfileError)}</p>${button('Try again','friend-profile','refresh','primary',`data-id="${e(state.friendProfileId)}"`)}`;
+  if (!person) return `<div class="modal-icon">${icon('user')}</div><h2 id="modal-title">Opening their profile…</h2><p role="status">Finding your friend’s latest community highlights.</p>`;
+  return `<div class="friend-profile-heading">${avatar(person,'lg')}<div>${tag('YOUR FRIEND','green')}<h2 id="modal-title">${e(displayName(person))}</h2><p>@${e(person.username)} · ${e(person.title || 'Rookie')}</p></div></div><div class="friend-profile-bio"><h3>About</h3><p>${e(person.bio || 'This scribbler hasn’t added a bio yet.')}</p></div><div class="friend-profile-stats">${[['Level',person.level],['XP',person.xp],['Games played',person.gamesPlayed],['Wins',person.wins],['Total points',person.points],['Average score',person.averageScore]].map(([label,value]) => `<div><strong>${number(value ?? 0)}</strong><span>${label}</span></div>`).join('')}</div><div class="section-heading"><h2>${icon('medal')}Badges & trophies</h2></div>${person.achievements?.length || person.trophies?.length ? awardsPanel(person) : `<div class="friend-quiet-state">${icon('medal')}<div><h3>More milestones ahead</h3><p>Their earned badges and tournament trophies will appear here.</p></div></div>`}`;
 }
 async function respondFriendRequest(otherUserId, action) {
   if (!user()) { requireUser(() => {}); return; }
@@ -561,6 +594,7 @@ function renderModal() {
     case 'auth': contents = authModal(); break;
     case 'room': contents = roomModal(); wide = true; break;
     case 'profile': contents = profileModal(); break;
+    case 'friend-profile': contents = friendProfileModal(); wide = true; break;
     case 'avatar-editor': contents = avatarEditorModal(); wide = true; break;
     case 'match': contents = matchModal(); wide = true; break;
     case 'my-drawings': contents = myDrawingsModal(); wide = true; break;
@@ -641,6 +675,7 @@ async function handleAction(action, element) {
     case 'add-friend': requireUser(() => openModal('friend')); break;
     case 'respond-friend': await respondFriendRequest(element.dataset.id,element.dataset.response); break;
     case 'refresh-friends': await refreshFriends(); break;
+    case 'friend-profile': await openFriendProfile(element.dataset.id); break;
     case 'create-team': requireUser(() => openModal('team')); break;
     case 'refresh-clubhouse': await showClubhouse(state.clubhouseDetail.id); break;
     case 'cancel-clubhouse-room': element.disabled = true; try { await api('/api/rooms/'+encodeURIComponent(element.dataset.id)+'/cancel',{method:'POST',body:'{}'}); await showClubhouse(state.clubhouseDetail.id); await refresh({silent:true}); toast('Room closed. A fresh canvas is ready when you are.'); } finally { if (element.isConnected) element.disabled = false; } break;
@@ -749,7 +784,7 @@ document.addEventListener('click',event => {
 });
 document.addEventListener('change',event => { if (event.target.id === 'upload-avatar' && state.modal === 'avatar-editor') previewAvatarUpload(event.target); });
 document.addEventListener('submit',event => { if (event.target.matches('[data-form]')) { event.preventDefault(); submitForm(event.target); } });
-document.addEventListener('input',event => { if (event.target.id === 'player-search') { state.search = event.target.value; let players = boardPlayers(); if (state.leaderboardTab === 'all-time') players.sort((a,b) => Number(b.totalPoints ?? b.points)-Number(a.totalPoints ?? a.points)); const filtered = players.map((player,index) => ({...player,rank:index+1})).filter(player => displayName(player).toLowerCase().includes(state.search.trim().toLowerCase())); $('#leaderboard-body').innerHTML = leaderboardTableRows(filtered); } });
+document.addEventListener('input',event => { if (event.target.id === 'friend-search') { state.friendSearch = event.target.value; $('#friends-list').innerHTML = friendListContent(); } if (event.target.id === 'player-search') { state.search = event.target.value; let players = boardPlayers(); if (state.leaderboardTab === 'all-time') players.sort((a,b) => Number(b.totalPoints ?? b.points)-Number(a.totalPoints ?? a.points)); const filtered = players.map((player,index) => ({...player,rank:index+1})).filter(player => displayName(player).toLowerCase().includes(state.search.trim().toLowerCase())); $('#leaderboard-body').innerHTML = leaderboardTableRows(filtered); } });
 document.addEventListener('error',event => { const img = event.target; if (img instanceof HTMLImageElement && img.parentElement?.matches('.avatar,.team-logo')) { const holder = img.parentElement; holder.textContent = holder.dataset.initial || ''; } },true);
 document.addEventListener('keydown',event => {
   if (event.key === 'Escape') { if (state.modal && !state.busy) closeModal(); else if (state.mobileNav) { state.mobileNav = false; render(); $('.mobile-toggle')?.focus(); } }

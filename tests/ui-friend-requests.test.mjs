@@ -20,10 +20,10 @@ function client(data=bootstrap([incoming,sent,accepted]),fetcher=async()=>{throw
   };
   const context=vm.createContext({
     document:{querySelector:node,body:{style:{}}},location:{hash:'#/friends',search:'',origin:'http://localhost'},
-    window:{matchMedia:()=>({matches:false})},URL,URLSearchParams,Intl,AbortController,setTimeout,clearTimeout,
+    window:{matchMedia:()=>({matches:false})},requestAnimationFrame:()=>{},URL,URLSearchParams,Intl,AbortController,setTimeout,clearTimeout,
     fetch:async(path,options)=>{calls.push({path,options});return fetcher(path,options);},notifications,
   });
-  vm.runInContext(`${beforeListeners}\ntoast=(...args)=>notifications.push(args);\nglobalThis.ui={state,friendsPage,friendsPanel,friendRow,respondFriendRequest,refreshFriends,handleAction,resetAccountViews,render};`,context);
+  vm.runInContext(`${beforeListeners}\ntoast=(...args)=>notifications.push(args);\nglobalThis.ui={state,friendsPage,friendsPanel,friendRow,respondFriendRequest,refreshFriends,handleAction,resetAccountViews,render,friendListContent,friendProfileModal,openFriendProfile};`,context);
   const ui=context.ui;ui.state.data=data;ui.state.route='friends';ui.state.partyLoaded=true;ui.state.teamsLoaded=true;
   return {ui,calls,notifications,focused,html:()=>node('#app').innerHTML};
 }
@@ -32,8 +32,10 @@ test('incoming requests have labeled decisions, sent requests have status only, 
   const {ui}=client();
   const page=ui.friendsPage();
   assert.match(page,/>Your friends · 1<\/button>/);
+  assert.match(page,/class="friends-columns"/);
+  assert.ok(page.indexOf('Your friends<span')<page.indexOf('Incoming requests'));
   assert.ok(page.indexOf('Incoming requests')<page.indexOf('Sent requests'));
-  assert.ok(page.indexOf('Sent requests')<page.lastIndexOf('Your friends'));
+  assert.match(page,/aria-label="Friend requests"/);
   const incomingRow=ui.friendRow(incoming,'incoming');
   assert.match(incomingRow,/data-response="accept" aria-label="Accept friend request from incoming_test"/);
   assert.match(incomingRow,/data-response="decline" aria-label="Decline friend request from incoming_test"/);
@@ -132,4 +134,33 @@ test('names and server error text stay escaped in request controls',()=>{
   const html=ui.friendsPage();
   assert.match(html,/&lt;img/);assert.match(html,/&lt;script&gt;/);
   assert.doesNotMatch(html,/<img src=x|<script>/);
+});
+
+
+test('accepted friends open profiles and search matches display names and usernames',()=>{
+  const {ui}=client();
+  const row=ui.friendRow({...accepted,displayName:'Pencil Pal'},'accepted');
+  assert.match(row,/data-action="friend-profile" data-id="accepted-test"/);
+  assert.match(row,/View Pencil Pal’s profile/);
+  assert.doesNotMatch(ui.friendRow(sent,'sent'),/data-action="friend-profile"/);
+  ui.state.friendSearch='ACCEPTED_';assert.match(ui.friendListContent(),/accepted-test/);
+  ui.state.friendSearch='missing';assert.match(ui.friendListContent(),/No friends found/);
+});
+
+test('profile loads real data, escapes content, and exposes no account edit controls',async()=>{
+  const {ui,calls}=client(undefined,async()=>response({profile:{...accepted,displayName:'<script>pal</script>',bio:'<b>hello</b>',level:3,xp:250,gamesPlayed:4,wins:2,points:700,averageScore:175}}));
+  await ui.openFriendProfile(accepted.id);
+  assert.equal(calls[0].path,'/api/friends/accepted-test/profile');
+  const html=ui.friendProfileModal();assert.match(html,/&lt;script&gt;pal/);assert.match(html,/&lt;b&gt;hello/);
+  assert.match(html,/Games played/);assert.match(html,/>700<\/strong>/);
+  assert.doesNotMatch(html,/data-action="edit-profile"|<script>|<b>hello/);
+});
+
+test('profile failures show retry and account changes discard in-flight profiles',async()=>{
+  const failed=client(undefined,async()=>response({error:'Profile unavailable'},404));
+  await failed.ui.openFriendProfile(accepted.id);assert.match(failed.ui.friendProfileModal(),/role="alert"/);
+  assert.match(failed.ui.friendProfileModal(),/Try again/);
+  const pending=deferred();const {ui}=client(undefined,async()=>{await pending.promise;return response({profile:accepted});});
+  const first=ui.openFriendProfile(accepted.id);ui.resetAccountViews();pending.resolve();await first;
+  assert.equal(ui.state.friendProfile,null);
 });
