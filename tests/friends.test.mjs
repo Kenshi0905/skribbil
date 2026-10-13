@@ -72,6 +72,24 @@ test('friend responses require recipient consent and preserve friendship state t
       for (const [viewer, other] of [[sender, recipient], [recipient, sender]]) assert.equal((await visible(viewer)).find(f => f.id === other.id).status, 'accepted');
     });
 
+    await t.test('profiles are limited to accepted friends and return community fields only', async () => {
+      const route='/api/friends/'+recipient.id+'/profile';
+      assert.equal((await call(route)).status,401);
+      assert.equal((await call(route,undefined,outsider)).status,404);
+      assert.equal((await call('/api/friends/invalid/profile',undefined,sender)).status,400);
+      const response=await call(route,undefined,sender);
+      assert.equal(response.status,200);assert.equal(response.data.profile.id,recipient.id);
+      assert.equal(response.data.profile.username,recipient.username);
+      assert.equal(response.data.profile.gamesPlayed,0);
+      for(const field of ['email','isAdmin','inventory','history','password','credentials']) assert.equal(field in response.data.profile,false);
+      await add(sender,fourth);
+      assert.equal((await call('/api/friends/'+fourth.id+'/profile',undefined,sender)).status,404);
+      assert.equal((await call('/api/friends/'+sender.id+'/profile',undefined,recipient)).status,200);
+      await db.query("UPDATE skribbil.users SET status='suspended' WHERE id=$1",[recipient.id]);
+      assert.equal((await call(route,undefined,sender)).status,404);
+      await db.query("UPDATE skribbil.users SET status='active' WHERE id=$1",[recipient.id]);
+    });
+
     await t.test('decline disappears from both lists and cannot be reopened by repeated sender requests', async () => {
       assert.equal((await add(sender, outsider)).status, 200);
       assert.equal((await respond(outsider, sender, 'decline')).status, 200);

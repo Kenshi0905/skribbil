@@ -37,6 +37,19 @@ export class Platform {
     return { ...row, avatarPreset:avatarFromUrl(row.avatarUrl), xp:Number(row.xp), points:Number(row.points),gamesPlayed:Number(totals.played),wins:Number(totals.wins),averageScore:totals.average,
       title:inventory.find(i=>i.slot==='title'&&i.equipped)?.name || 'Rookie',frame:inventory.find(i=>i.slot==='frame'&&i.equipped)?.slug||null, inventory, history,achievements,trophies };
   }
+  async friendProfile(user, friendId) {
+    requireValue(isUuid(friendId), 'Choose a valid friend.');
+    const friend = await one(this.db, `SELECT u.id FROM skribbil.friendships f
+      JOIN skribbil.users u ON u.id=$2 AND u.status='active'
+      WHERE f.user_low=LEAST($1::uuid,$2::uuid) AND f.user_high=GREATEST($1::uuid,$2::uuid)
+      AND f.status='accepted'`, [user.id, friendId]);
+    requireValue(friend, 'This friend profile is unavailable.', 404);
+    const profile = await this.profile(friend);
+    const { id, username, displayName, bio, avatarColor, avatarUrl, avatarPreset, xp, level,
+      points, gamesPlayed, wins, averageScore, title, frame, achievements, trophies } = profile;
+    return { id, username, displayName, bio, avatarColor, avatarUrl, avatarPreset, xp, level,
+      points, gamesPlayed, wins, averageScore, title, frame, achievements, trophies };
+  }
   async session(db, userId) {
     const s = newSession();
     await db.query(`INSERT INTO skribbil.auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')`, [userId, s.tokenHash]);
@@ -160,7 +173,7 @@ export class Platform {
         FROM skribbil.tournaments t WHERE t.status<>'draft' ORDER BY t.starts_at LIMIT 20`,[user?.id||null]),
       this.db.query(`SELECT t.id,t.name,t.tag,t.logo_url AS "logoUrl",t.captain_id AS "captainId",(SELECT count(*) FROM skribbil.team_members m WHERE m.team_id=t.id AND m.left_at IS NULL) AS members
         FROM skribbil.teams t WHERE t.archived_at IS NULL ORDER BY t.created_at LIMIT 30`),
-      user?this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",f.status,f.requested_by=$1 AS outgoing FROM skribbil.friendships f
+      user?this.db.query(`SELECT u.id,u.username,u.display_name AS "displayName",u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",f.status,f.requested_by=$1 AS outgoing FROM skribbil.friendships f
         JOIN skribbil.users u ON u.id=CASE WHEN f.user_low=$1 THEN f.user_high ELSE f.user_low END
         WHERE (f.user_low=$1 OR f.user_high=$1) AND f.status IN ('pending','accepted')`,[user.id]):{rows:[]},
       this.db.query(`SELECT m.id,m.engine_room_id AS code,m.mode,m.status,

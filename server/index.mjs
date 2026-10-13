@@ -242,6 +242,8 @@ export async function createApp({db,config,assets}={}) {
         else{res.writeHead(200,{'Content-Type':asset.type,'Cache-Control':'private, no-store'});res.end(asset.body);}return;
       }
       requireValue(user,'Sign in to continue.',401);
+      const friendProfile=path.match(/^\/api\/friends\/([^/]+)\/profile$/);
+      if(friendProfile&&req.method==='GET')return json(res,200,{profile:await platform.friendProfile(user,friendProfile[1])});
       if(path==='/api/auth/password'&&req.method==='POST'){
         rateLimit(req,'password',6);
         const changed=await platform.changePassword(user,token,input);
