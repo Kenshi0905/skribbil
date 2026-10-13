@@ -25,7 +25,7 @@ function setup(saved=null,failSave=false) {
       return {ok:true,status:200,json:async()=>path==='/api/bootstrap'?{user:person}:{user:person}};
     },
   });
-  vm.runInContext(`${beforeListeners}\ntoast=()=>{}; globalThis.ui={state,profilePage,avatarEditorModal,changeAvatar,openModal,closeModal,submitForm,resetAccountViews,handleAction,profileModal};`,context);
+  vm.runInContext(`${beforeListeners}\ntoast=()=>{}; globalThis.ui={state,profilePage,avatarEditorModal,changeAvatar,openModal,closeModal,submitForm,resetAccountViews,handleAction,profileModal,topbar};`,context);
   context.ui.state.data={user:person};context.ui.state.route='profile';
   return {ui:context.ui,calls,focused,html:()=>element('#dialog-root').innerHTML};
 }
@@ -94,4 +94,32 @@ test('a failed save keeps the chosen look available for retry',async()=>{
   assert.equal(f.ui.state.modal,'avatar-editor');assert.equal(f.ui.state.avatarDraft.hair,6);
   assert.equal(f.ui.state.busy,false);assert.equal(error.hidden,false);assert.match(error.textContent,/retry/);
   assert.equal(f.calls.length,1);
+});
+
+
+test('account and profile page use one settings window with profile, security and logout controls',async()=>{
+  const f=setup(defaultAvatar);
+  assert.match(f.ui.topbar(),/data-action="account-settings"/);
+  const page=f.ui.profilePage();
+  assert.match(page,/data-action="account-settings"/);
+  assert.doesNotMatch(page,/Edit profile|data-action="edit-profile"/);
+  await f.ui.handleAction('account-settings',{dataset:{}});
+  assert.equal(f.ui.state.modal,'profile');
+  const html=f.html();
+  assert.match(html,/id="modal-title">Profile & settings/);
+  assert.match(html,/data-form="profile"/);assert.match(html,/data-form="password"/);
+  assert.match(html,/data-action="avatar"/);assert.match(html,/data-action="logout"/);
+  assert.match(html,/data-action="go-profile"/);
+});
+
+test('settings floating window shows the saved preset or uploaded image immediately',()=>{
+  for(const saved of [defaultAvatar,'/api/media/photo-test']){
+    const f=setup(saved);
+    const html=f.ui.profileModal();
+    const url=typeof saved==='string'?saved:avatarUrl(saved);
+    assert.ok(html.includes(`<img src="${url}" alt="" loading="eager"/>`));
+    assert.match(html,/class="account-settings-heading"/);
+    assert.match(html,/@avatar_test/);
+  }
+  const f=setup();assert.match(f.ui.profileModal(),/data-initial="TE"/);
 });
