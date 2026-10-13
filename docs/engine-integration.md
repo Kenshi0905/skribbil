@@ -56,6 +56,15 @@ The platform signs a short-lived ticket:
 
 Managed rooms reject anonymous joins through both the native HTTP API and server-rendered lobby route. A removed participant cannot rejoin to gain a second identity. Native account-name changes and role toggles are disabled in league rooms. Spectator tickets cannot draw, guess for points, dislike, force-start, post into participant chat, or cast kick votes. Observers have a separate 100-person room cap, consume no player slots, and do not affect readiness or kick-vote quorum. A league match needs two connected participants. New ranked players cannot enter after the match starts. The backend must still enforce account bans, invitations, tournament rosters, and one active ranked admission per account before issuing tickets.
 
+Returning to a managed room reuses the authenticated account's original player
+and ownership. A new WebSocket replaces any previous connection for that seat;
+delayed messages and close callbacks from the old connection cannot alter the
+replacement's state. Empty, unstarted managed rooms remain available for 30
+minutes after creation or the last disconnect, allowing time to share invitations.
+Set `LOBBY_CLEANUP_MANAGED_WAITING_INACTIVITY_THRESHOLD` on the engine to adjust
+this duration. Started rooms retain the existing 75-second inactivity threshold.
+Engine restarts still discard in-memory rooms.
+
 For every managed-room browser hop the gateway overwrites `X-Skribbil-User` with the authenticated account ID and `X-Skribbil-Gateway-Key` with the engine secret. The engine constant-time checks the key and binds that account to the signed ticket or the native usersession owner on WebSocket upgrades, lobby pages and native HTTP mutations. This prevents one logged-in account from borrowing another account’s engine cookie to see its word or act as that player. The raw key stays on the private gateway-to-engine hop and must never be forwarded to a browser or logged. Standalone upstream rooms do not require these headers.
 
 A fresh platform match/room is required for a rematch, preserving immutable result identity. Native standalone casual lobbies remain available at `/engine` without league tracking. The proxy must forward WebSocket upgrades, preserve the browser Host header, and only trust its own forwarding headers; the engine rejects mismatched browser Origins.

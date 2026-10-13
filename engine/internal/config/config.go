@@ -40,6 +40,8 @@ type LobbyCleanup struct {
 	// inactivity and won't keep the lobby up. Note that cleaning up a lobby can
 	// therefore take up to Interval + PlayerInactivityThreshold.
 	PlayerInactivityThreshold time.Duration `env:"PLAYER_INACTIVITY_THRESHOLD"`
+	// Waiting managed rooms stay available while the creator shares invitations.
+	ManagedWaitingInactivityThreshold time.Duration `env:"MANAGED_WAITING_INACTIVITY_THRESHOLD"`
 }
 
 type Config struct {
@@ -107,8 +109,9 @@ var Default = Config{
 		AllowCredentials: false,
 	},
 	LobbyCleanup: LobbyCleanup{
-		Interval:                  90 * time.Second,
-		PlayerInactivityThreshold: 75 * time.Second,
+		Interval:                          90 * time.Second,
+		PlayerInactivityThreshold:         75 * time.Second,
+		ManagedWaitingInactivityThreshold: 30 * time.Minute,
 	},
 }
 

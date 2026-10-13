@@ -80,6 +80,22 @@ func (lobby *Lobby) ConfigureLeague(matchID, mode string, emit func(LeagueEvent)
 	lobby.League = &LeagueState{MatchID: matchID, Mode: mode, Emit: emit}
 	lobby.players = nil
 	lobby.OwnerID = uuid.Nil
+	createdAt := time.Now()
+	lobby.LastPlayerDisconnectTime = &createdAt
+}
+
+// ShouldCleanup inspects connection state under the lobby lock. Waiting managed
+// rooms allow time to share invitations, including before the first connection.
+func (lobby *Lobby) ShouldCleanup(now time.Time, inactivity, waitingInactivity time.Duration) bool {
+	lobby.mutex.Lock()
+	defer lobby.mutex.Unlock()
+	if lobby.GetConnectedPlayerCount() > 0 {
+		return false
+	}
+	if lobby.League != nil && !lobby.League.Cancelled && lobby.State == Unstarted {
+		inactivity = waitingInactivity
+	}
+	return lobby.LastPlayerDisconnectTime == nil || now.Sub(*lobby.LastPlayerDisconnectTime) >= inactivity
 }
 
 func (lobby *Lobby) emitLeague(kind string, payload any) {

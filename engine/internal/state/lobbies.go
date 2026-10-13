@@ -44,12 +44,7 @@ func cleanupRoutineLogic(cfg *config.LobbyCleanup) {
 	initalLobbyCount := len(lobbies)
 	for index := len(lobbies) - 1; index >= 0; index-- {
 		lobby := lobbies[index]
-		if lobby.HasConnectedPlayers() {
-			continue
-		}
-
-		disconnectTime := lobby.LastPlayerDisconnectTime
-		if disconnectTime == nil || time.Since(*disconnectTime) >= cfg.PlayerInactivityThreshold {
+		if lobby.ShouldCleanup(time.Now(), cfg.PlayerInactivityThreshold, cfg.ManagedWaitingInactivityThreshold) {
 			removeLobbyByIndex(index)
 		}
 	}

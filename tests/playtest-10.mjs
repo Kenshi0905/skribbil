@@ -156,6 +156,18 @@ try {
   }
   const players = clients.slice(0, 10), spectator = clients[10];
   report.checks.push('10 authenticated players and a spectator connected through the gateway');
+  // Returning from sharing an invitation must also work before the old socket
+  // has disconnected, without creating a second seat or losing ownership.
+  const previousOwnerSocket = players[0].ws;
+  const ownerId = players[0].playerId;
+  const returnTicket = await json(await request(players[0], `/api/rooms/${matchId}/join`, {}));
+  const returnedOwner = await connect(players[0], returnTicket.url);
+  assert.equal(returnedOwner.playerId, ownerId);
+  assert.equal(returnedOwner.ownerId, ownerId);
+  assert.equal(returnedOwner.players.length, 11, 'rejoining reuses the original roster');
+  await until(() => previousOwnerSocket.closed, 'superseded owner connection closes');
+  previousOwnerSocket.close();
+  report.checks.push('room creator returns with the old socket still active and preserves their seat and ownership');
   // All clients are genuine members of this room, but one must not use another
   // account's engine cookie to view its private drawing/word state.
   const borrowed = await request(clients[1], `/engine/lobby/${lobbyId}`, undefined, { Cookie: `${clients[1].cookie}; ${clients[0].nativeCookie}` });
