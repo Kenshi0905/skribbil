@@ -231,6 +231,36 @@ func TestCancellationCannotRacePastStartedGame(t *testing.T) {
 	}
 }
 
+func TestOwnerCanCloseCasualRoomWithoutFinalizingInterruptedGame(t *testing.T) {
+	l, _, _, _, _ := penaltyFixture()
+	if _, err := l.CloseLeagueRoom("other-match", true); err == nil {
+		t.Fatal("cross-match closure accepted")
+	}
+	if _, err := l.CloseLeagueRoom("match", false); err == nil {
+		t.Fatal("implicit running cancellation accepted")
+	}
+	completed, err := l.CloseLeagueRoom("match", true)
+	if err != nil || completed || !l.League.Cancelled || l.State != GameOver || l.timeLeftTicker != nil {
+		t.Fatalf("explicit casual closure failed: completed=%v err=%v", completed, err)
+	}
+	if _, err := l.CloseLeagueRoom("match", true); err != nil {
+		t.Fatal("closure retry was not idempotent")
+	}
+}
+
+func TestRoomClosurePreservesCompletedResultsAndCompetitiveProtection(t *testing.T) {
+	l, _, _, _, _ := penaltyFixture()
+	l.League.Mode = "ranked"
+	if _, err := l.CloseLeagueRoom("match", true); err == nil || l.League.Cancelled {
+		t.Fatal("running ranked match could be abandoned by casual deletion")
+	}
+	l.State = GameOver
+	completed, err := l.CloseLeagueRoom("match", false)
+	if err != nil || !completed {
+		t.Fatalf("completed result not preserved: %v %v", completed, err)
+	}
+}
+
 func TestLikesAreEligiblePerTurnReactionsWithoutScoreChanges(t *testing.T) {
 	l, artist, a, b, spec := penaltyFixture()
 	like := func(p *Player, turn int) error {

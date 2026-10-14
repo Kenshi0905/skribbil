@@ -101,7 +101,12 @@ test('platform HTTP integration: accounts, consent, authoritative results and ad
       assert.ok(payload.expiresAt > Date.now() / 1000 && payload.expiresAt < Date.now() / 1000 + 300);
       assert.deepEqual(controlRequests[0].body, { matchId: room.data.matchId, mode: 'private', rounds: 2, drawTime: 90, maxPlayers: 4 });
       assert.equal((await api(`/api/rooms/${room.data.matchId}/join`, { method: 'POST', cookie: guesser.cookie, body: {} })).status, 200);
-      assert.equal((await api('/api/rooms', { method: 'POST', cookie: artist.cookie, body: { mode: 'private' } })).status, 409);
+      const previousId=room.data.matchId;
+      room=await api('/api/rooms', { method: 'POST', cookie: artist.cookie, body: { mode: 'private' } });
+      assert.equal(room.status,201);
+      assert.notEqual(room.data.matchId,previousId);
+      assert.equal((await db.query('SELECT status FROM skribbil.matches WHERE id=$1',[previousId])).rows[0].status,'cancelled');
+      assert.equal((await api(`/api/rooms/${room.data.matchId}/join`, { method: 'POST', cookie: guesser.cookie, body: {} })).status,200);
     });
 
     await t.test('signed turn ingestion archives exact replay, rejects forged writes and stays private', async () => {

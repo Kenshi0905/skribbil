@@ -175,7 +175,7 @@ export class Platform {
         JOIN skribbil.users u ON u.id=CASE WHEN f.user_low=$1 THEN f.user_high ELSE f.user_low END
         WHERE (f.user_low=$1 OR f.user_high=$1) AND f.status IN ('pending','accepted')`,[user.id]):{rows:[]},
       this.db.query(`SELECT m.id,m.engine_room_id AS code,m.mode,m.status,
-        (SELECT count(*) FROM skribbil.match_players p WHERE p.match_id=m.id) AS players
+        (SELECT count(*) FROM skribbil.match_players p WHERE p.match_id=m.id AND p.left_at IS NULL) AS players
         FROM skribbil.matches m WHERE m.status IN ('lobby','running') AND NOT m.private AND m.created_at>now()-interval '6 hours' ORDER BY m.created_at DESC LIMIT 20`),
       this.db.query(`SELECT p.id,p.hall,p.title,p.caption,p.prompt_snapshot AS prompt,p.artist_id AS "artistId",u.display_name AS artist,
         p.dislike_count AS dislikes,p.published_at AS date,'/api/drawings/'||p.drawing_id||'/image' AS url
@@ -185,7 +185,7 @@ export class Platform {
     return {leagues:leagues.rows,user:profile,leaderboard:leaderboard.rows,seasonLeaderboard:seasonBoard.rows,challenges:challenges.rows,
       tournaments:tournaments.rows,teams:teams.rows,friends:friends.rows,rooms:rooms.rows,drawings:drawings.rows,season:season||null,
       ownRooms:user?(await this.db.query(`SELECT DISTINCT m.id,m.engine_room_id AS code,m.mode,m.status,m.private,m.created_by=$1 AS owner
-        FROM skribbil.matches m JOIN skribbil.match_players p ON p.match_id=m.id WHERE p.user_id=$1 AND m.status IN ('lobby','running')
+        FROM skribbil.matches m JOIN skribbil.match_players p ON p.match_id=m.id WHERE p.user_id=$1 AND p.left_at IS NULL AND m.status IN ('lobby','running')
         AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL))`,[user.id])).rows:[],
       stats:await one(this.db,`SELECT (SELECT count(*) FROM skribbil.users WHERE username<>'skribbil_system' AND status='active') AS players,
         (SELECT count(*) FROM skribbil.matches WHERE status='completed') AS matches`),engine,mode:this.db.mode,demo:false};
