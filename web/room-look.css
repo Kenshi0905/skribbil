@@ -25,6 +25,9 @@ body:has(#room-look-panel:not([hidden])) #toolbox { grid-row:4; }
 .room-look-preview .room-look-avatar { width:min(100%,420px); height:auto; aspect-ratio:1; font-size:72px; border:2px solid #302c3b; box-sizing:border-box; }
 .room-look-preview .room-look-avatar img { object-fit:contain; }
 .room-look-avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+/* Transparent photos must not reveal the fallback initials underneath.
+   Removing a failed image automatically restores the original text color. */
+.room-look-avatar:has(img),.community-player-avatar:has(img) { color:transparent; }
 .room-look-roster { padding:0; margin:0; list-style:none; max-height:200px; overflow-y:auto; }
 .room-look-roster li { display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px dashed var(--line,#b8aecb); }
 .room-look-roster-name { min-width:0; overflow-wrap:anywhere; }
