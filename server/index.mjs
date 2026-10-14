@@ -214,7 +214,7 @@ export async function createApp({db,config,assets}={}) {
         requireValue((req.headers['content-type']||'').startsWith('application/json'),'Send application/json.',415);
         const imageUpload=path==='/api/profile/avatar'||/^\/api\/teams\/[a-f0-9-]+\/logo$/.test(path);
         if(imageUpload){requireValue(user,'Sign in to continue.',401);rateLimit(req,'media',6);}
-        const raw=await body(req,imageUpload?1400000:32768);input=raw.length?JSON.parse(raw.toString()):{};
+        const raw=await body(req,imageUpload?11200000:32768);input=raw.length?JSON.parse(raw.toString()):{};
         requireValue(input&&typeof input==='object'&&!Array.isArray(input),'Send a JSON object.');
       }
       if(path==='/api/bootstrap'&&req.method==='GET')return json(res,200,await platform.bootstrap(user,await engineStatus()));
@@ -233,7 +233,7 @@ export async function createApp({db,config,assets}={}) {
       }
       if((path==='/api/auth/register'||path==='/api/auth/login')&&req.method==='POST') {
         rateLimit(req,'auth',12);const result=await (path.endsWith('register')?platform.register(input):platform.login(input));
-        setSession(res,result.token,config.secure);return json(res,200,{user:await platform.profile(result.user)});
+        setSession(res,result.token,config.secure,input.rememberMe === true);return json(res,200,{user:await platform.profile(result.user)});
       }
       if(path==='/api/auth/logout'&&req.method==='POST'){await platform.logout(token);setSession(res,'',config.secure);disconnect(user?.id);return json(res,200,{ok:true});}
       const drawingAsset=path.match(/^\/api\/drawings\/([a-f0-9-]+)\/(image|replay)$/);
@@ -248,7 +248,7 @@ export async function createApp({db,config,assets}={}) {
       if(path==='/api/auth/password'&&req.method==='POST'){
         rateLimit(req,'password',6);
         const changed=await platform.changePassword(user,token,input);
-        disconnect(user.id);setSession(res,changed.token,config.secure);return json(res,200,{ok:true});
+        disconnect(user.id);setSession(res,changed.token,config.secure,changed.rememberMe);return json(res,200,{ok:true});
       }
       if(path==='/api/clubhouses'){
         if(req.method==='GET')return json(res,200,await clubhouses.list(user));
@@ -365,6 +365,8 @@ export async function createApp({db,config,assets}={}) {
       }
       if(path.startsWith('/api/admin')){
         await platform.admin(user);
+        const titleAssignment=path.match(/^\/api\/admin\/users\/([a-f0-9-]+)\/title$/);
+        if(titleAssignment&&req.method==='POST')return json(res,200,await platform.assignTitle(user,titleAssignment[1],input));
         if(path==='/api/admin/disputes'&&req.method==='GET')return json(res,200,await community.getDisputes(user,{admin:true}));
         const resolution=path.match(/^\/api\/admin\/disputes\/([a-f0-9-]+)$/);
         if(resolution&&req.method==='POST')return json(res,200,await community.resolveDispute(user,resolution[1],input));
@@ -380,9 +382,10 @@ export async function createApp({db,config,assets}={}) {
         if(seedTournament&&req.method==='POST')return json(res,200,await competition.generateFixtures(user,seedTournament[1],{...input,reason:input.reason||'Seed tournament fixtures'}));
         const fixtureResult=path.match(/^\/api\/admin\/fixtures\/([a-f0-9-]+)\/result$/);
         if(fixtureResult&&req.method==='POST')return json(res,200,await competition.recordFixture(user,fixtureResult[1],input));
-        if(path==='/api/admin'&&req.method==='GET')return json(res,200,{audit:(await db.query(`SELECT a.*,u.username FROM skribbil.admin_audit_log a JOIN skribbil.users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 100`)).rows,
+        if(path==='/api/admin'&&req.method==='GET')return json(res,200,{audit:(await db.query(`SELECT a.*,a.created_at AS "createdAt",a.actor_id AS "actorId",u.username,target.username AS "targetUsername" FROM skribbil.admin_audit_log a JOIN skribbil.users u ON u.id=a.actor_id LEFT JOIN skribbil.users target ON a.entity_type='user' AND target.id=a.entity_id ORDER BY a.created_at DESC LIMIT 100`)).rows,
           seasons:(await db.query(`SELECT id,name,status,starts_at AS "startsAt",ends_at AS "endsAt" FROM skribbil.seasons ORDER BY starts_at DESC`)).rows,
-          users:(await db.query(`SELECT id,username,status FROM skribbil.users WHERE username<>'skribbil_system' ORDER BY created_at DESC LIMIT 100`)).rows,
+          users:(await db.query(`SELECT u.id,u.username,u.status,e.cosmetic_id AS "titleId" FROM skribbil.users u LEFT JOIN skribbil.equipped_cosmetics e ON e.user_id=u.id AND e.slot='title' WHERE u.username<>'skribbil_system' ORDER BY u.created_at DESC LIMIT 100`)).rows,
+          titles:(await db.query(`SELECT id,name FROM skribbil.cosmetic_definitions WHERE slot='title' ORDER BY name`)).rows,
           matches:(await db.query(`SELECT id,mode,status,ended_at FROM skribbil.matches ORDER BY created_at DESC LIMIT 100`)).rows,
           drawings:(await db.query(`SELECT id,prompt_snapshot AS prompt,publication_consent_at AS consent,visibility FROM skribbil.drawings ORDER BY created_at DESC LIMIT 100`)).rows});
         if(path==='/api/admin/adjustments'&&req.method==='POST')return json(res,200,await platform.adjust(user,input));

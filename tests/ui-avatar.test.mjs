@@ -26,7 +26,7 @@ function setup(saved=null,failSave=false) {
       return {ok:true,status:200,json:async()=>path==='/api/bootstrap'?{user:person}:{user:person}};
     },
   });
-  vm.runInContext(`${beforeListeners}\ntoast=()=>{}; globalThis.ui={state,profilePage,avatarEditorModal,changeAvatar,openModal,closeModal,submitForm,resetAccountViews,handleAction,profileModal,topbar};`,context);
+  vm.runInContext(`${beforeListeners}\ntoast=()=>{}; globalThis.ui={state,profilePage,avatarEditorModal,changeAvatar,openModal,closeModal,submitForm,resetAccountViews,handleAction,profileModal,topbar,authModal};`,context);
   context.ui.state.data={user:person};context.ui.state.route='profile';
   return {ui:context.ui,calls,focused,html:()=>element('#dialog-root').innerHTML};
 }
@@ -51,7 +51,7 @@ test('the Avatar section offers character or photo choices and opens on the curr
   const f=setup('/api/media/photo-test');await f.ui.handleAction('avatar',{dataset:{}});
   assert.equal(f.ui.state.avatarMode,'upload');
   assert.match(f.html(),/Build a character/);assert.match(f.html(),/Upload a photo/);
-  assert.match(f.html(),/accept="image\/png,image\/jpeg,\.png,\.jpg,\.jpeg"/);
+  assert.match(f.html(),/accept="image\/png,image\/jpeg,image\/webp,\.png,\.jpg,\.jpeg,\.webp"/);
   assert.match(f.html(),/data-form="avatar"/);
   assert.doesNotMatch(f.ui.profileModal(),/data-form="avatar"/,'photo uploads belong in Avatar');
   await f.ui.handleAction('avatar-mode',{dataset:{mode:'preset'}});
@@ -137,4 +137,26 @@ test('opening legacy artwork preserves its preview and saving an edit migrates t
   f.ui.openModal('avatar-editor');assert.equal(f.ui.state.avatarDraft.face,5);
   f.ui.changeAvatar('avatar-vibe',{dataset:{value:'Anime'}});
   assert.equal(f.ui.state.avatarVibe,'Anime');assert.equal(f.ui.state.avatarDraft.version,2);
+});
+
+test('header retains footer help and settings show a read-only title',()=>{
+  const f=setup(defaultAvatar);assert.doesNotMatch(f.ui.topbar(),/data-action="help"|top-divider/);
+  assert.doesNotMatch(f.ui.profileModal(),/name="title"|Profile title/);assert.match(f.ui.profileModal(),/Current title/);
+});
+
+test('failed photo save retains crop and retry exports once per deliberate submission',async()=>{
+  const f=setup(defaultAvatar);f.ui.openModal('avatar-editor');let disposed=0,exports=0;
+  f.ui.state.photoCropper={dispose(){disposed++;},setBusy(){},async export(){exports++;throw new Error('Crop export retry');}};
+  const error={hidden:true,textContent:''};await f.ui.submitForm({dataset:{form:'avatar'},querySelector:()=>error});
+  assert.equal(f.ui.state.modal,'avatar-editor');assert.equal(disposed,0);assert.equal(exports,1);assert.match(error.textContent,/retry/);
+  f.ui.state.busy=true;await f.ui.submitForm({dataset:{form:'avatar'},querySelector:()=>error});assert.equal(exports,1);
+  f.ui.state.busy=false;f.ui.closeModal();assert.equal(disposed,1);assert.equal(f.ui.state.photoCropper,null);
+});
+
+test('login and registration expose an unchecked remember option and send an explicit boolean',async()=>{
+  for(const mode of ['login','register'])for(const checked of [false,true]){
+    const f=setup();f.ui.state.authMode=mode;const html=f.ui.authModal();assert.match(html,/Remember me on this device/);assert.match(html,/Stay signed in after closing your browser/);assert.doesNotMatch(html,/<input[^>]+id="auth-remember"[^>]+checked/);
+    await f.ui.submitForm({dataset:{form:'auth'},elements:{namedItem(){return {checked};}},querySelector(){return null;}});
+    assert.equal(f.calls[0].path,'/api/auth/'+mode);assert.equal(JSON.parse(f.calls[0].options.body).rememberMe,checked);
+  }
 });

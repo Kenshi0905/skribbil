@@ -44,8 +44,8 @@ export function verifySignature(raw, signature, secret) {
 export function sessionToken(req) {
   return (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('skribbil_session='))?.slice(17);
 }
-export function setSession(res, token, secure = false) {
-  res.setHeader('Set-Cookie', `skribbil_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${token ? 604800 : 0}${secure ? '; Secure' : ''}`);
+export function setSession(res, token, secure = false, rememberMe = false) {
+  res.setHeader('Set-Cookie', `skribbil_session=${token}; Path=/; HttpOnly; SameSite=Lax${!token ? '; Max-Age=0' : rememberMe ? '; Max-Age=604800' : ''}${secure ? '; Secure' : ''}`);
 }
 export class ApiError extends Error { constructor(status, message) { super(message); this.status = status; } }
 export function requireValue(condition, message, status = 400) { if (!condition) throw new ApiError(status, message); }

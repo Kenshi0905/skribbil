@@ -96,3 +96,22 @@ html[data-theme="dark"] .avatar-feature-tab.selected { background: var(--accent-
 .avatar-vibes { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:12px 0; }
 .avatar-vibes button { border:2px solid var(--ink); border-radius:8px; background:var(--paper); color:var(--ink); font-weight:700; }
 .avatar-vibes button[aria-pressed=true] { background:var(--yellow); color:#302c3b; }
+.photo-crop-window { position:relative; width:100%; max-width:360px; aspect-ratio:1; overflow:hidden; border:3px solid var(--ink); border-radius:12px; background:repeating-conic-gradient(#eee 0% 25%,#fff 0% 50%) 50%/20px 20px; }
+.photo-crop-canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+.photo-crop-canvas:active { cursor:grabbing; }
+.photo-crop-canvas:focus-visible { outline:4px solid var(--purple); outline-offset:-5px; }
+.photo-crop-circle { position:absolute; inset:0; border:2px dashed #fff; border-radius:50%; box-shadow:0 0 0 80px #302c3b55; pointer-events:none; }
+.photo-crop-controls { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.photo-crop-controls label { flex:1 0 100%; display:flex; align-items:center; gap:12px; font-weight:700; }
+.photo-crop-controls input { min-width:0; width:100%; min-height:44px; accent-color:var(--purple); }
+.photo-crop-controls button { padding:8px 12px; border:2px solid var(--ink); border-radius:8px; background:var(--paper); color:var(--ink); }
+.media-upload-section [data-photo-cropper] { min-width:0; margin:16px 0; }
+.media-upload-section [hidden] { display:none!important; }
+.remember-device { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; }
+.remember-device input { width:24px; height:24px; accent-color:var(--purple); }
+.remember-device input:focus-visible { outline:3px solid var(--purple); outline-offset:4px; }
+.remember-help { margin:0 0 16px; font-size:13px; color:var(--ink); }
+@media(max-width:620px) { .photo-crop-window { max-width:100%; } }
+.media-upload-section>p { font-size:13px; line-height:1.6; }
+.media-upload-section [data-photo-cropper] .form-note { font-size:13px; line-height:1.5; color:var(--ink); }
+.media-upload-section :is(button,input):focus-visible { outline:3px solid var(--purple); outline-offset:3px; }
