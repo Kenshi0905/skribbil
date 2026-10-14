@@ -206,8 +206,10 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 			undoFrom := lobby.connectedDrawEventsIndexStack[len(lobby.connectedDrawEventsIndexStack)-1]
 			lobby.connectedDrawEventsIndexStack = lobby.connectedDrawEventsIndexStack[:len(lobby.connectedDrawEventsIndexStack)-1]
 			if undoFrom < len(lobby.currentDrawing) {
+				undoTo := len(lobby.currentDrawing)
 				lobby.currentDrawing = lobby.currentDrawing[:undoFrom]
-				lobby.Broadcast(&Event{Type: EventTypeDrawing, Data: lobby.currentDrawing})
+				lobby.lastDrawEvent = time.Time{}
+				lobby.Broadcast(&Event{Type: EventTypeUndoDrawing, Data: map[string]int{"from": undoFrom, "to": undoTo}})
 			}
 		}
 	} else if eventType == EventTypeChooseWord {
@@ -259,11 +261,8 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 
 		handleNameChangeEvent(player, lobby, message.Data)
 	} else if eventType == EventTypeRequestDrawing {
-		// Since the client shouldn't be blocking to wait for the drawing, it's
-		// fine to emit the event if there's no drawing.
-		if len(lobby.currentDrawing) != 0 {
-			_ = lobby.WriteObject(player, Event{Type: EventTypeDrawing, Data: lobby.currentDrawing})
-		}
+		// Empty drawings also reconcile a client recovering its local history.
+		_ = lobby.WriteObject(player, Event{Type: EventTypeDrawing, Data: lobby.currentDrawing})
 	}
 
 	return nil

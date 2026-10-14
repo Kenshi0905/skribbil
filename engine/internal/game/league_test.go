@@ -285,3 +285,43 @@ func TestLikesAreEligiblePerTurnReactionsWithoutScoreChanges(t *testing.T) {
 		t.Fatal("like accepted while choosing a word")
 	}
 }
+
+func TestUndoPreservesServerStrokeBoundariesAndDrawingAuthority(t *testing.T) {
+	l, artist, guesser, _, spectator := penaltyFixture()
+	send := func(p *Player, kind string, data any) {
+		payload, _ := json.Marshal(map[string]any{"type": kind, "data": data})
+		if err := l.HandleEvent(kind, payload, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	segment := map[string]any{"x": 10, "y": 10, "x2": 20, "y2": 20, "width": 8, "color": 2}
+	send(artist, EventTypeLine, segment)
+	send(artist, EventTypeLine, segment)
+	send(artist, EventTypeFill, map[string]any{"x": 0, "y": 0, "color": 3})
+	send(guesser, EventTypeUndo, nil)
+	send(spectator, EventTypeUndo, nil)
+	if len(l.currentDrawing) != 3 {
+		t.Fatal("non-artists could undo")
+	}
+	send(artist, EventTypeUndo, nil)
+	if len(l.currentDrawing) != 2 {
+		t.Fatal("fill undo removed pen stroke")
+	}
+	send(artist, EventTypeUndo, nil)
+	if len(l.currentDrawing) != 0 {
+		t.Fatal("undo failed to remove grouped pen stroke")
+	}
+	send(artist, EventTypeUndo, nil)
+	if len(l.currentDrawing) != 0 {
+		t.Fatal("empty undo changed drawing")
+	}
+	// A new stroke immediately after undo/clear needs its own undo boundary.
+	for _, reset := range []func(){func() {}, l.ClearDrawing} {
+		reset()
+		send(artist, EventTypeLine, segment)
+		send(artist, EventTypeUndo, nil)
+		if len(l.currentDrawing) != 0 {
+			t.Fatal("new stroke could not be undone immediately after reset")
+		}
+	}
+}

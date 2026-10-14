@@ -1,5 +1,6 @@
 import KeyboardManager from "./resources/keyboardManager.js";
 import { attachCanvasInput } from './resources/{{.WithCacheBust "canvas-input.js"}}';
+import { createDrawingHistory } from './resources/{{.WithCacheBust "drawing-history.js"}}';
 import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
 
 String.prototype.format = function () {
@@ -870,7 +871,7 @@ document
     .addEventListener("click", clearCanvasAndSendEvent);
 
 function undoAndSendEvent() {
-    if (allowDrawing) {
+    if (allowDrawing && socket?.readyState === WebSocket.OPEN) {
         socket.send(
             JSON.stringify({
                 type: "undo",
@@ -1158,29 +1159,11 @@ const handleEvent = (parsed) => {
             parsed.data.author,
             parsed.data.content,
         );
-    } else if (parsed.type === "line") {
-        drawLine(
-            context,
-            imageData,
-            parsed.data.x,
-            parsed.data.y,
-            parsed.data.x2,
-            parsed.data.y2,
-            indexToRgbColor(parsed.data.color),
-            parsed.data.width,
-        );
-    } else if (parsed.type === "fill") {
-        if (
-            floodfillUint8ClampedArray(
-                imageData.data,
-                parsed.data.x,
-                parsed.data.y,
-                indexToRgbColor(parsed.data.color),
-                imageData.width,
-                imageData.height,
-            )
-        ) {
-            context.putImageData(imageData, 0, 0);
+    } else if (parsed.type === "line" || parsed.type === "fill") {
+        drawingHistory.append({type: parsed.type, data: parsed.data});
+    } else if (parsed.type === "undo-drawing") {
+        if (!drawingHistory.undo(parsed.data)) {
+            socket.send(JSON.stringify({type: "request-drawing"}));
         }
     } else if (parsed.type === "clear-drawing-board") {
         clear(context);
@@ -1399,9 +1382,7 @@ const handleReadyEvent = (ready) => {
     if (ready.players && ready.players.length) {
         applyPlayers(ready.players);
     }
-    if (ready.currentDrawing && ready.currentDrawing.length) {
-        applyDrawData(ready.currentDrawing);
-    }
+    applyDrawData(ready.currentDrawing || []);
     if (ready.wordHints && ready.wordHints.length) {
         applyWordHints(ready.wordHints);
     } else {
@@ -1834,38 +1815,29 @@ const set_dummy_word_hints = () => {
 };
 set_dummy_word_hints();
 
-const applyDrawData = (drawElements) => {
-    clear(context);
-
-    drawElements.forEach((drawElement) => {
-        const drawData = drawElement.data;
-        if (drawElement.type === "fill") {
-            floodfillUint8ClampedArray(
-                imageData.data,
-                drawData.x,
-                drawData.y,
-                indexToRgbColor(drawData.color),
-                imageData.width,
-                imageData.height,
-            );
-        } else if (drawElement.type === "line") {
-            drawLineNoPut(
-                context,
-                imageData,
-                drawData.x,
-                drawData.y,
-                drawData.x2,
-                drawData.y2,
-                indexToRgbColor(drawData.color),
-                drawData.width,
-            );
-        } else {
-            console.log("Unknown draw element type: " + drawData.type);
+const drawingHistory = createDrawingHistory({
+    snapshot: () => imageData.data.slice(),
+    restore: pixels => imageData.data.set(pixels),
+    clear: () => clearCanvasPixels(context),
+    present: event => {
+        if (event?.type === "line") {
+            const data = event.data;
+            const bounds = prepareDrawLineCoords(context, data.x, data.y, data.x2, data.y2, data.width);
+            context.putImageData(imageData, 0, 0, 0, 0, bounds.right, bounds.bottom);
+        } else context.putImageData(imageData, 0, 0);
+    },
+    draw: ({type, data}) => {
+        if (type === "fill") {
+            return floodfillUint8ClampedArray(imageData.data, data.x, data.y,
+                indexToRgbColor(data.color), imageData.width, imageData.height);
         }
-    });
-
-    context.putImageData(imageData, 0, 0);
-};
+        if (type === "line") {
+            drawLineNoPut(context, imageData, data.x, data.y, data.x2, data.y2,
+                indexToRgbColor(data.color), data.width);
+        }
+    },
+});
+const applyDrawData = drawElements => drawingHistory.replace(drawElements);
 
 attachCanvasInput(drawingBoard, {
     state: () => ({
@@ -1945,6 +1917,10 @@ function onKeyDown(event) {
 window.addEventListener("keydown", onKeyDown);
 
 function clear(context) {
+    drawingHistory.reset();
+}
+
+function clearCanvasPixels(context) {
     context.fillStyle = "#FFFFFF";
     context.fillRect(0, 0, drawingBoard.width, drawingBoard.height);
     // Refetch, as we don't manually fill here.
@@ -1960,70 +1936,20 @@ function clear(context) {
 clear(context);
 
 function fillAndSendEvent(context, x, y, colorIndex) {
-    const xScaled = convertToServerCoordinate(x);
-    const yScaled = convertToServerCoordinate(y);
-    const color = indexToRgbColor(colorIndex);
-    if (
-        floodfillUint8ClampedArray(
-            imageData.data,
-            xScaled,
-            yScaled,
-            color,
-            imageData.width,
-            imageData.height,
-        )
-    ) {
-        context.putImageData(imageData, 0, 0);
-        const fillInstruction = {
-            type: "fill",
-            data: {
-                x: xScaled,
-                y: yScaled,
-                color: colorIndex,
-            },
-        };
-        socket.send(JSON.stringify(fillInstruction));
-    }
+    const instruction = {type: "fill", data: {
+        x: convertToServerCoordinate(x), y: convertToServerCoordinate(y), color: colorIndex,
+    }};
+    if (drawingHistory.append(instruction, true)) socket.send(JSON.stringify(instruction));
 }
 
-function drawLineAndSendEvent(
-    context,
-    x1,
-    y1,
-    x2,
-    y2,
-    lineWidth = localLineWidth,
-) {
-    const color = localTool === rubber ? rubberColor : localColor;
-    const colorIndex = localTool === rubber ? 0 /* white */ : localColorIndex;
-
-    const x1Scaled = convertToServerCoordinate(x1);
-    const y1Scaled = convertToServerCoordinate(y1);
-    const x2Scaled = convertToServerCoordinate(x2);
-    const y2Scaled = convertToServerCoordinate(y2);
-    drawLine(
-        context,
-        imageData,
-        x1Scaled,
-        y1Scaled,
-        x2Scaled,
-        y2Scaled,
-        color,
-        lineWidth,
-    );
-
-    const drawInstruction = {
-        type: "line",
-        data: {
-            x: x1Scaled,
-            y: y1Scaled,
-            x2: x2Scaled,
-            y2: y2Scaled,
-            color: colorIndex,
-            width: lineWidth,
-        },
-    };
-    socket.send(JSON.stringify(drawInstruction));
+function drawLineAndSendEvent(context, x1, y1, x2, y2, lineWidth = localLineWidth) {
+    const instruction = {type: "line", data: {
+        x: convertToServerCoordinate(x1), y: convertToServerCoordinate(y1),
+        x2: convertToServerCoordinate(x2), y2: convertToServerCoordinate(y2),
+        color: localTool === rubber ? 0 : localColorIndex, width: lineWidth,
+    }};
+    drawingHistory.append(instruction);
+    socket.send(JSON.stringify(instruction));
 }
 
 function isString(obj) {
