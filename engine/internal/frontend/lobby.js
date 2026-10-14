@@ -1597,7 +1597,10 @@ function applyPlayers(players) {
     }
 
     playerContainer.innerHTML = "";
-    players.forEach((player) => {
+    const playersByName = players.slice().sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+    playersByName.forEach((player) => {
         // Makes sure that the "is choosing" a word dialog doesn't show
         // "undefined" as the player name. Can happen, if the player
         // disconnects after being assigned the drawer.
