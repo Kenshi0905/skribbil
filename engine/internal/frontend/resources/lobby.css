@@ -525,6 +525,21 @@ kbd {
     flex: 1;
 }
 
+.playername-action {
+    appearance:none;
+    border:0;
+    background:transparent;
+    color:inherit;
+    font:inherit;
+    text-align:start;
+    padding:0;
+    cursor:pointer;
+    min-width:0;
+}
+.playername-action:hover { text-decoration:underline; }
+.playername-action:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+.kick-target-name { font-weight:700; overflow-wrap:anywhere; margin:0 0 12px; }
+
 .playername-self {
     font-weight: bold;
 }

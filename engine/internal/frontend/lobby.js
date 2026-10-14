@@ -229,37 +229,60 @@ document
     .getElementById("help-button")
     .addEventListener("click", showHelpDialog);
 
-function showKickDialog() {
-    hideMenu();
-
-    if (cachedPlayers && cachedPlayers) {
-        kickDialogPlayers.innerHTML = "";
-
-        cachedPlayers.forEach((player) => {
-            //Don't wanna allow kicking ourselves.
-            if (player.id !== ownID && player.connected) {
-                const playerKickEntry = document.createElement("button");
-                playerKickEntry.classList.add("kick-player-button");
-                playerKickEntry.classList.add("dialog-button");
-                playerKickEntry.onclick = () => onVotekickPlayer(player.id);
-                playerKickEntry.innerText = player.name;
-                kickDialogPlayers.appendChild(playerKickEntry);
-            }
-        });
-
-        kickDialog.style.visibility = "visible";
-    }
+let kickTargetID = null;
+function canVotekickPlayer(player) {
+    return player && player.id !== ownID && player.connected &&
+        !(document.body.dataset.leagueMode && spectating);
 }
-document
-    .getElementById("kick-button")
-    .addEventListener("click", showKickDialog);
+
+function createPlayerName(player) {
+    const actionable = canVotekickPlayer(player);
+    const name = document.createElement(actionable ? "button" : "span");
+    name.classList.add("playername");
+    name.innerText = player.name;
+    name.id = "playername-" + player.id;
+    if (player.id === ownID) name.classList.add("playername-self");
+    if (actionable) {
+        name.type = "button";
+        name.classList.add("playername-action");
+        name.setAttribute("aria-haspopup", "dialog");
+        name.setAttribute("aria-controls", "kick-dialog");
+        name.title = '{{.Translation.Get "votekick-a-player"}}';
+        name.onclick = () => showKickDialog(player.id);
+    }
+    return name;
+}
+
+function showKickDialog(playerId) {
+    const player = getCachedPlayer(playerId);
+    if (!canVotekickPlayer(player)) return;
+    hideMenu();
+    kickTargetID = player.id;
+    kickDialogPlayers.innerHTML = "";
+    const name = document.createElement("p");
+    name.className = "kick-target-name";
+    name.innerText = player.name;
+    const vote = document.createElement("button");
+    vote.type = "button";
+    vote.className = "kick-player-button dialog-button";
+    vote.innerText = '{{.Translation.Get "votekick-a-player"}}';
+    vote.onclick = () => onVotekickPlayer(player.id);
+    kickDialogPlayers.appendChild(name);
+    kickDialogPlayers.appendChild(vote);
+    kickDialog.style.visibility = "visible";
+    vote.focus();
+}
 
 function hideKickDialog() {
     kickDialog.style.visibility = "hidden";
+    const target = kickTargetID;
+    kickTargetID = null;
+    if (target) document.getElementById("playername-" + target)?.focus();
 }
-document
-    .getElementById("kick-close-button")
-    .addEventListener("click", hideKickDialog);
+document.getElementById("kick-close-button").addEventListener("click", hideKickDialog);
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && kickTargetID) hideKickDialog();
+});
 
 function showNameChangeDialog() {
     hideMenu();
@@ -936,6 +959,10 @@ function chooseWord(index) {
 }
 
 function onVotekickPlayer(playerId) {
+    if (!canVotekickPlayer(getCachedPlayer(playerId)) || socket?.readyState !== WebSocket.OPEN) {
+        hideKickDialog();
+        return;
+    }
     socket.send(
         JSON.stringify({
             type: "kick-vote",
@@ -1680,14 +1707,7 @@ function applyPlayers(players) {
             playerDiv.appendChild(createCommunityAvatar(player));
         }
 
-        const playernameSpan = document.createElement("span");
-        playernameSpan.classList.add("playername");
-        playernameSpan.innerText = player.name;
-        playernameSpan.id = "playername-" + player.id;
-        if (player.id === ownID) {
-            playernameSpan.classList.add("playername-self");
-        }
-        playerDiv.appendChild(playernameSpan);
+        playerDiv.appendChild(createPlayerName(player));
 
         const playerscoreSpan = document.createElement("span");
         playerscoreSpan.classList.add("playerscore");
@@ -1706,6 +1726,7 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+    if (kickTargetID && !canVotekickPlayer(getCachedPlayer(kickTargetID))) hideKickDialog();
     const self = players.find(player => player.id === ownID);
     if (roomLook && self) setUsernameLocally(self.name);
     updateRoomLook();
