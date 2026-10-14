@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Run the production renderers with an inert DOM. Test rows below are synthetic
 // server responses used only by these tests, never shipped as UI fallback data.
-const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8').replace(/^import .* from '\.\/avatar\.js';\n/m, '');
+const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8').replace(/^import .* from '\.\/avatar\.js';\r?\n/m, '');
 const renderers = source.slice(0, source.indexOf("document.addEventListener('click'"));
 function client(data = {}) {
   const nodes = new Map();
@@ -19,7 +19,7 @@ function client(data = {}) {
     window: {matchMedia:()=>({matches:false})},
     URL, URLSearchParams, Intl,
   });
-  vm.runInContext(`${renderers}\nglobalThis.ui = {state,homePage,leaguePage,tournamentsPage,communityPage,profilePage,friendsPage,clubhousesPage,roomRow,tournamentCard,cosmeticsCollection,awardsPanel,boardPlayers,leaderboardTableRows,challengeRow,officialBracketModal,hero,topbar,sidebar,render};`,context);
+  vm.runInContext(`${renderers}\nglobalThis.ui = {state,homePage,skribbilPage,gameShelf,sidebar,currentRoute,leaguePage,tournamentsPage,communityPage,profilePage,friendsPage,clubhousesPage,roomRow,tournamentCard,cosmeticsCollection,awardsPanel,leaderboardTableRows,boardPlayers,challengeRow,officialBracketModal,hero,topbar,render};`,context);
   context.ui.state.data = data;
   return context.ui;
 }
@@ -28,6 +28,18 @@ const noInventedCards = html => {
   assert.doesNotMatch(html,/class="(?:podium-card|leaderboard-row|room-row|challenge-row|tournament-card|art-card|cosmetic |award-row)/);
   assert.doesNotMatch(html,/data-id="sample-|DoodleDemon|PixelPandit|ChaiAndChaos|NotAnArtist|GuessWho|Placeholder Open|Golden hour|Main character|Qualifier [1-4]|EXAMPLE|SAMPLE DOODLE/i);
 };
+
+test('Clubhouse navigation separates the shared community from its playable Skribbil section',()=>{
+  const ui=client({});
+  assert.match(ui.homePage(),/Welcome to the Clubhouse/);
+  assert.match(ui.gameShelf(),/href="#\/skribbil"/);
+  assert.match(ui.sidebar(),/assets\/skribbil-communities-light\.png/);
+  assert.match(ui.sidebar(),/nav-game/);
+  assert.match(ui.skribbilPage(),/data-action="play"/);
+  assert.match(ui.skribbilPage(),/data-action="private-room"/);
+  for(const route of ['home','skribbil','tournaments','community','friends','profile','clubhouses'])assert.match(ui.sidebar(),new RegExp(`href="#/${route}"`));
+  assert.doesNotMatch(ui.gameShelf(),/Among Us|Duck Duck Goose/,'unavailable games are not presented as playable');
+});
 
 test('a fresh or unavailable community renders honest empty pages without manufactured activity', () => {
   const ui = client({user:null,leaderboard:[],seasonLeaderboard:[],rooms:[],challenges:[],tournaments:[],drawings:[],teams:[],friends:[],season:null});

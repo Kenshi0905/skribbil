@@ -10,6 +10,7 @@ import { Platform } from '../server/platform.mjs';
 import { AssetStore } from '../server/assets.mjs';
 import { Media, validatePng, normalizePng, validateImage, normalizeImage } from '../server/media.mjs';
 import { defaultAvatar } from '../web/avatar.js';
+import {createApp} from '../server/index.mjs';
 
 function sample(format='image/png') {
   const canvas=createCanvas(40,20),ctx=canvas.getContext('2d');
@@ -19,21 +20,34 @@ function sample(format='image/png') {
 test('PNG uploads reject arbitrary content and excessive dimensions before decoding',async()=>{
   assert.throws(()=>validatePng(Buffer.from('<svg onload="evil()"/>').toString('base64')));
   const bomb=sample();bomb.writeUInt32BE(1000000,16);
-  assert.throws(()=>validatePng(bomb.toString('base64')),/1024/);
+  assert.throws(()=>validatePng(bomb.toString('base64')),/corrupt/);
   assert.throws(()=>validatePng(Buffer.concat([sample(),Buffer.from('trailing content')]).toString('base64')));
   const normalized=await normalizePng(sample().toString('base64'));
-  const image=await loadImage(normalized);assert.equal(image.width,256);assert.equal(image.height,256);
+  const image=await loadImage(normalized);assert.equal(image.width,512);assert.equal(image.height,512);
+});
+
+test('authenticated non-admin uploads validate real formats and cannot target another profile',{timeout:60000},async()=>{
+  const db=await openDatabase({url:'',dataDir:':memory:'}),root=await mkdtemp(join(tmpdir(),'skribbil-http-photo-'));
+  const app=await createApp({db,assets:new AssetStore({root,bucket:''}),config:{secret:randomBytes(32).toString('hex'),origin:'',secure:false}});
+  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${app.server.address().port}`;app.config.origin=base;
+  const a=await app.platform.register({username:'http_photo_owner',email:'http_photo@example.invalid',password:randomBytes(24).toString('hex')}),b=await app.platform.register({username:'http_other_photo',email:'http_other@example.invalid',password:randomBytes(24).toString('hex')});
+  const upload=(image,token=a.token)=>fetch(base+'/api/profile/avatar',{method:'POST',headers:{Origin:base,'X-Requested-With':'Skribbil','Content-Type':'application/json',...(token?{Cookie:`skribbil_session=${token}`}:{})},body:JSON.stringify({image,userId:b.user.id})});
+  try{
+    assert.equal((await upload(sample().toString('base64'),null)).status,401);
+    for(const format of ['image/png','image/jpeg','image/webp']){const response=await upload(sample(format).toString('base64'));assert.equal(response.status,200);const {url}=await response.json();assert.equal((await app.platform.profile(a.user)).avatarUrl,url);assert.equal((await app.platform.profile(b.user)).avatarUrl,null);}
+    assert.equal((await upload(Buffer.from('<svg/>').toString('base64'))).status,400);
+  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });
 test('JPEG uploads validate dimensions before decoding and normalize to a square PNG',async()=>{
   const jpeg=sample('image/jpeg');
   assert.deepEqual(validateImage(jpeg.toString('base64')),jpeg);
   const image=await loadImage(await normalizeImage(jpeg.toString('base64')));
-  assert.equal(image.width,256);assert.equal(image.height,256);
+  assert.equal(image.width,512);assert.equal(image.height,512);
   const badDimensions=Buffer.from(jpeg);
   let frame=-1;
   for(let i=0;i<badDimensions.length-10;i++)if(badDimensions[i]===255&&[0xc0,0xc2].includes(badDimensions[i+1])){frame=i;break;}
-  assert.ok(frame>=0);badDimensions.writeUInt16BE(4000,frame+7);
-  assert.throws(()=>validateImage(badDimensions.toString('base64')),/1024/);
+  assert.ok(frame>=0);badDimensions.writeUInt16BE(65535,frame+7);
+  assert.throws(()=>validateImage(badDimensions.toString('base64')),/25 megapixels/);
   for(const bytes of [Buffer.from('<svg/>'),Buffer.from('GIF89a'),jpeg.subarray(0,-2),Buffer.concat([jpeg,Buffer.from('extra')])])assert.throws(()=>validateImage(bytes.toString('base64')));
 });
 test('avatars and team logos enforce ownership, invalidate old URLs and retain deletion metadata',{timeout:60000},async()=>{
@@ -56,7 +70,7 @@ test('avatars and team logos enforce ownership, invalidate old URLs and retain d
     assert.equal((await p.profile(a)).avatarPreset,null,'uploaded photos replace presets');
     assert.equal((await p.profile(a)).avatarUrl,replacement.url);
     const uploadedPhoto=await media.read(replacement.url.split('/').at(-1));
-    const photo=await loadImage(uploadedPhoto.body);assert.equal(photo.width,256);assert.equal(photo.height,256);
+    const photo=await loadImage(uploadedPhoto.body);assert.equal(photo.width,512);assert.equal(photo.height,512);
     await media.remove(a);await assert.rejects(media.read(second.url.split('/').at(-1)),e=>e.status===404);
     const old=(await db.query(`SELECT expires_at FROM skribbil.object_assets WHERE id=$1`,[first.url.split('/').at(-1)])).rows[0];assert.ok(old.expires_at);
     const team=await p.createTeam(a,{name:'Image clan',tag:'IMG'});

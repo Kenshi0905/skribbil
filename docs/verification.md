@@ -5,6 +5,54 @@ on **13 October 2026 (India time)**. It does not certify physical-phone
 compatibility, sustained production capacity or crash recovery. Feature boundaries
 remain in [implementation status](feature-status.md).
 
+## Room looks and the Character Workshop — 14 October 2026
+
+The permanent editor keeps its profile save/upload contract and gains a costume
+drawer presentation. Managed rooms add temporary server-authoritative identities
+and an explicit host start. No database migration or drawing-loop rewrite is involved.
+
+Local verification: 147 Node tests passed, with one optional integration skip;
+the full Go suite and the game/API race suites passed. The ten-player protocol
+playtest completed 20 turns, checked broadcasts of two independent room looks,
+unchanged profile records, reconnect preservation, readiness resets, forbidden
+guest starts, and fresh-rematch profile defaults. Preset bounds have a JS/Go parity test.
+
+Manual verification used two isolated browser sessions against an in-memory test
+database. Host/member customization appeared in both rosters; profile reset stayed
+a draft until Apply, Cancel discarded it, refresh preserved the room override,
+editing revoked readiness, and only the host started. Both panels closed at start.
+The permanent name/avatar stayed unchanged. Desktop and 390px phone layouts had
+no horizontal overflow in the editor/panel, keyboard focus was visible, and both
+browser sessions reported no console errors. These are viewport checks, not
+physical-device certification. Test accounts were never created in production.
+
+## Clubhouse identity and player avatars — pre-push checks
+
+The hygiene update starts from merged `main` revision `65d8ea8`, preserving the
+new friend directory, unified account settings, avatar editor and reconnect fixes.
+Clubhouse is the shared home and Skribbil has its own nested game route. Private
+groups remain at the existing `#/clubhouses` route; account and league schemas
+are unchanged. The supplied caped-hero branding has transparent light/dark variants.
+
+Before pushing: 141 application tests passed with one optional integration test
+skipped; all eight infrastructure tests and the full Go race suite passed. The
+ten-player isolated protocol playtest completed 20 turns, archived 20 drawings
+and produced ten authoritative results. Three clients used mobile User-Agent
+headers. Saved avatar URLs survived signed admission and reconnect. Penalty,
+hard-word carryover, spectator restrictions and account-binding checks passed.
+
+Browser checks exercised login, the game link from Clubhouse, private group room
+controls, and the original game roster with three loaded preset avatars plus
+initials fallbacks. Light/dark and 390-pixel mobile checks confirmed the player
+cards fit without horizontal overflow and the mobile navigation still works.
+These are browser viewport checks, not physical phone tests. The local fixtures
+used an isolated memory database; no production accounts or matches were created.
+Windows CRLF compatibility was repaired in the existing UI test harnesses.
+
+The checks above are local evidence; the existing CI workflow repeats checks
+before deploying a pushed revision. They do not claim that a future live rollout
+has already succeeded.
+
 ## Initial live deployment
 
 [Skribbil is deployed on Cloudflare Pages](https://skribbil.pages.dev), with its
@@ -164,3 +212,23 @@ administrators were provisioned privately; there is no shared default admin
 password. Keep account data, database files, session material and
 deployment secrets in protected runtime storage. See the
 [free deployment guide](free-deployment.md) for setup and its remaining checks.
+
+## Avatar v2 and large ready-room preview (2026-10-14)
+
+- Frozen v1 SVG renderer/catalog; canonical v2 has 12 indices plus a versioned profile object. Go, native browser, and JS bounds have parity coverage. Query, zero-padded, unknown-version, out-of-range and external paths are rejected.
+- All v2 options decode as 200×200 SVG images. Vibe tests cover all eight skin tones; legacy opening, edit migration, save/reopen, room drafts, errors and cancellation have regression coverage.
+- Visually reviewed 32 generated avatars across four vibes plus all 24 hairstyles and 22 extras at large and thumbnail sizes. Corrected deep-skin facial contrast.
+- Desktop 1280px preview 420px, tablet 1024px preview 280px, phone 390px preview 220px. Phone panel scrollWidth equals clientWidth (357px); viewport has no horizontal overflow. These are browser viewport checks, not physical-device tests.
+- Two isolated browser sessions verify independent v2 customization, server-accepted roster broadcasts, reconnect persistence, draft-only profile restore/cancel, readiness and explicit owner start.
+- 10-player/one-spectator protocol playtest includes v2 permanent and temporary identities, legacy compatibility, profile unchanged, readiness reset, stale-seat protection, 20 drawing turns and fresh-rematch reset.
+- Full Node tests: 154 total, 153 passed, one optional integration skip. Go test ./... and race tests for game/API passed; syntax, infra, secret guard and diff checks passed.
+
+## Account and photo hygiene (2026-10-14)
+
+- Remember Me defaults off on login/register, sends a typed boolean, controls cookie persistence, and retains a seven-day database expiry. Password rotation preserves persistence and revokes other sessions; logout clears the cookie. Existing persistent sessions are preserved by an additive migration.
+- Authenticated ordinary users can crop PNG/JPEG/WebP photos. Shared preflight checks signatures, sizes, dimensions, PNG CRCs, container boundaries and animation/trailing content. A bounded streaming PNG raster verifier prevents permissive native decoding of corrupt scanlines. EXIF orientations 1–8, RGB/RGBA/grayscale/palette PNG, transparency, wide/tall sources, WebP, 8 MiB exact boundary and corrupt/bomb fixtures are covered. Metadata-free 512px PNG exports are decoded again in a limited worker.
+- Browser checks: 320, 390, 768 and 1280px widths have no horizontal overflow. Crop controls are at least 44px; pointer drag, keyboard pan/zoom, cancel, replace, save, retry after simulated storage failure, and removal were exercised. PNG bytes with a JPEG filename are recognized by signature; HTML disguised as JPEG is rejected. Browser gesture tests use pointer input and phone viewport sizes, not physical iOS/Android devices.
+- Normal profile edits preserve titles and reject forged title fields/equipping. Admin title definitions/default restoration are permission-checked and audited with actor, target and timestamp. Header help/separator removed; footer help kept.
+- Full Node suite: 166 tests, 165 passed, one optional integration skip. Focused source/media/auth/crop/admin tests and infra tests passed. Ten-player/one-spectator playtest completed 20 turns with reconnection, room-identity preservation, dislike penalty, and rematch reset. No engine code changed.
+
+Transparent profile photos were additionally checked in a real managed room: fallback initials stay in the DOM for image failures but are hidden beneath a loaded image in the preview, crew roster, and game scoreboard. Existing image-error tests still pass.

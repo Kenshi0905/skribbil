@@ -960,6 +960,15 @@ let rounds = 0;
 let roundEndTime = 0;
 let gameState = "unstarted";
 
+const roomLook = document.body.dataset.leagueMode
+    ? (await import('/room-look.js')).createRoomLook(document.getElementById('room-look-panel'), {
+        send: event => socket.send(JSON.stringify(event)),
+        isConnected: () => socket?.readyState === WebSocket.OPEN,
+        focusAfterStart: () => messageInput.focus(),
+    }) : null;
+function updateRoomLook(profileIdentity) {
+    roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, ...(profileIdentity ? {profileIdentity} : {})});
+}
 let leagueDislikes = null;
 const dislikeButton = document.getElementById("league-dislike-button");
 const dislikeLabel = document.getElementById("league-dislike-status");
@@ -987,6 +996,8 @@ const handleEvent = (parsed) => {
         if (parsed.data.leagueMode) {
             renderLeagueDislikes(parsed.data.dislikes);
         }
+    } else if (parsed.type === "room-command-result") {
+        roomLook?.result(parsed.data);
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
     } else if (parsed.type === "game-over") {
@@ -1158,6 +1169,7 @@ const handleEvent = (parsed) => {
         } else {
             //First turn, the game starts
             gameState = "ongoing";
+            updateRoomLook();
         }
 
         //As soon as a turn starts, the round should be ongoing, so we make
@@ -1221,6 +1233,7 @@ const handleEvent = (parsed) => {
         }
     } else if (parsed.type === "owner-change") {
         ownerID = parsed.data.playerId;
+        updateRoomLook();
         updateButtonVisibilities();
         appendMessage(
             "system-message",
@@ -1334,6 +1347,7 @@ const handleReadyEvent = (ready) => {
     round = ready.round;
     rounds = ready.rounds;
     gameState = ready.gameState;
+    updateRoomLook(ready.profileIdentity);
     updateRoundsDisplay();
     updateButtonVisibilities();
 
@@ -1643,6 +1657,11 @@ function applyPlayers(players) {
         rankSpan.innerText = player.rank;
         playerDiv.appendChild(rankSpan);
 
+        if (document.body.dataset.leagueMode) {
+            playerDiv.classList.add("community-player");
+            playerDiv.appendChild(createCommunityAvatar(player));
+        }
+
         const playernameSpan = document.createElement("span");
         playernameSpan.classList.add("playername");
         playernameSpan.innerText = player.name;
@@ -1669,6 +1688,33 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+    const self = players.find(player => player.id === ownID);
+    if (roomLook && self) setUsernameLocally(self.name);
+    updateRoomLook();
+}
+
+// Stable schema bounds; parity tests cover both engine and browser consumers.
+function validCommunityPreset(url) {
+    const match = typeof url === 'string' && url.match(/^\/api\/avatar-presets\/(v[12])\/([0-9-]+)\.svg$/);
+    if (!match) return false;
+    const bounds = match[1] === 'v1' ? [8,6,5,6,7,8,10,8,8] : [7,24,16,5,6,16,6,22,8,10,8,8];
+    const parts = match[2].split('-');
+    return parts.length === bounds.length && parts.every((n,i) => /^(0|[1-9][0-9]*)$/.test(n) && Number(n) < bounds[i]);
+}
+
+function createCommunityAvatar(player) {
+    const avatar = document.createElement("span");
+    avatar.classList.add("community-player-avatar");
+    avatar.setAttribute("aria-hidden", "true");
+    avatar.textContent = Array.from(player.name || "?").slice(0, 2).join("").toUpperCase();
+    if (validCommunityPreset(player.avatarUrl) || /^\/api\/(?:media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(player.avatarUrl || "")) {
+        const image = document.createElement("img");
+        image.alt = "";
+        image.src = player.avatarUrl;
+        image.addEventListener("error", () => image.remove(), { once: true });
+        avatar.appendChild(image);
+    }
+    return avatar;
 }
 
 function createPlayerStateImageNode(path) {
@@ -1999,6 +2045,7 @@ const connectToWebsocket = () => {
         socketIsConnecting = false;
 
         socket.onclose = (event) => {
+            roomLook?.disconnect();
             //We want to avoid handling the error multiple times and showing the incorrect dialogs.
             socket.onerror = null;
 

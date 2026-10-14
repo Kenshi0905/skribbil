@@ -124,7 +124,8 @@ const connect = async (client, ticketUrl) => {
   client.ws.on('event', message => { if (message.type === 'your-turn') turns.push({ client, data: message.data }); });
   await client.ws.connect(new URL(`/engine/v1/lobby/${lobbyId}/ws`, base), `${client.cookie}; ${client.nativeCookie}`, base, client.ua);
   const ready = (await client.ws.wait('ready')).data;
-  assert.equal(ready.playerName, client.user.display_name);
+  assert.equal(ready.playerName, client.roomName || client.user.display_name);
+  assert.equal(ready.players.find(player => player.id === ready.playerId)?.avatarUrl || '', client.roomAvatar || client.avatarUrl || '', 'signed admission carries the saved avatar, including after reconnect');
   if (client.playerId) assert.equal(ready.playerId, client.playerId, 'reconnect keeps engine identity');
   client.playerId = ready.playerId; return ready;
 };
@@ -133,7 +134,9 @@ try {
   for (let i = 0; i < 11; i++) {
     const name = `play_${i}_${randomBytes(4).toString('hex')}`;
     const { user, token } = await app.platform.register({ username: name, email: `${name}@example.invalid`, password: randomBytes(32).toString('hex') });
-    clients.push({ user, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
+    const avatarUrl = i===0 ? '/api/avatar-presets/v2/0-12-6-0-0-6-1-7-1-1-0-0.svg' : i < 3 ? `/api/avatar-presets/v1/${i}-0-0-0-0-1-1-0-0.svg` : '';
+    if (avatarUrl) await db.query('UPDATE skribbil.users SET avatar_url=$2 WHERE id=$1',[user.id,avatarUrl]);
+    clients.push({ user, avatarUrl, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
   }
   if (demo) {
     const name = `viewer_${randomBytes(4).toString('hex')}`, password = randomBytes(24).toString('hex');
@@ -156,6 +159,20 @@ try {
   }
   const players = clients.slice(0, 10), spectator = clients[10];
   report.checks.push('10 authenticated players and a spectator connected through the gateway');
+  for (let i=0;i<2;i++) {
+    const p=players[i];p.roomName=['Captain Doodle','Mystery Pencil'][i];p.roomAvatar=i===0?'/api/avatar-presets/v2/2-9-6-3-0-7-2-12-1-1-0-0.svg':`/api/avatar-presets/v1/${7-i}-4-2-3-1-2-8-3-1.svg`;
+    p.ws.send('room-identity-change',{displayName:p.roomName,avatarUrl:p.roomAvatar});
+    await Promise.all(clients.map(c=>c.ws.wait('update-players',rows=>rows.some(r=>r.id===p.playerId&&r.name===p.roomName&&r.avatarUrl===p.roomAvatar))));
+    const ack=await p.ws.wait('room-command-result',d=>d.action==='room-identity-change');assert.equal(ack.data.error,undefined);
+  }
+  players[1].ws.send('toggle-readiness');await players[1].ws.wait('room-command-result',d=>d.action==='toggle-readiness');
+  players[1].roomName='Mystery Pencil 2';players[1].ws.send('room-identity-change',{displayName:players[1].roomName,avatarUrl:players[1].roomAvatar});
+  await players[0].ws.wait('update-players',rows=>rows.some(r=>r.id===players[1].playerId&&r.name==='Mystery Pencil 2'&&r.state==='standby'));
+  await players[1].ws.wait('room-command-result',d=>d.action==='room-identity-change');
+  players[1].ws.send('start');assert.ok((await players[1].ws.wait('room-command-result',d=>d.action==='start')).data.error);
+  players[0].ws.send('start');assert.ok((await players[0].ws.wait('room-command-result',d=>d.action==='start')).data.error);
+  for(const p of players.slice(0,2)) {const profile=(await db.query('SELECT display_name,avatar_url FROM skribbil.users WHERE id=$1',[p.user.id])).rows[0];assert.equal(profile.display_name,p.user.display_name);assert.equal(profile.avatar_url||'',p.avatarUrl||'');}
+  report.checks.push('two room looks broadcast to every client; profile unchanged; edit unreadies; unready/unauthorized start blocked');
   // Returning from sharing an invitation must also work before the old socket
   // has disconnected, without creating a second seat or losing ownership.
   const previousOwnerSocket = players[0].ws;
@@ -186,7 +203,9 @@ try {
     await until(() => access(demoStart).then(() => true).catch(() => false), 'demo lobby continuation', 720000);
   }
   // Ready must not be blocked by the spectator.
-  for (const p of players) p.ws.send('toggle-readiness');
+  for (const p of players.slice(1)) {p.ws.send('toggle-readiness');await p.ws.wait('room-command-result',d=>d.action==='toggle-readiness');}
+  assert.equal(turns.length,0,'managed room waits for explicit owner start');
+  players[0].ws.send('start');
   let penalized;
   for (let turn = 1; turn <= 20; turn++) {
     const next = await until(() => turns.shift(), `artist turn ${turn}`);
@@ -257,6 +276,12 @@ try {
   const debt = (await db.query('SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1', [penalized.user.id])).rows[0]; assert.equal(debt.pending, false);
   report.checks.push('20 real turns archived;10 results with18 correct guesses each; spectator absent from results; debt consumed');
   report.archivedDrawings = Number(archive.total); report.authoritativeResults = results.length;
+  for (const c of clients) c.ws?.close();
+  const fresh=await json(await request(players[0],`/api/matches/${matchId}/rematch`,{}));
+  lobbyId=(await db.query('SELECT engine_room_id FROM skribbil.matches WHERE id=$1',[fresh.matchId])).rows[0].engine_room_id;
+  delete players[0].roomName;delete players[0].roomAvatar;delete players[0].playerId;
+  const freshReady=await connect(players[0],fresh.url);assert.equal(freshReady.playerName,players[0].user.display_name);
+  report.checks.push('fresh rematch resets temporary identity to permanent profile');
   report.status = 'passed'; console.log(JSON.stringify(report, null, 2));
 } finally {
   for (const client of clients) client.ws?.close();

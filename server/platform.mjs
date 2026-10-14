@@ -50,12 +50,13 @@ export class Platform {
     return { id, username, displayName, bio, avatarColor, avatarUrl, avatarPreset, xp, level,
       points, gamesPlayed, wins, averageScore, title, frame, achievements, trophies };
   }
-  async session(db, userId) {
+  async session(db, userId, rememberMe = false) {
     const s = newSession();
-    await db.query(`INSERT INTO skribbil.auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '7 days')`, [userId, s.tokenHash]);
+    await db.query(`INSERT INTO skribbil.auth_sessions(user_id,token_hash,expires_at,remember_me) VALUES($1,$2,now()+interval '7 days',$3)`, [userId, s.tokenHash, rememberMe]);
     return s.token;
   }
   async register(body) {
+    requireValue(body.rememberMe === undefined || typeof body.rememberMe === 'boolean','Remember me must be true or false.');
     const username = textField(body.username,3,24,'Username');
     requireValue(/^[A-Za-z0-9_]+$/.test(username),'Use letters, numbers and underscores in your username.');
     const email = textField(body.email,3,254,'Email').toLowerCase();
@@ -72,11 +73,12 @@ export class Platform {
           SELECT $1::uuid,id,'welcome',$1::text||':welcome:'||slug FROM skribbil.cosmetic_definitions WHERE slug='rookie'`,[user.id]);
         await db.query(`INSERT INTO skribbil.equipped_cosmetics(user_id,cosmetic_id,slot)
           SELECT $1,id,slot FROM skribbil.cosmetic_definitions WHERE slug='rookie'`,[user.id]);
-        return { user,token:await this.session(db,user.id) };
+        return { user,token:await this.session(db,user.id,body.rememberMe === true) };
       });
     } catch(error) { if(error.code==='23505') throw new ApiError(409,'That username or email is already registered.'); throw error; }
   }
   async login(body) {
+    requireValue(body.rememberMe === undefined || typeof body.rememberMe === 'boolean','Remember me must be true or false.');
     const email = textField(body.email,3,254,'Email or username');
     requireValue(typeof body.password==='string' && body.password.length<=128,'Invalid credentials.',401);
     const row = await one(this.db,`SELECT u.*,c.password_hash FROM skribbil.users u JOIN skribbil.credentials c ON c.user_id=u.id
@@ -91,7 +93,7 @@ export class Platform {
       // row could otherwise retain the pre-lock snapshot across a password change.
       const credential=await one(db,'SELECT password_hash FROM skribbil.credentials WHERE user_id=$1',[row.id]);
       requireValue(current?.status==='active'&&credential?.password_hash===row.password_hash,'Credentials changed. Please sign in again.',401);
-      return {user:row,token:await this.session(db,row.id)};
+      return {user:row,token:await this.session(db,row.id,body.rememberMe === true)};
     });
   }
   async logout(token) { if(token) await this.db.query(`UPDATE skribbil.auth_sessions SET revoked_at=now() WHERE token_hash=$1`,[hash(token)]); }
@@ -104,15 +106,16 @@ export class Platform {
     const nextHash=await passwordHash(body.newPassword);
     return this.db.transaction(async db=>{
       const account=await one(db,'SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE',[user.id]);
-      const session=await one(db,`SELECT 1 FROM skribbil.auth_sessions WHERE user_id=$1 AND token_hash=$2 AND revoked_at IS NULL AND expires_at>now()`,[user.id,hash(token||'')]);
+      const session=await one(db,`SELECT remember_me FROM skribbil.auth_sessions WHERE user_id=$1 AND token_hash=$2 AND revoked_at IS NULL AND expires_at>now()`,[user.id,hash(token||'')]);
       requireValue(account?.status==='active'&&session,'Sign in again to change your password.',401);
       const changed=await db.query(`UPDATE skribbil.credentials SET password_hash=$2,updated_at=now() WHERE user_id=$1 AND password_hash=$3 RETURNING user_id`,[user.id,nextHash,credential.password_hash]);
       requireValue(changed.rows.length,'Your password changed in another session. Sign in again.',409);
       await db.query(`UPDATE skribbil.auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`,[user.id]);
-      return {token:await this.session(db,user.id)};
+      return {token:await this.session(db,user.id,session.remember_me),rememberMe:session.remember_me};
     });
   }
   async updateProfile(user,body) {
+    requireValue(!Object.hasOwn(body,'title')&&!Object.hasOwn(body,'titleId'),'Only an administrator can change profile titles.');
     const displayName=textField(body.displayName ?? user.display_name,1,60,'Display name');
     const bio=textField(body.bio ?? user.bio,0,280,'Bio');
     const color=body.avatarColor || user.avatar_color;
@@ -132,17 +135,11 @@ export class Platform {
       }
       await db.query(`UPDATE skribbil.users SET display_name=coalesce($2,display_name),bio=coalesce($3,bio),avatar_color=coalesce($4,avatar_color) WHERE id=$1`,
         [user.id,body.displayName!=null?displayName:null,body.bio!=null?bio:null,body.avatarColor?color:null]);
-      if(body.title) {
-        const owned=await one(db,`SELECT d.id,d.slot FROM skribbil.user_inventory i JOIN skribbil.cosmetic_definitions d ON d.id=i.cosmetic_id
-          WHERE i.user_id=$1 AND d.slot='title' AND (d.name=$2 OR d.slug=$2)`,[user.id,body.title]);
-        requireValue(owned,'Earn this title before equipping it.');
-        await db.query(`INSERT INTO skribbil.equipped_cosmetics(user_id,cosmetic_id,slot) VALUES($1,$2,'title')
-          ON CONFLICT(user_id,slot) DO UPDATE SET cosmetic_id=excluded.cosmetic_id`,[user.id,owned.id]);
-      }
       if(body.cosmeticId){
         requireValue(isUuid(body.cosmeticId),'Invalid cosmetic.');
         const item=await one(db,`SELECT d.id,d.slot FROM skribbil.user_inventory i JOIN skribbil.cosmetic_definitions d ON d.id=i.cosmetic_id WHERE i.user_id=$1 AND i.cosmetic_id=$2`,[user.id,body.cosmeticId]);
         requireValue(item,'Earn this cosmetic before equipping it.',403);
+        requireValue(item.slot!=='title','Only an administrator can change profile titles.',403);
         await db.query(`INSERT INTO skribbil.equipped_cosmetics(user_id,cosmetic_id,slot) VALUES($1,$2,$3) ON CONFLICT(user_id,slot) DO UPDATE SET cosmetic_id=excluded.cosmetic_id`,[user.id,item.id,item.slot]);
       }
     });
@@ -278,6 +275,23 @@ export class Platform {
   async audit(db,user,action,entityType,entityId,reason,before,after) {
     await db.query(`INSERT INTO skribbil.admin_audit_log(actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[user.id,action,entityType,entityId,reason,JSON.stringify(before),JSON.stringify(after),randomUUID()]);
+  }
+  async assignTitle(user,targetId,body) {
+    await this.admin(user);
+    requireValue(isUuid(targetId)&&Object.hasOwn(body,'titleId')&&(body.titleId===null||isUuid(body.titleId)),'Choose a valid player and title.');
+    const reason=textField(body.reason,5,500,'Reason');
+    return this.db.transaction(async db=>{
+      requireValue(await one(db,`SELECT role FROM skribbil.platform_roles WHERE user_id=$1 AND role='administrator' FOR SHARE`,[user.id]),'Administrator access required.',403);
+      const target=await one(db,`SELECT id,status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[targetId]);
+      requireValue(target&&target.status!=='erased','Player not found.',404);
+      const title=await one(db,`SELECT id,name FROM skribbil.cosmetic_definitions WHERE slot='title' AND CASE WHEN $1::uuid IS NULL THEN slug='rookie' ELSE id=$1 END`,[body.titleId]);
+      requireValue(title,'Choose an existing title.');
+      const before=await one(db,`SELECT cosmetic_id AS "titleId" FROM skribbil.equipped_cosmetics WHERE user_id=$1 AND slot='title'`,[targetId]);
+      await db.query(`INSERT INTO skribbil.user_inventory(user_id,cosmetic_id,source,grant_key) VALUES($1,$2,'admin',$3) ON CONFLICT(user_id,cosmetic_id) DO NOTHING`,[targetId,title.id,`admin-title:${targetId}:${title.id}`]);
+      await db.query(`INSERT INTO skribbil.equipped_cosmetics(user_id,cosmetic_id,slot) VALUES($1,$2,'title') ON CONFLICT(user_id,slot) DO UPDATE SET cosmetic_id=excluded.cosmetic_id`,[targetId,title.id]);
+      await this.audit(db,user,'profile.title.assigned','user',targetId,reason,before||{titleId:null},{titleId:title.id});
+      return {titleId:title.id,title:title.name};
+    });
   }
   async ban(user,body) {
     requireValue(isUuid(body.userId)&&body.userId!==user.id,'Choose another account.');

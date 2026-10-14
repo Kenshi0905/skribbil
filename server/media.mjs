@@ -1,55 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
+import {inspectImage,IMAGE_MAX_BYTES} from '../web/image-file.js';
 import { ApiError, requireValue, isUuid } from './security.mjs';
 
 const one = async (db, sql, values = []) => (await db.query(sql, values)).rows[0];
 let active = 0;
-export function validatePng(png) {
-  requireValue(typeof png === 'string' && png.length <= 1398104 && /^[A-Za-z0-9+/]+={0,2}$/.test(png), 'Upload a PNG of at most 1 MiB.');
-  const bytes = Buffer.from(png, 'base64');
-  requireValue(bytes.length <= 1048576 && bytes.length >= 45 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])), 'Choose a valid PNG image.');
-  requireValue(bytes.readUInt32BE(8) === 13 && bytes.toString('ascii',12,16) === 'IHDR', 'Invalid PNG header.');
-  const w = bytes.readUInt32BE(16), h = bytes.readUInt32BE(20);
-  requireValue(w > 0 && h > 0 && w <= 1024 && h <= 1024, 'PNG dimensions must be at most 1024 × 1024.');
-  let at = 8, ended = false;
-  while (at + 12 <= bytes.length) {
-    const length = bytes.readUInt32BE(at), type = bytes.toString('ascii',at+4,at+8);
-    requireValue(length <= bytes.length - at - 12 && type !== 'acTL', 'Use a static, valid PNG image.');
-    at += 12 + length;
-    if (type === 'IEND') { ended = true; break; }
-  }
-  requireValue(ended && at === bytes.length, 'Invalid PNG data.');
-  return bytes;
-}
 export function validateImage(image) {
-  requireValue(typeof image === 'string' && image.length <= 1398104 && /^[A-Za-z0-9+/]+={0,2}$/.test(image), 'Upload a PNG or JPG of at most 1 MiB.');
-  const bytes = Buffer.from(image, 'base64');
-  requireValue(bytes.length <= 1048576, 'Upload a PNG or JPG of at most 1 MiB.');
-  if (bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return validatePng(image);
-  requireValue(bytes.length >= 12 && bytes.readUInt16BE(0) === 0xffd8 && bytes.readUInt16BE(bytes.length-2) === 0xffd9, 'Choose a valid PNG or JPG image.');
-  // Read JPEG frame dimensions before invoking the decoder, just as for PNG.
-  // Skip metadata segments without trusting the filename or browser MIME type.
-  const frames = new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
-  let at=2, foundFrame=false;
-  while (at < bytes.length-2) {
-    requireValue(bytes[at++] === 0xff, 'Invalid JPG data.');
-    while (bytes[at] === 0xff) at++;
-    const marker=bytes[at++];
-    requireValue(marker !== undefined && marker !== 0 && marker !== 0xd8 && marker !== 0xd9 && at+2 <= bytes.length, 'Invalid JPG data.');
-    const length=bytes.readUInt16BE(at);
-    requireValue(length >= 2 && at+length <= bytes.length-2, 'Invalid JPG data.');
-    if (frames.has(marker)) {
-      requireValue(length >= 8, 'Invalid JPG frame.');
-      const height=bytes.readUInt16BE(at+3), width=bytes.readUInt16BE(at+5);
-      requireValue(width > 0 && height > 0 && width <= 1024 && height <= 1024, 'JPG dimensions must be at most 1024 × 1024.');
-      foundFrame=true;
-    }
-    if (marker === 0xda) break;
-    at+=length;
-  }
-  requireValue(foundFrame, 'Invalid JPG frame.');
+  requireValue(typeof image==='string'&&image.length<=Math.ceil(IMAGE_MAX_BYTES/3)*4,'Image exceeds 8 MiB. Choose a smaller photo.');
+  requireValue(image.length%4===0&&/^[A-Za-z0-9+/]*={0,2}$/.test(image),'This image is unreadable or corrupt.');
+  const bytes=Buffer.from(image,'base64');
+  requireValue(bytes.toString('base64')===image,'This image is unreadable or corrupt.');
+  try{inspectImage(bytes);}catch(error){throw new ApiError(400,error.message);}
   return bytes;
 }
+export function validatePng(image){const bytes=validateImage(image);requireValue(inspectImage(bytes).format==='png','Choose a valid PNG image.');return bytes;}
 export async function normalizePng(png) {
   return normalizeImage(png, validatePng);
 }
@@ -58,14 +22,14 @@ export async function normalizeImage(image, validate = validateImage) {
   requireValue(active < 2, 'Image uploads are busy. Please retry shortly.', 503);
   active++;
   return new Promise((resolve,reject) => {
-    const worker = new Worker(new URL('./media-worker.mjs', import.meta.url), {resourceLimits:{maxOldGenerationSizeMb:64}});
+    const worker = new Worker(new URL('./media-worker.mjs', import.meta.url), {resourceLimits:{maxOldGenerationSizeMb:96}});
     let settled = false;
     const finish = (error, result) => {
       if (settled) return; settled = true; clearTimeout(timer);
-      worker.terminate().finally(() => { active--; });
+      worker.terminate().catch(()=>{}).finally(() => { active--; });
       if (error) reject(error); else resolve(Buffer.from(result));
     };
-    const timer = setTimeout(() => finish(new ApiError(400,'Image could not be processed within the time limit.')),5000);
+    const timer = setTimeout(() => finish(new ApiError(400,'Image could not be processed within the time limit.')),15000);
     worker.on('message', result => finish(result.error ? new ApiError(400,result.error) : null,result.bytes));
     worker.on('error', () => finish(new ApiError(400,'Image could not be processed.')));
     worker.on('exit', () => { if (!settled) finish(new ApiError(400,'Image could not be processed.')); });

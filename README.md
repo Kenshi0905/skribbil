@@ -1,12 +1,25 @@
-# Skribbil
+# Skribbil Communities
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/assets/skribbil-communities.png">
+  <img src="web/assets/skribbil-communities-light.png" width="520" alt="Skribbil Communities — the red-caped doodle hero">
+</picture>
 
 ### Draw terribly. Guess brilliantly.
 
-**Skribbil** brings profiles, private friend groups, clans,
-tournaments, and admin-created leagues around the original
+The **Clubhouse** is our community home: shared profiles, private friend groups,
+clans, tournaments, and admin-created leagues. **Skribbil** is its first game,
+with the original
 [scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
-engine. The community around them is new.
+engine. Accounts and community identity are shared foundations for future games;
+only Skribbil is playable today. Open **Clubhouse → Skribbil** to play, or
+**Your Clubhouses** to find invite-only groups. Saved avatars appear beside
+players' ranks and scores inside the game.
+
+Make your permanent avatar in the **Character Workshop**. Before a managed game,
+**Edit room look** gives you a temporary name and preset character just for that
+match. Your profile stays unchanged; guests ready up and the host starts the game.
 
 **[Play Skribbil →](https://skribbil.pages.dev)**
 
@@ -79,10 +92,10 @@ not physical-phone photographs or proof of real-device touch behavior.*
 
 ## What you can do
 
-- **Make it yours:** profiles, uploaded avatars, owned titles and frames, match
+- **Make it yours:** profiles, cropped photo avatars, admin-assigned titles and frames, match
   history, XP, daily/weekly challenges, achievements, and trophies.
   In **Your profile → Avatar**, build a character from preset hair, eyes, brows,
-  mouths, accessories, and colors, or upload your own PNG/JPG photo. Preview,
+  mouths, accessories, and colors, or crop your own PNG/JPEG/WebP photo (up to 8 MiB and 25 megapixels). Preview,
   randomize, and reset your character before saving. Save your
   look to use it across the account menu, friends list, and leaderboards.
 - **Set the mood:** quieter pop effects, saved sound volume, and a one-click mute.
@@ -261,3 +274,14 @@ and the [pinned upstream revision](engine/UPSTREAM.md).
 
 This is an independent community project. The name **Skribbil** and new community
 artwork do not remove or replace upstream license obligations.
+## Character workshop and room looks
+
+Characters now have separate face, ears, nose, hair, eyes, brows, mouth, and extras, with Cute, Anime, Goofy, and Chaos randomizers. Existing v1 artwork remains unchanged. A feature edit upgrades the draft to v2; saving makes it your permanent profile avatar.
+
+Managed pre-game rooms have a large live preview. Draft names and presets stay local until **Apply room look** succeeds. **Cancel** returns to the confirmed room look; **Use my profile look** previews your permanent identity and still requires Apply. The host starts after connected guests ready. Room identities survive reconnects and reset in a fresh rematch.
+
+## Account and photo controls
+
+Login and registration default to a browser-session cookie. Check **Remember me on this device** to keep the normal seven-day persistent session; server expiry still applies, and password changes revoke other sessions while retaining this device’s choice. Session tokens use HttpOnly cookies; the app does not save passwords in browser storage.
+
+Photo uploads stay on your device until **Crop and save**. Pan with mouse/touch or arrow keys, zoom, reset, or cancel. The square 512×512 PNG export is decoded and validated again on the server, with metadata removed. Profile titles are read-only for players; administrators select existing title definitions or restore Rookie through the audited title action. **How it works** remains in the footer.

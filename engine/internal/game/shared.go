@@ -199,6 +199,7 @@ type OutgoingMessage struct {
 // This includes all the necessary things for properly running a client
 // without receiving any more data.
 type ReadyEvent struct {
+	ProfileIdentity    *RoomIdentity `json:"profileIdentity,omitempty"`
 	Dislikes           *DislikeState `json:"dislikes,omitempty"`
 	LeagueMode         string        `json:"leagueMode,omitempty"`
 	WordHints          []*WordHint   `json:"wordHints"`
@@ -252,7 +253,13 @@ func (r *Ring[T]) Latest() T {
 
 // Player represents a participant in a Lobby.
 type Player struct {
-	AccountID       string `json:"-"`
+	AccountID string `json:"-"`
+	// Profile baseline stays private; only its owner receives it in the ready event.
+	ProfileIdentity      RoomIdentity `json:"-"`
+	profileInitialized   bool
+	roomIdentityOverride bool
+	// AvatarURL is the effective, server-validated room look.
+	AvatarURL       string `json:"avatarUrl,omitempty"`
 	SpectatorOnly   bool   `json:"-"`
 	HardWordPending bool   `json:"hardWordPending,omitempty"`
 	// userSession uniquely identifies the player.
