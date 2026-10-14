@@ -998,6 +998,24 @@ function updateRoomLook(profileIdentity) {
     roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, ...(profileIdentity ? {profileIdentity} : {})});
 }
 let leagueDislikes = null;
+const copyRoomInvite = document.getElementById("copy-room-invite");
+copyRoomInvite?.addEventListener("click", async () => {
+    const input = document.getElementById("room-invite-link");
+    const status = document.getElementById("room-invite-status");
+    const invite = new URL("/", location.origin);
+    invite.searchParams.set("join", copyRoomInvite.dataset.roomId);
+    input.value = invite.href;
+    try {
+        await navigator.clipboard.writeText(invite.href);
+        input.hidden = true;
+        status.textContent = "Invite link copied! Send it to your friends.";
+    } catch {
+        input.hidden = false;
+        input.focus();
+        input.select();
+        status.textContent = "Copy the selected link to invite your friends.";
+    }
+});
 const dislikeButton = document.getElementById("league-dislike-button");
 const likeButton = document.getElementById("league-like-button");
 const drawingReactions = document.getElementById("drawing-reactions");
@@ -1120,31 +1138,6 @@ const handleEvent = (parsed) => {
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
         applyWordHints(parsed.data);
-
-        // What it does:
-        // 1. Show new word hints when they come in.
-        // 2. Show new word hints for other players, if even you are already done guessing
-
-        // We don't do this in applyWordHints because that's called in all kinds of places
-        if (parsed.data.some((hint) => hint.character)) {
-            var hints = parsed.data
-                .map((hint) => {
-                    if (hint.character) {
-                        var char = String.fromCharCode(hint.character);
-                        if (char === " " || hint.revealed) {
-                            return char;
-                        }
-                    }
-                    return "_";
-                })
-                .join(" ");
-            appendMessage(
-                ["system-message", "hint-chat-message"],
-                '{{.Translation.Get "system"}}',
-                '{{.Translation.Get "word-hint-revealed"}}\n' + hints,
-                { dir: wordContainer.getAttribute("dir") },
-            );
-        }
     } else if (parsed.type === "message") {
         appendMessage(null, parsed.data.author, parsed.data.content);
     } else if (parsed.type === "system-message") {
@@ -1218,7 +1211,7 @@ const handleEvent = (parsed) => {
         setRoundTimeLeft(parsed.data.choiceTimeLeft);
         applyPlayers(parsed.data.players);
 
-        set_dummy_word_hints();
+        revealRoundWord(parsed.data.previousWord);
 
         //Even though we always hide the dialog in the "your-turn"
         //event handling, it will be shortly visible if we it here.
@@ -1319,19 +1312,23 @@ const handleEvent = (parsed) => {
 };
 
 function showRoundEndMessage(previousWord) {
-    if (previousWord === "") {
-        appendMessage(
-            "system-message",
-            null,
-            `{{.Translation.Get "round-over"}}`,
-        );
-    } else {
-        appendMessage(
-            "system-message",
-            null,
-            `{{.Translation.Get "round-over-no-word"}}`.format(previousWord),
-        );
+    if (previousWord) return;
+    appendMessage(
+        "system-message",
+        null,
+        `{{.Translation.Get "round-over"}}`,
+    );
+}
+
+function revealRoundWord(previousWord) {
+    if (!previousWord) {
+        set_dummy_word_hints();
+        return;
     }
+    applyWordHints(Array.from(previousWord, (character) => ({
+        character: character.codePointAt(0),
+        underline: ![" ", "_", "-"].includes(character),
+    })));
 }
 
 function getCachedPlayer(playerID) {
@@ -1385,6 +1382,8 @@ const handleReadyEvent = (ready) => {
     applyDrawData(ready.currentDrawing || []);
     if (ready.wordHints && ready.wordHints.length) {
         applyWordHints(ready.wordHints);
+    } else if (ready.gameState === "gameOver") {
+        revealRoundWord(ready.previousWord);
     } else {
         set_dummy_word_hints();
     }
@@ -1772,7 +1771,7 @@ const applyWordHints = (wordHints, dummy) => {
                 if (hint.underline) {
                     hintSpan.classList.add("hint-underline");
                 }
-                hintSpan.innerText = String.fromCharCode(hint.character);
+                hintSpan.innerText = String.fromCodePoint(hint.character);
             }
 
             // space
