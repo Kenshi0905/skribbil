@@ -90,4 +90,6 @@ html[data-theme="dark"] .avatar-feature-tab.selected { background: var(--accent-
 
 .avatar-editor-preview .form-note { color:var(--ink); }
 .avatar-editor-heading .eyebrow { color:#302c3b; }
+.modal:has(.avatar-mode-options) button { min-width:44px; min-height:44px; transform:none; }
+.modal:has(.avatar-mode-options) input[type=file] { min-height:44px; }
 @media(max-width:620px) { .avatar-editor-preview { position:relative; } }
