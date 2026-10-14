@@ -20,6 +20,7 @@ test('quick rematches preserve authority and reuse a durable successor', { timeo
   const db = await openDatabase({ url: '', dataDir: ':memory:' });
   await db.query(await readFile(new URL('../database/rematch.sql', import.meta.url), 'utf8'));
   // Historical seasons are test fixtures only; production seeds no schedule.
+  await db.query(`INSERT INTO skribbil.leagues(id,community_id,name,slug) VALUES('00000000-0000-4000-8000-000000000040',$1,'Test league','test-league')`,[communityId]);
   const historicalSeason = randomUUID();
   await db.query(`INSERT INTO skribbil.seasons(id,league_id,community_id,name,starts_at,ends_at,status)
     VALUES($1,'00000000-0000-4000-8000-000000000040',$2,'Historical rematch fixture',now()-interval '2 days',now()-interval '1 day','closed')`,[historicalSeason,communityId]);

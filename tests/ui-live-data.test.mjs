@@ -26,7 +26,7 @@ function client(data = {}) {
 
 const noInventedCards = html => {
   assert.doesNotMatch(html,/class="(?:podium-card|leaderboard-row|room-row|challenge-row|tournament-card|art-card|cosmetic |award-row)/);
-  assert.doesNotMatch(html,/data-id="sample-|DoodleDemon|PixelPandit|ChaiAndChaos|NotAnArtist|GuessWho|Dussehra Open|Golden hour|Main character|Qualifier [1-4]|EXAMPLE|SAMPLE DOODLE/i);
+  assert.doesNotMatch(html,/data-id="sample-|DoodleDemon|PixelPandit|ChaiAndChaos|NotAnArtist|GuessWho|Placeholder Open|Golden hour|Main character|Qualifier [1-4]|EXAMPLE|SAMPLE DOODLE/i);
 };
 
 test('Clubhouse navigation separates the shared community from its playable Skribbil section',()=>{
@@ -37,7 +37,7 @@ test('Clubhouse navigation separates the shared community from its playable Skri
   assert.match(ui.sidebar(),/nav-game/);
   assert.match(ui.skribbilPage(),/data-action="play"/);
   assert.match(ui.skribbilPage(),/data-action="private-room"/);
-  for(const route of ['home','skribbil','league','tournaments','community','friends','profile','clubhouses'])assert.match(ui.sidebar(),new RegExp(`href="#/${route}"`));
+  for(const route of ['home','skribbil','tournaments','community','friends','profile','clubhouses'])assert.match(ui.sidebar(),new RegExp(`href="#/${route}"`));
   assert.doesNotMatch(ui.gameShelf(),/Among Us|Duck Duck Goose/,'unavailable games are not presented as playable');
 });
 
@@ -49,8 +49,9 @@ test('a fresh or unavailable community renders honest empty pages without manufa
     noInventedCards(html);
   }
   assert.match(ui.homePage(),/No public rooms are open/);
-  assert.match(ui.leaguePage(),/No active season/);
-  assert.match(ui.leaguePage(),/No verified results yet/);
+  assert.doesNotMatch(ui.sidebar(),/href="#\/league"|season-card/);
+  assert.doesNotMatch(ui.homePage(),/href="#\/league"/);
+  assert.doesNotMatch(ui.leaguePage(),/A league of your own|league-season/);
   assert.match(ui.tournamentsPage(),/No tournaments scheduled/);
   assert.match(ui.communityPage(),/No drawings have been curated/);
   assert.match(ui.profilePage(),/Sign in to see your own match history/);
@@ -63,7 +64,7 @@ test('a fresh or unavailable community renders honest empty pages without manufa
 });
 
 test('season standings never substitute all-time results and search distinguishes no results from no match', () => {
-  const ui = client({leaderboard:[{username:'render_test_player',points:840,wins:2,played:5}],seasonLeaderboard:[],season:null});
+  const ui = client({leagues:[{id:'test-league',name:'Weekend league'}],leaderboard:[{username:'render_test_player',points:840,wins:2,played:5}],seasonLeaderboard:[],season:null});
   assert.equal(ui.boardPlayers().length,0);
   assert.doesNotMatch(ui.leaguePage(),/render_test_player/);
   ui.state.leaderboardTab = 'all-time';
@@ -133,4 +134,16 @@ test('account rewards are derived only from actual inventory, awards, and challe
   const challenge = ui.challengeRow({id:'challenge-render-test',title:'Runtime challenge',target:3,progress:3,xp:75},0);
   assert.match(challenge,/data-action="claim"[^>]*data-id="challenge-render-test"/);
   assert.doesNotMatch(ui.challengeRow({title:'Runtime challenge',target:3,progress:0},0),/\+100 XP/);
+});
+
+test('admin-created leagues supply escaped names and reveal league navigation', () => {
+  const ui = client({leagues:[{id:'test-league',name:'Weekend <league>'}],season:null});
+  assert.match(ui.sidebar(),/href="#\/league"/);
+  assert.match(ui.sidebar(),/Weekend &lt;league&gt;/);
+  assert.match(ui.topbar(),/Weekend &lt;league&gt;/);
+  assert.match(ui.homePage(),/Weekend &lt;league&gt;/);
+  assert.match(ui.leaguePage(),/Weekend &lt;league&gt;/);
+  assert.match(ui.leaguePage(),/No active season/);
+  ui.state.data.leagues=[];
+  assert.doesNotMatch(ui.sidebar(),/season-card|href="#\/league"/);
 });

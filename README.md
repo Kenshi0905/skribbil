@@ -8,7 +8,7 @@
 ### Draw terribly. Guess brilliantly.
 
 The **Clubhouse** is our community home: shared profiles, private friend groups,
-clans, tournaments, and the **Dussehra League**. **Skribbil** is its first game,
+clans, tournaments, and admin-created leagues. **Skribbil** is its first game,
 with the original
 [scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go

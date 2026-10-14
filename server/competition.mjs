@@ -23,6 +23,18 @@ export class Competition {
     return this.platform.audit(db, user, action, type, id, reason, before, after);
   }
 
+  async createLeague(user, body) {
+    await this.admin(user);
+    const name = textField(body.name, 3, 80, 'League name'), reason = reasonFor(body);
+    return this.db.transaction(async db => {
+      const context = await this.platform.context(db);
+      const league = await one(db, `INSERT INTO skribbil.leagues(community_id,name,slug)
+        VALUES($1,$2,$3) RETURNING *`, [context.community_id,name,`league-${randomUUID()}`]);
+      await this.audit(db,user,'league.created','league',league.id,reason,null,league);
+      return league;
+    });
+  }
+
   async createSeason(user, body) {
     await this.admin(user);
     validId(body.leagueId, 'league');
