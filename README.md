@@ -2,8 +2,8 @@
 
 ### Draw terribly. Guess brilliantly.
 
-**Dussehra League of Skribbil** brings profiles, private friend groups, clans,
-tournaments, and a shared league around the original
+**Skribbil** brings profiles, private friend groups, clans,
+tournaments, and admin-created leagues around the original
 [scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
 engine. The community around them is new.

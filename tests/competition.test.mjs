@@ -9,7 +9,7 @@ let db, service, admin, outsider;
 const community='00000000-0000-4000-8000-000000000010';
 const game='00000000-0000-4000-8000-000000000020';
 const rules='00000000-0000-4000-8000-000000000031';
-const league='00000000-0000-4000-8000-000000000040';
+let league;
 const reason='Verified community competition setup';
 const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
 async function user() {
@@ -45,6 +45,10 @@ before(async()=>{
   db=await openDatabase({url:null,dataDir:':memory:'});
   service=new Competition(new Platform(db));admin=await user();outsider=await user();
   await db.query("INSERT INTO skribbil.platform_roles(user_id,role) VALUES($1,'administrator')",[admin.id]);
+  assert.equal((await service.platform.bootstrap(null,{})).leagues.length,0);
+  await assert.rejects(service.createLeague(outsider,{name:'Test league',reason}),/Administrator/);
+  league=(await service.createLeague(admin,{name:'Test league',reason})).id;
+  assert.equal((await service.platform.bootstrap(null,{})).leagues[0].name,'Test league');
 });
 after(async()=>{if(db)await db.close();});
 

@@ -5,8 +5,16 @@ INSERT INTO users(id,username,display_name,status)
 VALUES ('00000000-0000-4000-8000-000000000001','skribbil_system','Skribbil system','active')
 ON CONFLICT DO NOTHING;
 INSERT INTO communities(id,slug,name,created_by)
-VALUES ('00000000-0000-4000-8000-000000000010','dussehra','Dussehra League',
+VALUES ('00000000-0000-4000-8000-000000000010','skribbil','Skribbil community',
   '00000000-0000-4000-8000-000000000001') ON CONFLICT DO NOTHING;
+-- Upgrade the original community configuration without changing its identity.
+UPDATE communities SET slug='skribbil',name='Skribbil community'
+WHERE id='00000000-0000-4000-8000-000000000010';
+-- Remove only the unused legacy seeded league. Preserve administrator seasons.
+DELETE FROM leagues WHERE id='00000000-0000-4000-8000-000000000040'
+  AND NOT EXISTS (SELECT 1 FROM seasons WHERE league_id=leagues.id);
+UPDATE leagues SET name='Community league',slug='community-league'
+WHERE id='00000000-0000-4000-8000-000000000040';
 INSERT INTO community_members(community_id,user_id,role)
 VALUES ('00000000-0000-4000-8000-000000000010','00000000-0000-4000-8000-000000000001','owner')
 ON CONFLICT DO NOTHING;
@@ -19,9 +27,6 @@ INSERT INTO rule_sets(id,game_id,version,name,competitive,rules) VALUES
   ('00000000-0000-4000-8000-000000000031','00000000-0000-4000-8000-000000000020',1,'Standard ranked',true,
     '{"rounds":3,"drawingTime":80,"maxPlayers":8,"language":"en","dislikePenalty":100,"hardWordNextTurn":true}')
 ON CONFLICT DO NOTHING;
-INSERT INTO leagues(id,community_id,name,slug)
-VALUES ('00000000-0000-4000-8000-000000000040','00000000-0000-4000-8000-000000000010',
-  'Dussehra League','dussehra-league') ON CONFLICT DO NOTHING;
 -- Actual seasons and tournaments are created by an administrator. Fresh
 -- installations have no placeholder schedules, entrants, activity or results.
 INSERT INTO cosmetic_definitions(id,slug,name,slot,metadata) VALUES

@@ -28,7 +28,7 @@ if (existing.response.ok) {
 }
 if (existing.response.status !== 404) throw new Error(`Cannot check repository: ${existing.response.status}`);
 const result = await request('/user/repos', { method: 'POST', body: JSON.stringify({
-  name, description: 'Dussehra League of Skribbil — a cross-game community league powered by scribble.rs',
+  name, description: 'Skribbil — a cross-game community league powered by scribble.rs',
   private: false, auto_init: false, has_issues: true,
 }) });
 if (!result.response.ok) throw new Error(`Repository creation failed (${result.response.status}): ${result.body.message}`);

@@ -1,4 +1,4 @@
-# Dussehra League of Skribbil: architecture
+# Skribbil: architecture
 
 Status: implementation blueprint with a runnable first release. See `feature-status.md`
 for the distinction between implemented behavior and planned capabilities.

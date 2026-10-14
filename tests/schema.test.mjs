@@ -51,7 +51,7 @@ test('baseline and configuration seed can initialize actual PostgreSQL and seed 
   for (const table of ['seasons','season_games','tournaments','auth_sessions','match_results','score_events','xp_events','drawings','challenge_progress']) {
     assert.equal((await db.query(`SELECT count(*)::int AS count FROM ${table}`)).rows[0].count, 0, `${table} must not contain fabricated activity or schedules`);
   }
-  assert.equal((await db.query('SELECT count(*)::int AS count FROM leagues')).rows[0].count, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM leagues')).rows[0].count, 0);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM challenge_definitions')).rows[0].count, 2);
 });
 
@@ -127,3 +127,26 @@ test('private or revoked artwork cannot enter the public gallery projection', ()
   await db.query("UPDATE drawings SET visibility='private',consent_revoked_at=now() WHERE id=$1",[drawing]);
   assert.equal((await db.query('SELECT count(*)::int AS count FROM public_gallery')).rows[0].count,0);
 }));
+
+test('configuration upgrades remove an unused seeded league and preserve existing seasons', async () => {
+  const upgrade = new PGlite();
+  const legacy = '00000000-0000-4000-8000-000000000040';
+  const seed = await readFile(new URL('../database/seed.sql', import.meta.url), 'utf8');
+  try {
+    await upgrade.exec(await readFile(new URL('../database/schema.sql', import.meta.url), 'utf8'));
+    await upgrade.exec(seed);
+    const insertLegacy = () => upgrade.query(`INSERT INTO skribbil.leagues(id,community_id,name,slug)
+      VALUES($1,$2,'Legacy league','legacy-league')`,[legacy,community]);
+    await insertLegacy();
+    await upgrade.exec(seed);
+    assert.equal((await upgrade.query('SELECT count(*)::int AS n FROM skribbil.leagues')).rows[0].n,0);
+    await insertLegacy();
+    await upgrade.query(`INSERT INTO skribbil.seasons(league_id,community_id,name,starts_at,ends_at)
+      VALUES($1,$2,'Admin season',now(),now()+interval '1 day')`,[legacy,community]);
+    await upgrade.exec(seed);
+    assert.equal((await upgrade.query('SELECT name FROM skribbil.leagues WHERE id=$1',[legacy])).rows[0].name,'Community league');
+    assert.equal((await upgrade.query('SELECT name FROM skribbil.seasons')).rows[0].name,'Admin season');
+    await upgrade.exec(seed);
+    assert.equal((await upgrade.query('SELECT count(*)::int AS n FROM skribbil.seasons')).rows[0].n,1);
+  } finally { await upgrade.close(); }
+});

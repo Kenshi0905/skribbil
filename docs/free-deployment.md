@@ -160,7 +160,7 @@ The template is intended for one instance. A free instance has limited memory/CP
 
 Initialize a fresh production database from the checked-in schema and seed; do
 not import a development database or playtest assets. The seed contains the
-credential-free system identity, Dussehra community and league, Skribbil rules,
+credential-free system identity, Skribbil community, Skribbil rules,
 cosmetics, level thresholds, challenge and achievement definitions, and the word
 catalog. It creates no player accounts, seasons, tournaments, match results,
 drawings, XP or completed challenges. Administrators create actual seasons and

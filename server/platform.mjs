@@ -10,7 +10,7 @@ export class Platform {
       (SELECT id FROM skribbil.rule_sets WHERE game_id=g.id AND competitive ORDER BY version DESC LIMIT 1) AS ranked_rules,
       (SELECT id FROM skribbil.rule_sets WHERE game_id=g.id AND NOT competitive ORDER BY version DESC LIMIT 1) AS private_rules,
       (SELECT id FROM skribbil.seasons WHERE community_id=c.id AND status='active' AND starts_at<=now() AND ends_at>now() LIMIT 1) AS season_id
-      FROM skribbil.games g CROSS JOIN skribbil.communities c WHERE g.slug='skribbil' AND c.slug='dussehra'`);
+      FROM skribbil.games g CROSS JOIN skribbil.communities c WHERE g.slug='skribbil' AND c.slug='skribbil'`);
   }
   async authenticate(token) {
     if (!token) return null;
@@ -158,7 +158,8 @@ export class Platform {
   async bootstrap(user,engine) {
     await this.challengeWindows();
     const context=await this.context();
-    const [profile,leaderboard,seasonBoard,challenges,tournaments,teams,friends,rooms,drawings,season] = await Promise.all([
+    const [leagues,profile,leaderboard,seasonBoard,challenges,tournaments,teams,friends,rooms,drawings,season] = await Promise.all([
+      this.db.query(`SELECT l.id,l.name,l.slug FROM skribbil.leagues l WHERE l.community_id=$1 ORDER BY EXISTS(SELECT 1 FROM skribbil.seasons s WHERE s.league_id=l.id AND s.id=$2) DESC,l.created_at DESC,l.id`,[context.community_id,context.season_id]),
       this.profile(user),
       this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",s.total_points AS points,s.wins,s.matches_played AS played
         FROM skribbil.all_time_game_standings s JOIN skribbil.users u ON u.id=s.user_id WHERE s.game_id=$1 AND u.status<>'erased' ORDER BY s.total_points DESC,s.wins DESC,u.username LIMIT 50`,[context.game_id]),
@@ -184,7 +185,7 @@ export class Platform {
         FROM skribbil.public_gallery p JOIN skribbil.users u ON u.id=p.artist_id ORDER BY p.published_at DESC LIMIT 30`),
       one(this.db,`SELECT id,name,starts_at AS "startsAt",ends_at AS "endsAt",status FROM skribbil.seasons WHERE id=$1`,[context.season_id]),
     ]);
-    return {user:profile,leaderboard:leaderboard.rows,seasonLeaderboard:seasonBoard.rows,challenges:challenges.rows,
+    return {leagues:leagues.rows,user:profile,leaderboard:leaderboard.rows,seasonLeaderboard:seasonBoard.rows,challenges:challenges.rows,
       tournaments:tournaments.rows,teams:teams.rows,friends:friends.rows,rooms:rooms.rows,drawings:drawings.rows,season:season||null,
       ownRooms:user?(await this.db.query(`SELECT DISTINCT m.id,m.engine_room_id AS code,m.mode,m.status,m.private,m.created_by=$1 AS owner
         FROM skribbil.matches m JOIN skribbil.match_players p ON p.match_id=m.id WHERE p.user_id=$1 AND m.status IN ('lobby','running')

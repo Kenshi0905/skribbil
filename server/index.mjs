@@ -368,8 +368,9 @@ export async function createApp({db,config,assets}={}) {
         const resolution=path.match(/^\/api\/admin\/disputes\/([a-f0-9-]+)$/);
         if(resolution&&req.method==='POST')return json(res,200,await community.resolveDispute(user,resolution[1],input));
         const context=await platform.context();
+        if(path==='/api/admin/leagues'&&req.method==='POST')return json(res,201,await competition.createLeague(user,{...input,reason:input.reason||'Create community league'}));
         if(path==='/api/admin/seasons'&&req.method==='POST')return json(res,201,await competition.createSeason(user,{
-          ...input,leagueId:'00000000-0000-4000-8000-000000000040',reason:input.reason||'Create community season',
+          ...input,leagueId:input.leagueId,reason:input.reason||'Create community season',
           games:[{gameId:context.game_id,ruleSetId:context.ranked_rules,scoringConfig:{method:'placement',points:{'1':25,'2':18,'3':15,'4':12,'5':10,'6':8},participation:5}}]}));
         const activateSeason=path.match(/^\/api\/admin\/seasons\/([a-f0-9-]+)\/(activate|close)$/);
         if(activateSeason&&req.method==='POST')return json(res,200,await competition[activateSeason[2]==='activate'?'activateSeason':'closeSeason'](user,activateSeason[1],{reason:input.reason||'Update community season'}));
