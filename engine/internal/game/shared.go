@@ -23,6 +23,7 @@ const (
 
 // Events that are outgoing only.
 const (
+	EventTypeUndoDrawing    = "undo-drawing"
 	EventTypeUpdatePlayers  = "update-players"
 	EventTypeUpdateWordHint = "update-wordhint"
 	EventTypeWordChosen     = "word-chosen"

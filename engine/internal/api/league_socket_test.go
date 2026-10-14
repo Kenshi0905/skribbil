@@ -210,6 +210,13 @@ func TestOriginalWebsocketDrawingGuessingAndLeaguePenaltyTogether(t *testing.T) 
 	if line["data"].(map[string]any)["x2"] != float64(20) {
 		t.Fatal("native drawing transport changed")
 	}
+	send(0, `{"type":"undo"}`)
+	undone := waitSocketEvent(t, handlers[1], "undo-drawing")["data"].(map[string]any)
+	if undone["from"] != float64(0) || undone["to"] != float64(1) {
+		t.Fatal("undo must send a compact authoritative range")
+	}
+	send(0, `{"type":"line","data":{"x":10,"y":10,"x2":20,"y2":20,"color":2,"width":8}}`)
+	waitSocketEvent(t, handlers[1], "line")
 	send(1, `{"type":"like-drawing","data":{"turnId":1}}`)
 	liked := waitSocketEvent(t, handlers[1], "dislike-state")["data"].(map[string]any)
 	if liked["likes"] != float64(1) || liked["votes"] != float64(0) || liked["applied"] != false {

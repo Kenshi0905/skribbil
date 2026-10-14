@@ -179,6 +179,7 @@ func (lobby *Lobby) GetOwner() *Player {
 func (lobby *Lobby) ClearDrawing() {
 	lobby.currentDrawing = make([]any, 0)
 	lobby.connectedDrawEventsIndexStack = nil
+	lobby.lastDrawEvent = time.Time{}
 }
 
 // AppendLine adds a line direction to the current drawing. This exists in order
