@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { avatarOptions, defaultAvatar, avatarFromUrl, avatarUrl, renderAvatar, randomAvatar } from '../web/avatar.js';
+import { avatarV2Options as avatarOptions, defaultAvatarV2 as defaultAvatar, editableAvatar, avatarVibes, avatarFromUrl, avatarUrl, renderAvatar, randomAvatar } from '../web/avatar.js';
+import {defaultAvatar as legacyDefault} from '../web/avatar-v1.js';
 
 const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace(/^import .* from '\.\/avatar\.js';\r?\n/m,'');
 const beforeListeners=source.slice(0,source.indexOf("document.addEventListener('click'"));
@@ -14,7 +15,7 @@ function setup(saved=null,failSave=false) {
   };
   const person={id:'avatar-ui-account',username:'avatar_test',displayName:'Test scribbler',avatarUrl:typeof saved==='string'?saved:saved?avatarUrl(saved):null};
   const context=vm.createContext({
-    avatarOptions,defaultAvatar,avatarFromUrl,renderAvatar,randomAvatar,
+    avatarOptions,defaultAvatar,editableAvatar,avatarVibes,avatarFromUrl,renderAvatar,randomAvatar,
     document:{querySelector:element,body:{style:{}}},location:{hash:'#/profile',search:'',origin:'http://localhost'},
     window:{matchMedia:()=>({matches:false})},requestAnimationFrame:fn=>fn(),URL,URLSearchParams,Intl,
     FormData:class { *[Symbol.iterator]() {} },AbortController,setTimeout,clearTimeout,
@@ -122,4 +123,18 @@ test('settings floating window shows the saved preset or uploaded image immediat
     assert.match(html,/@avatar_test/);
   }
   const f=setup();assert.match(f.ui.profileModal(),/data-initial="TE"/);
+});
+
+test('opening legacy artwork preserves its preview and saving an edit migrates to v2',async()=>{
+  const f=setup(legacyDefault);f.ui.openModal('avatar-editor');
+  assert.ok(f.html().includes(renderAvatar(legacyDefault)));
+  assert.equal(f.ui.state.avatarDraft.version,undefined);
+  f.ui.changeAvatar('avatar-tab',{dataset:{key:'face'}});
+  assert.equal(f.ui.state.avatarDraft.version,undefined,'a tab does not change the saved artwork');
+  f.ui.changeAvatar('avatar-choice',{dataset:{key:'face',value:'5'}});
+  assert.equal(f.ui.state.avatarDraft.version,2);assert.equal(f.ui.state.avatarDraft.face,5);
+  await f.ui.submitForm({dataset:{form:'avatar-preset'},querySelector(){return null;}});
+  f.ui.openModal('avatar-editor');assert.equal(f.ui.state.avatarDraft.face,5);
+  f.ui.changeAvatar('avatar-vibe',{dataset:{value:'Anime'}});
+  assert.equal(f.ui.state.avatarVibe,'Anime');assert.equal(f.ui.state.avatarDraft.version,2);
 });

@@ -1693,12 +1693,21 @@ function applyPlayers(players) {
     updateRoomLook();
 }
 
+// Stable schema bounds; parity tests cover both engine and browser consumers.
+function validCommunityPreset(url) {
+    const match = typeof url === 'string' && url.match(/^\/api\/avatar-presets\/(v[12])\/([0-9-]+)\.svg$/);
+    if (!match) return false;
+    const bounds = match[1] === 'v1' ? [8,6,5,6,7,8,10,8,8] : [7,24,16,5,6,16,6,22,8,10,8,8];
+    const parts = match[2].split('-');
+    return parts.length === bounds.length && parts.every((n,i) => /^(0|[1-9][0-9]*)$/.test(n) && Number(n) < bounds[i]);
+}
+
 function createCommunityAvatar(player) {
     const avatar = document.createElement("span");
     avatar.classList.add("community-player-avatar");
     avatar.setAttribute("aria-hidden", "true");
     avatar.textContent = Array.from(player.name || "?").slice(0, 2).join("").toUpperCase();
-    if (/^\/api\/(?:avatar-presets\/v1\/(?:\d{1,2}-){8}\d{1,2}\.svg|media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(player.avatarUrl || "")) {
+    if (validCommunityPreset(player.avatarUrl) || /^\/api\/(?:media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(player.avatarUrl || "")) {
         const image = document.createElement("img");
         image.alt = "";
         image.src = player.avatarUrl;

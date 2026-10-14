@@ -274,3 +274,8 @@ and the [pinned upstream revision](engine/UPSTREAM.md).
 
 This is an independent community project. The name **Skribbil** and new community
 artwork do not remove or replace upstream license obligations.
+## Character workshop and room looks
+
+Characters now have separate face, ears, nose, hair, eyes, brows, mouth, and extras, with Cute, Anime, Goofy, and Chaos randomizers. Existing v1 artwork remains unchanged. A feature edit upgrades the draft to v2; saving makes it your permanent profile avatar.
+
+Managed pre-game rooms have a large live preview. Draft names and presets stay local until **Apply room look** succeeds. **Cancel** returns to the confirmed room look; **Use my profile look** previews your permanent identity and still requires Apply. The host starts after connected guests ready. Room identities survive reconnects and reset in a fresh rematch.

@@ -93,3 +93,6 @@ html[data-theme="dark"] .avatar-feature-tab.selected { background: var(--accent-
 .modal:has(.avatar-mode-options) button { min-width:44px; min-height:44px; transform:none; }
 .modal:has(.avatar-mode-options) input[type=file] { min-height:44px; }
 @media(max-width:620px) { .avatar-editor-preview { position:relative; } }
+.avatar-vibes { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:12px 0; }
+.avatar-vibes button { border:2px solid var(--ink); border-radius:8px; background:var(--paper); color:var(--ink); font-weight:700; }
+.avatar-vibes button[aria-pressed=true] { background:var(--yellow); color:#302c3b; }

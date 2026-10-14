@@ -21,7 +21,7 @@ import (
 )
 
 var leagueCreateMutex sync.Mutex
-var leagueAvatarPath = regexp.MustCompile(`^/api/(avatar-presets/v1/([0-9]{1,2}-){8}[0-9]{1,2}\.svg|media/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$`)
+var leagueAvatarPath = regexp.MustCompile(`^/api/(media/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$`)
 
 type joinTicket struct {
 	UserID          string `json:"userId"`
@@ -60,7 +60,7 @@ func verifyJoinTicket(token, secret string, now time.Time) (*joinTicket, error) 
 		return nil, errors.New("invalid or expired ticket")
 	}
 	// Cosmetic data must never make the browser contact a third-party image host.
-	if t.AvatarURL != "" && (!leagueAvatarPath.MatchString(t.AvatarURL) || (strings.HasPrefix(t.AvatarURL, "/api/avatar-presets/") && !game.ValidPresetAvatarURL(t.AvatarURL))) {
+	if t.AvatarURL != "" && (!game.ValidPresetAvatarURL(t.AvatarURL) && !leagueAvatarPath.MatchString(t.AvatarURL)) {
 		return nil, errors.New("invalid avatar path")
 	}
 	return &t, nil

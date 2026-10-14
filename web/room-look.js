@@ -1,6 +1,6 @@
-import { avatarOptions, avatarKeys, defaultAvatar, avatarFromUrl, avatarUrl, randomAvatar } from './avatar.js';
+import { avatarV2Options as avatarOptions, avatarV2Keys as avatarKeys, editableAvatar, avatarVibes, avatarFromUrl, avatarUrl, randomAvatar } from './avatar.js';
 
-const labels = {hair:'Hair',eyes:'Eyes',eyebrows:'Brows',mouth:'Mouth',accessory:'Extras',skin:'Skin tone',hairColor:'Hair color',shirtColor:'Clothing',background:'Background'};
+const labels = {face:'Face',ears:'Ears',nose:'Nose',hair:'Hair',eyes:'Eyes',eyebrows:'Brows',mouth:'Mouth',accessory:'Extras',skin:'Skin tone',hairColor:'Hair color',shirtColor:'Clothing',background:'Background'};
 const mediaPath = /^\/api\/media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export function roomDisplayName(value) {
   return Array.from(value.replace(/[\p{Cc}\p{Cf}]/gu,c=>c==='\u200d'?c:'').trim()).slice(0,30).join('').trim();
@@ -15,7 +15,7 @@ export function roomRules({players=[],ownID,ownerID,gameState}) {
 // All player strings go through textContent or input.value. This component only
 // emits match-scoped WS commands; it has no profile API or persistence access.
 export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
-  let snapshot={players:[],gameState:'unstarted'},draft=null,pending=null,error='',notice='';
+  let snapshot={players:[],gameState:'unstarted'},draft=null,pending=null,error='',notice='',vibe='Cute';
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;if(cls)el.className=cls;return el;};
   const button=(text,fn,cls='')=>{const b=node('button',text,cls);b.type='button';b.addEventListener('click',fn);return b;};
   const title=node('h2','Before we draw…'), hint=node('p','Pick your room look.');
@@ -31,21 +31,22 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
   for(const key of avatarKeys) {
     const label=node('label',labels[key]),select=node('select');select.id=`room-${key}`;label.htmlFor=select.id;
     avatarOptions[key].forEach((option,i)=>{const o=node('option',typeof option==='string'?option:option.name);o.value=String(i);select.append(o);});
-    select.addEventListener('change',()=>{if(!canEdit())return;const preset=avatarFromUrl(draft.avatarUrl)||{...defaultAvatar};preset[key]=Number(select.value);draft.avatarUrl=avatarUrl(preset);updatePreview();});
+    select.addEventListener('change',()=>{if(!canEdit())return;const preset=editableAvatar(avatarFromUrl(draft.avatarUrl));preset[key]=Number(select.value);draft.avatarUrl=avatarUrl(preset);updatePreview();});
     label.append(select);selects.append(label);fields[key]=select;
   }
-  const restore=button('Use my profile look',()=>{if(!canEdit())return;draft={...snapshot.profileIdentity};syncDraft();});
-  const shuffle=button('⚄ Surprise me',()=>{if(!canEdit())return;draft.avatarUrl=avatarUrl(randomAvatar());syncDraft();},'room-look-shuffle');
+  const restore=button('Use my profile look',()=>{if(!canEdit())return;draft={...snapshot.profileIdentity};notice='Profile look restored in the preview. Apply to use it.';syncDraft();render();});
+  const shuffle=button('⚄ Surprise me',()=>{if(!canEdit())return;draft.avatarUrl=avatarUrl(randomAvatar(Math.random,vibe));syncDraft();},'room-look-shuffle');
   const apply=node('button','Apply room look','room-look-primary');apply.type='submit';
   const cancel=button('Cancel',()=>{if(pending)return;draft=null;error='';render();edit.focus();});
   const actions=node('div',null,'room-look-actions');actions.append(apply,cancel);
-  form.append(nameLabel,name,nameHelp,selects,shuffle,restore,actions);
+  const vibes=node('div',null,'room-look-vibes');vibes.setAttribute('role','group');vibes.setAttribute('aria-label','Randomizer vibe');const vibeButtons=avatarVibes.map(v=>button(v,()=>{if(!canEdit())return;vibe=v;draft.avatarUrl=avatarUrl(randomAvatar(Math.random,v));syncDraft();render();}));vibes.append(...vibeButtons);
+  form.append(nameLabel,name,nameHelp,selects,vibes,shuffle,restore,actions);
   name.addEventListener('input',()=>{if(canEdit()){draft.displayName=name.value;updatePreview();}});
   form.addEventListener('keydown',e=>{if(e.key==='Escape'&&!pending){e.preventDefault();cancel.click();}});
   form.addEventListener('submit',e=>{e.preventDefault();if(!canEdit())return;if(!draft.displayName.trim()){error='Enter a room name.';render();name.focus();return;}command('room-identity-change',{...draft});});
-  identity.append(preview,edit,form);
+  identity.append(edit,form);
   const rosterSection=node('section',null,'room-look-roster-section'),roster=node('ul',null,'room-look-roster');roster.setAttribute('aria-label','Room roster');rosterSection.append(node('h3','The drawing crew'),roster);
-  columns.append(identity,rosterSection);
+  const aside=node('div',null,'room-look-aside');aside.append(rosterSection,preview);columns.append(identity,aside);
   const status=node('p',null,'room-look-status');status.setAttribute('role','status');
   const errors=node('p',null,'room-look-error');errors.setAttribute('role','alert');
   const bottom=node('div',null,'room-look-actions');
@@ -62,8 +63,15 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
     return holder;
   }
   function canEdit(){return draft && !pending && roomRules(snapshot).editable && isConnected();}
-  function updatePreview(){const self=roomRules(snapshot).self;preview.replaceChildren();if(!self)return;const raw=draft||{displayName:self.name,avatarUrl:self.avatarUrl};const look={...raw,displayName:roomDisplayName(raw.displayName)};preview.append(avatar(look),node('strong',roomDisplayName(look.displayName)||'Your room name'),node('small',draft?'Preview · not applied yet':'Your room look · You'));}
-  function syncDraft(){name.value=draft.displayName;const preset=avatarFromUrl(draft.avatarUrl)||defaultAvatar;for(const key of avatarKeys)fields[key].value=String(preset[key]);updatePreview();}
+  function updatePreview(){
+    const rules=roomRules(snapshot),self=rules.self;preview.replaceChildren();if(!self)return;
+    const raw=draft||{displayName:self.name,avatarUrl:self.avatarUrl},look={...raw,displayName:roomDisplayName(raw.displayName)};
+    const changed=Boolean(draft)&&(look.displayName!==self.name||look.avatarUrl!==(self.avatarUrl||''));
+    preview.setAttribute('role','group');preview.setAttribute('aria-label','Room look preview for '+(look.displayName||'Your room name'));
+    const badges=node('div',null,'room-look-badges');badges.append(node('span','You'));if(rules.host)badges.append(node('span','♛ Host'));
+    preview.append(node('small','ROOM LOOK PREVIEW','room-look-stamp'),avatar(look),node('strong',look.displayName||'Your room name'),badges,node('small',changed?'Not applied yet':'Current room look','room-look-draft-status'),node('small','Only for this room.'));
+  }
+  function syncDraft(){name.value=draft.displayName;const preset=editableAvatar(avatarFromUrl(draft.avatarUrl));for(const key of avatarKeys)fields[key].value=String(preset[key]);updatePreview();}
   function openEditor(){if(!roomRules(snapshot).editable||pending)return;const self=roomRules(snapshot).self;draft={displayName:self.name,avatarUrl:self.avatarUrl||''};error='';notice='';syncDraft();render();name.focus();}
   function command(action,data){
     const rules=roomRules(snapshot);
@@ -77,7 +85,8 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
     root.hidden=false;edit.hidden=!rules.editable||Boolean(draft);form.hidden=!draft||!rules.editable;
     readyLabel.hidden=!rules.editable||rules.host;start.hidden=!rules.editable||!rules.host;
     const busy=Boolean(pending)||!isConnected();root.setAttribute('aria-busy',String(Boolean(pending)));
-    for(const el of [edit,name,shuffle,restore,apply,cancel,ready,...Object.values(fields)])el.disabled=busy;
+    for(const el of [edit,name,shuffle,restore,apply,cancel,ready,...vibeButtons,...Object.values(fields)])el.disabled=busy;
+    for(const b of vibeButtons)b.setAttribute('aria-pressed',String(b.textContent===vibe));
     start.disabled=busy||!rules.canStart;apply.textContent=pending==='room-identity-change'?'Applying…':'Apply room look';
     ready.checked=rules.self?.state==='ready';readyText.textContent=ready.checked?'Ready':'Not ready · tick when you’re set';
     errors.textContent=error;errors.hidden=!error;

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { loadImage } from '@napi-rs/canvas';
-import { avatarOptions, avatarKeys, defaultAvatar, validateAvatar, avatarUrl, avatarFromUrl, renderAvatar, randomAvatar } from '../web/avatar.js';
+import { avatarOptions, avatarKeys, defaultAvatar, defaultAvatarV2, validateAvatar, avatarUrl, avatarFromUrl, renderAvatar, randomAvatar } from '../web/avatar.js';
 import { openDatabase } from '../server/db.mjs';
 import { createApp } from '../server/index.mjs';
 
@@ -60,6 +60,12 @@ test('profile presets persist across sessions, reject forged choices and serve s
     const concurrentProfile=await app.platform.profile(refreshed);
     assert.equal(concurrentProfile.displayName,'Fresh scribbler','an avatar-only update cannot overwrite newer profile edits');
     assert.equal(concurrentProfile.bio,'A new bio');
+    const v2={...defaultAvatarV2,face:5,ears:4,nose:3,hair:19,eyes:7,mouth:8,accessory:20};
+    assert.equal((await patch({avatarPreset:v2})).status,200);
+    assert.deepEqual((await app.platform.profile(await app.platform.authenticate(secondToken))).avatarPreset,v2);
+    const v2Image=await fetch(base+avatarUrl(v2));assert.equal(v2Image.status,200);assert.equal(await v2Image.text(),renderAvatar(v2));
+    for(const suffix of ['?x=1','?cache=1'])assert.equal((await fetch(base+avatarUrl(v2)+suffix)).status,404);
+    assert.equal((await patch({avatarPreset:{...v2,ears:6}})).status,400);
   } finally { await app.close(); }
 });
 test('Go room preset bounds match the permanent v1 avatar catalog',()=>{

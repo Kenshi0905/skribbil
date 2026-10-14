@@ -212,3 +212,13 @@ administrators were provisioned privately; there is no shared default admin
 password. Keep account data, database files, session material and
 deployment secrets in protected runtime storage. See the
 [free deployment guide](free-deployment.md) for setup and its remaining checks.
+
+## Avatar v2 and large ready-room preview (2026-10-14)
+
+- Frozen v1 SVG renderer/catalog; canonical v2 has 12 indices plus a versioned profile object. Go, native browser, and JS bounds have parity coverage. Query, zero-padded, unknown-version, out-of-range and external paths are rejected.
+- All v2 options decode as 200×200 SVG images. Vibe tests cover all eight skin tones; legacy opening, edit migration, save/reopen, room drafts, errors and cancellation have regression coverage.
+- Visually reviewed 32 generated avatars across four vibes plus all 24 hairstyles and 22 extras at large and thumbnail sizes. Corrected deep-skin facial contrast.
+- Desktop 1280px preview 420px, tablet 1024px preview 280px, phone 390px preview 220px. Phone panel scrollWidth equals clientWidth (357px); viewport has no horizontal overflow. These are browser viewport checks, not physical-device tests.
+- Two isolated browser sessions verify independent v2 customization, server-accepted roster broadcasts, reconnect persistence, draft-only profile restore/cancel, readiness and explicit owner start.
+- 10-player/one-spectator protocol playtest includes v2 permanent and temporary identities, legacy compatibility, profile unchanged, readiness reset, stale-seat protection, 20 drawing turns and fresh-rematch reset.
+- Full Node tests: 154 total, 153 passed, one optional integration skip. Go test ./... and race tests for game/API passed; syntax, infra, secret guard and diff checks passed.

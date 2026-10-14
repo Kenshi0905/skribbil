@@ -134,7 +134,7 @@ try {
   for (let i = 0; i < 11; i++) {
     const name = `play_${i}_${randomBytes(4).toString('hex')}`;
     const { user, token } = await app.platform.register({ username: name, email: `${name}@example.invalid`, password: randomBytes(32).toString('hex') });
-    const avatarUrl = i < 3 ? `/api/avatar-presets/v1/${i}-0-0-0-0-1-1-0-0.svg` : '';
+    const avatarUrl = i===0 ? '/api/avatar-presets/v2/0-12-6-0-0-6-1-7-1-1-0-0.svg' : i < 3 ? `/api/avatar-presets/v1/${i}-0-0-0-0-1-1-0-0.svg` : '';
     if (avatarUrl) await db.query('UPDATE skribbil.users SET avatar_url=$2 WHERE id=$1',[user.id,avatarUrl]);
     clients.push({ user, avatarUrl, cookie: `skribbil_session=${token}`, ua: i < 3 ? mobileUA : desktopUA, spectator: i === 10 });
   }
@@ -160,7 +160,7 @@ try {
   const players = clients.slice(0, 10), spectator = clients[10];
   report.checks.push('10 authenticated players and a spectator connected through the gateway');
   for (let i=0;i<2;i++) {
-    const p=players[i];p.roomName=['Captain Doodle','Mystery Pencil'][i];p.roomAvatar=`/api/avatar-presets/v1/${7-i}-4-2-3-1-2-8-3-1.svg`;
+    const p=players[i];p.roomName=['Captain Doodle','Mystery Pencil'][i];p.roomAvatar=i===0?'/api/avatar-presets/v2/2-9-6-3-0-7-2-12-1-1-0-0.svg':`/api/avatar-presets/v1/${7-i}-4-2-3-1-2-8-3-1.svg`;
     p.ws.send('room-identity-change',{displayName:p.roomName,avatarUrl:p.roomAvatar});
     await Promise.all(clients.map(c=>c.ws.wait('update-players',rows=>rows.some(r=>r.id===p.playerId&&r.name===p.roomName&&r.avatarUrl===p.roomAvatar))));
     const ack=await p.ws.wait('room-command-result',d=>d.action==='room-identity-change');assert.equal(ack.data.error,undefined);

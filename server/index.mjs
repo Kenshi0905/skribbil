@@ -118,7 +118,7 @@ export async function createApp({db,config,assets}={}) {
       } else await tx.query(`INSERT INTO skribbil.spectator_sessions(match_id,user_id,delay_ms) VALUES($1,$2,0)`,[match.id,user.id]);
     });
     const debt=await one(db,`SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1 AND game_id=$2`,[user.id,match.game_id]);
-    const avatarUrl=/^\/api\/(?:avatar-presets\/v1\/(?:\d{1,2}-){8}\d{1,2}\.svg|media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(user.avatar_url||'')?user.avatar_url:'';
+    const avatarUrl=(avatarFromUrl(user.avatar_url)||/^\/api\/media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(user.avatar_url||''))?user.avatar_url:'';
     const token=signedTicket({userId:user.id,username:user.display_name,avatarUrl,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,hardWordPending:debt?.pending||false},config.secret);
     return {url:`/engine/league/join?ticket=${encodeURIComponent(token)}`,matchId:match.id};
   }
@@ -179,7 +179,7 @@ export async function createApp({db,config,assets}={}) {
       if(path==='/api/health')return json(res,200,{ok:true,service:'Skribbil',database:db.mode,revision:config.revision||null});
       if(path.startsWith('/api/avatar-presets/')) {
         requireValue(req.method==='GET'||req.method==='HEAD','Method not allowed.',405);
-        const preset=avatarFromUrl(path);
+        const preset=avatarFromUrl(req.url);
         requireValue(preset,'Avatar preset not found.',404);
         res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'public, max-age=31536000, immutable','Content-Security-Policy':"default-src 'none'; style-src 'none'; sandbox"});
         res.end(req.method==='HEAD'?undefined:renderAvatar(preset));return;

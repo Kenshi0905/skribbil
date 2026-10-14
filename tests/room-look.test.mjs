@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRoomLook, roomRules, roomDisplayName } from '../web/room-look.js';
 import { avatarUrl, defaultAvatar } from '../web/avatar.js';
+import {avatarV2Options,avatarV2Keys,avatarVibes} from '../web/avatar.js';
 
 function fixture(role='member') {
   const doc={activeElement:null,createElement(tag){return new Element(tag);}};
@@ -63,3 +64,19 @@ test('readiness excludes host, spectators and offline seats',()=>{
 });
 
 test('room preview uses the same Unicode character limit and control stripping as the server',()=>{assert.equal(roomDisplayName('  '+ '界'.repeat(35)), '界'.repeat(30));assert.equal(roomDisplayName('\u202eMoon\n'), 'Moon');});
+
+test('large preview updates every feature and vibe locally, while roster stays authoritative',()=>{
+  for(const role of ['host','member']){
+    const f=fixture(role),preview=()=>f.all().find(n=>n.className==='room-look-preview');
+    assert.match(preview().attrs['aria-label'],/Room look preview for/);
+    assert.ok(f.all().some(n=>n.textContent==='ROOM LOOK PREVIEW'));
+    f.find('button','Edit room look').click();
+    for(const key of avatarV2Keys){const control=f.find('select','room-'+key);control.value=String(avatarV2Options[key].length-1);control.fire('change');assert.equal(f.sent.length,0);assert.ok(preview().children.some(n=>n.textContent==='Not applied yet'));}
+    for(const v of avatarVibes){f.find('button',v).click();assert.equal(f.sent.length,0);}
+    const name=f.find('input','room-display-name');name.value='<script>draft</script>';name.fire('input');assert.ok(preview().children.some(n=>n.textContent===name.value));
+    const roster=f.all().find(n=>n.className==='room-look-roster');assert.ok(!JSON.stringify(roster.children.map(n=>n.children[1].children[0].textContent)).includes('draft'));
+    f.find('button','Use my profile look').click();assert.equal(f.sent.length,0);
+    f.find('button','Cancel').click();assert.ok(preview().children.some(n=>n.textContent===f.players.find(p=>p.id===f.snapshot.ownID).name));
+    assert.ok(!preview().children.some(n=>n.textContent==='Not applied yet'));
+  }
+});

@@ -17,18 +17,26 @@ const EventTypeRoomIdentityChange = "room-identity-change"
 // shirt, background. tests/avatar.test.mjs checks parity with web/avatar.js.
 var PresetAvatarBounds = [...]int{8, 6, 5, 6, 7, 8, 10, 8, 8}
 
+// v2: face, hair, eyes, brows, nose, mouth, ears, extras and four colors.
+var PresetAvatarV2Bounds = [...]int{7, 24, 16, 5, 6, 16, 6, 22, 8, 10, 8, 8}
+
 func ValidPresetAvatarURL(url string) bool {
-	const prefix = "/api/avatar-presets/v1/"
+	prefix := "/api/avatar-presets/v1/"
+	bounds := PresetAvatarBounds[:]
+	if strings.HasPrefix(url, "/api/avatar-presets/v2/") {
+		prefix = "/api/avatar-presets/v2/"
+		bounds = PresetAvatarV2Bounds[:]
+	}
 	if !strings.HasPrefix(url, prefix) || !strings.HasSuffix(url, ".svg") {
 		return false
 	}
 	parts := strings.Split(strings.TrimSuffix(strings.TrimPrefix(url, prefix), ".svg"), "-")
-	if len(parts) != len(PresetAvatarBounds) {
+	if len(parts) != len(bounds) {
 		return false
 	}
 	for i, part := range parts {
 		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 || n >= PresetAvatarBounds[i] || strconv.Itoa(n) != part {
+		if err != nil || n < 0 || n >= bounds[i] || strconv.Itoa(n) != part {
 			return false
 		}
 	}
