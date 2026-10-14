@@ -85,7 +85,7 @@ html[data-theme="dark"] body[data-league-mode]:fullscreen { background: var(--pa
 html[data-theme="dark"] body[data-league-mode]::before { opacity: .08; }
 html[data-theme="dark"] body[data-league-mode] :is(#lobby-header>*,#menu-button-container,#word-container,#message-container,.player,.center-dialog,.gameover-scoreboard-entry) { background: var(--surface); color: var(--ink); }
 html[data-theme="dark"] body[data-league-mode] :is(.message:nth-child(2n),kbd) { background: var(--surface-raised); color: var(--ink); }
-html[data-theme="dark"] body[data-league-mode] #league-toolbar { background: var(--surface); color: var(--ink); border-color: var(--line); box-shadow: 0 3px 0 #18191c; }
+html[data-theme="dark"] body[data-league-mode] #league-toolbar { background: var(--surface); color: var(--ink); border-color: var(--line); box-shadow: none; }
 html[data-theme="dark"] body[data-league-mode] #league-toolbar a { color: var(--purple); }
 html[data-theme="dark"] body[data-league-mode] :is(.player-ready,.ready-check-box:has(input:checked)) { background: var(--yellow-tint); color: var(--yellow); }
 html[data-theme="dark"] body[data-league-mode] .player-done { background: var(--green-tint); color: var(--green); }
@@ -93,3 +93,6 @@ html[data-theme="dark"] body[data-league-mode] :is(.last-turn-score,footer) { co
 html[data-theme="dark"] body[data-league-mode] footer { background: var(--surface); }
 html[data-theme="dark"] body[data-league-mode] .system-message { color: #ffb5a9; }
 html[data-theme="dark"] body[data-league-mode] :is(button,input,select,textarea):focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+
+html[data-theme="dark"] .drawing-reaction { background:var(--surface); color:var(--ink); border-color:var(--line); }
+html[data-theme="dark"] .drawing-reaction[aria-pressed="true"] { color:var(--purple); border-color:var(--purple); }

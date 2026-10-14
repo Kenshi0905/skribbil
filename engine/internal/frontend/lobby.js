@@ -971,17 +971,31 @@ function updateRoomLook(profileIdentity) {
 }
 let leagueDislikes = null;
 const dislikeButton = document.getElementById("league-dislike-button");
-const dislikeLabel = document.getElementById("league-dislike-status");
+const likeButton = document.getElementById("league-like-button");
+const drawingReactions = document.getElementById("drawing-reactions");
 const renderLeagueDislikes = (state) => {
     leagueDislikes = state;
     if (!state) return;
     document.getElementById("league-toolbar").hidden = false;
-    dislikeButton.disabled = state.applied || !state.eligible?.includes(ownID) || state.voters?.includes(ownID) || !state.turnId;
-    dislikeLabel.textContent = state.applied ? "Unanimous: artist −100. Hard word next turn." : `${state.votes} / ${state.required} dislikes · unanimous vote = −100`;
+    dislikeButton.disabled = !state.active || state.applied || !state.eligible?.includes(ownID) || state.voters?.includes(ownID) || !state.turnId;
+    const disliked = state.voters?.includes(ownID) || false;
+    const liked = state.likers?.includes(ownID) || false;
+    likeButton.disabled = dislikeButton.disabled || liked;
+    dislikeButton.setAttribute("aria-pressed", String(disliked));
+    likeButton.setAttribute("aria-pressed", String(liked));
+    document.getElementById("league-like-count").textContent = state.likes || 0;
+    document.getElementById("league-dislike-count").textContent = state.votes || 0;
+    drawingReactions.hidden = !state.active || !state.turnId;
 };
 dislikeButton.addEventListener("click", () => {
     if (socket?.readyState === WebSocket.OPEN && leagueDislikes && !dislikeButton.disabled) {
         socket.send(JSON.stringify({type: "dislike-drawing", data: {turnId: leagueDislikes.turnId}}));
+    }
+});
+
+likeButton.addEventListener("click", () => {
+    if (socket?.readyState === WebSocket.OPEN && leagueDislikes && !likeButton.disabled) {
+        socket.send(JSON.stringify({type: "like-drawing", data: {turnId: leagueDislikes.turnId}}));
     }
 });
 
@@ -1002,6 +1016,8 @@ const handleEvent = (parsed) => {
         renderLeagueDislikes(parsed.data);
     } else if (parsed.type === "game-over") {
         dislikeButton.disabled = true;
+        likeButton.disabled = true;
+        drawingReactions.hidden = true;
         if (document.body.dataset.leagueMode) {
             document.getElementById("league-results-link").hidden = false;
         }
@@ -1149,7 +1165,9 @@ const handleEvent = (parsed) => {
         setAllowDrawing(drawerID === ownID);
     } else if (parsed.type === "next-turn") {
         dislikeButton.disabled = true;
-        dislikeLabel.textContent = "Waiting for the artist to choose a word…";
+        likeButton.disabled = true;
+        drawingReactions.hidden = true;
+        leagueDislikes = null;
         if (gameState === "ongoing") {
             if (parsed.data.roundEndReason === "drawer_disconnected") {
                 appendMessage(

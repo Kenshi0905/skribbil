@@ -117,7 +117,7 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 	if lobby.League != nil && eventType == EventTypeNameChange {
 		return errors.New("account names are managed by the platform")
 	}
-	if eventType == EventTypeDislike {
+	if eventType == EventTypeDislike || eventType == EventTypeLike {
 		var vote struct {
 			Data struct {
 				TurnID int `json:"turnId"`
@@ -125,6 +125,9 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 		}
 		if err := json.Unmarshal(payload, &vote); err != nil {
 			return err
+		}
+		if eventType == EventTypeLike {
+			return lobby.like(player, vote.Data.TurnID)
 		}
 		return lobby.dislike(player, vote.Data.TurnID)
 	}
