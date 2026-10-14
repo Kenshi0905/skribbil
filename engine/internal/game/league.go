@@ -36,6 +36,9 @@ type LeagueState struct {
 	Applied               bool
 	HardTurn              bool
 	Emit                  func(LeagueEvent) bool
+	NextSessionMatchID    string
+	SessionOwnerAccountID string
+	SessionPlayers        map[string]RoomIdentity
 }
 
 // CancelLeagueBeforeStart is atomic with the first start event. A running match

@@ -3,6 +3,7 @@ import { attachCanvasInput } from './resources/{{.WithCacheBust "canvas-input.js
 import { createDrawingHistory } from './resources/{{.WithCacheBust "drawing-history.js"}}';
 import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
 import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
+import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -989,6 +990,18 @@ let rounds = 0;
 let roundEndTime = 0;
 let gameState = "unstarted";
 
+const roomSession = createRoomSessionControls(document.getElementById('room-session-controls'), {
+    matchId: document.getElementById('copy-room-invite')?.dataset.roomId,
+    navigate: url => {
+        if (socket) { socket.onclose = null; socket.close(); }
+        location.assign(url);
+    },
+});
+function updateRoomSession() {
+    roomSession?.update({finished:gameState === 'gameOver', isLeader:ownID === ownerID,
+        leaderName:getCachedPlayer(ownerID)?.name});
+}
+
 const roomLook = document.body.dataset.leagueMode
     ? (await import('/room-look.js')).createRoomLook(document.getElementById('room-look-panel'), {
         send: event => socket.send(JSON.stringify(event)),
@@ -1059,6 +1072,10 @@ const handleEvent = (parsed) => {
         }
     } else if (parsed.type === "room-command-result") {
         roomLook?.result(parsed.data);
+    } else if (parsed.type === "room-session-transition") {
+        roomSession?.transition(parsed.data);
+    } else if (parsed.type === "room-session-closed") {
+        roomSession?.closed();
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
     } else if (parsed.type === "game-over") {
@@ -1432,6 +1449,7 @@ const handleReadyEvent = (ready) => {
 };
 
 function updateButtonVisibilities() {
+    updateRoomSession();
     if (ownerID === ownID) {
         lobbySettingsButton.style.display = "flex";
     } else {
@@ -1664,6 +1682,7 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+    updateRoomSession();
     if (kickTargetID && !canVotekickPlayer(getCachedPlayer(kickTargetID))) hideKickDialog();
     const self = players.find(player => player.id === ownID);
     if (roomLook && self) setUsernameLocally(self.name);

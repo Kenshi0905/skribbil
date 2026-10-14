@@ -641,7 +641,16 @@ kbd {
 .results-row-name { flex:1; min-width:0; overflow-wrap:anywhere; font-weight:700; }
 .results-you, .results-left { display:inline-block; margin-left:6px; font-size:10px; color:var(--muted, #686174); font-weight:400; }
 .results-row-points { white-space:nowrap; font-size:12px; }
-.results-back-link { display:inline-flex; align-items:center; justify-content:center; min-height:40px; box-sizing:border-box; text-decoration:none; font-weight:700; }
+#room-session-controls { width:100%; text-align:center; flex-shrink:0; position:relative; padding-top:10px; }
+#room-session-controls[hidden], #room-session-controls [hidden] { display:none; }
+.results-session-note { margin:0 0 8px; font-size:12px; color:var(--muted, #686174); }
+.results-session-error { margin:0 0 8px; font-size:12px; color:var(--red, #b42e47); }
+.results-owner-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+#room-session-controls button { min-height:44px; cursor:pointer; font:700 13px system-ui,sans-serif; border-radius:8px; }
+#room-session-controls .results-play-again { background:#ffdc70; color:#302c3b; }
+#room-session-controls .results-delete-room { background:var(--surface-raised, #f5f2fa); color:var(--red, #b42e47); }
+#room-session-controls .results-leave-room { background:transparent; color:inherit; margin-top:4px; }
+#room-session-controls button:disabled { opacity:.55; cursor:wait; }
 @media (max-width:480px) {
     #game-over-dialog { padding:14px 10px; }
     .results-podium { gap:6px; padding-inline:0; }

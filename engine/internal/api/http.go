@@ -13,6 +13,7 @@ func (handler *V1Handler) SetupRoutes(rootPath string, register func(string, str
 	register("POST", path.Join(rootPath, "internal", "rooms"), handler.postLeagueRoom)
 	register("POST", path.Join(rootPath, "internal", "rooms", "cancel"), handler.cancelLeagueRoom)
 	register("POST", path.Join(rootPath, "internal", "rooms", "status"), handler.statusLeagueRoom)
+	register("POST", path.Join(rootPath, "internal", "rooms", "session"), handler.controlResultsSession)
 	register("GET", path.Join(rootPath, "league", "join"), handler.joinLeagueRoom)
 	leagueOutbox() // Restart delivery of persisted events even before a room opens.
 	v1 := path.Join(rootPath, "v1")

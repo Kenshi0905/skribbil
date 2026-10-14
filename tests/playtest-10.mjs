@@ -81,6 +81,7 @@ class ProtocolSocket extends EventEmitter {
 }
 
 const demo = process.argv.includes('--demo');
+const sessionFlow = process.argv.includes('--room-sessions');
 let demoMetadata, demoContinue, demoStart, demoClubhouseId, viewer;
 const scratch = await mkdtemp(join(tmpdir(), 'skribbil-playtest-'));
 const db = await openDatabase({ url: '', dataDir: ':memory:' });
@@ -276,12 +277,63 @@ try {
   const debt = (await db.query('SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1', [penalized.user.id])).rows[0]; assert.equal(debt.pending, false);
   report.checks.push('20 real turns archived;10 results with18 correct guesses each; spectator absent from results; debt consumed');
   report.archivedDrawings = Number(archive.total); report.authoritativeResults = results.length;
-  for (const c of clients) c.ws?.close();
-  const fresh=await json(await request(players[0],`/api/matches/${matchId}/rematch`,{}));
-  lobbyId=(await db.query('SELECT engine_room_id FROM skribbil.matches WHERE id=$1',[fresh.matchId])).rows[0].engine_room_id;
-  delete players[0].roomName;delete players[0].roomAvatar;delete players[0].playerId;
-  const freshReady=await connect(players[0],fresh.url);assert.equal(freshReady.playerName,players[0].user.display_name);
-  report.checks.push('fresh rematch resets temporary identity to permanent profile');
+  if (sessionFlow) {
+    for (const client of [players[1], spectator]) {
+      assert.equal((await request(client, `/api/rooms/${matchId}/session`, {action:'rematch'})).status, 409);
+      assert.equal((await request(client, `/api/rooms/${matchId}/session`, {action:'close'})).status, 409);
+    }
+    const nextSession = await json(await request(players[0], `/api/rooms/${matchId}/session`, {action:'rematch'}));
+    const transitions = await Promise.all(clients.map(c => c.ws.wait('room-session-transition')));
+    assert.ok(transitions.every(event => event.data.matchId === nextSession.matchId));
+    assert.equal(transitions.at(-1).data.role, 'spectator');
+    assert.equal((await request(players[0], `/api/rooms/${matchId}/session`, {action:'close'})).status, 409);
+    lobbyId = (await db.query('SELECT engine_room_id FROM skribbil.matches WHERE id=$1', [nextSession.matchId])).rows[0].engine_room_id;
+    for (const client of clients) {
+      client.ws.close(); delete client.playerId;
+      const ticket = await json(await request(client, `/api/rooms/${nextSession.matchId}/join`, {role:client.spectator?'spectator':'player'}));
+      await connect(client, ticket.url);
+    }
+    await Promise.all(players.map(c => c.ws.wait('next-turn')));
+    report.checks.push('leader-only next session carries all ten players and spectator, preserves room identities, and starts automatically');
+    for (let turn = 1; turn <= 20; turn++) {
+      const next = await until(() => turns.shift(), `next-session artist turn ${turn}`);
+      next.client.ws.send('choose-word', 0);
+      await Promise.all(clients.map(c=>c.ws.wait('word-chosen')));
+      await delay(900);
+      const guessers = players.filter(c=>c!==next.client);
+      for (const client of guessers) client.ws.send('message', next.data.words[0]);
+      await Promise.all(guessers.map(c=>c.ws.wait('correct-guess-self')));
+    }
+    await Promise.all(clients.map(c=>c.ws.wait('game-over')));
+    const nextResult = await until(async()=> (await db.query("SELECT * FROM skribbil.matches WHERE id=$1 AND status='completed'", [nextSession.matchId])).rows[0], 'next session settled');
+    assert.notEqual(nextResult.accepted_result_id, settled.accepted_result_id);
+    assert.equal((await db.query('SELECT accepted_result_id FROM skribbil.matches WHERE id=$1', [matchId])).rows[0].accepted_result_id, settled.accepted_result_id);
+    // A failed replay must leave everyone on results and remain deletable,
+    // even if leadership changes after its successor was reserved.
+    await db.query("UPDATE skribbil.users SET status='suspended' WHERE id=$1", [spectator.user.id]);
+    assert.equal((await request(players[0], `/api/rooms/${nextSession.matchId}/session`, {action:'rematch'})).status, 409);
+    const failedReplay = (await db.query('SELECT target_match_id FROM skribbil.match_rematches WHERE source_match_id=$1', [nextSession.matchId])).rows[0];
+    assert.ok(failedReplay);
+    assert.ok(clients.every(c=>!c.ws.pending.some(event=>event.type==='room-session-transition')));
+    await db.query("UPDATE skribbil.users SET status='active' WHERE id=$1", [spectator.user.id]);
+    players[0].ws.close();
+    await Promise.all(clients.slice(1).map(c=>c.ws.wait('owner-change', d=>d.playerId===players[1].playerId)));
+    assert.equal((await request(players[0], `/api/rooms/${nextSession.matchId}/session`, {action:'close'})).status, 409);
+    await json(await request(players[1], `/api/rooms/${nextSession.matchId}/session`, {action:'close'}));
+    await Promise.all(clients.slice(1).map(c=>c.ws.wait('room-session-closed')));
+    const removed = await fetch(config.engineUrl+'/engine/internal/rooms/status', {method:'POST', headers:{Authorization:`Bearer ${secret}`, 'Content-Type':'application/json'}, body:JSON.stringify({matchId:nextSession.matchId,lobbyId})});
+    assert.equal(removed.status, 404);
+    assert.equal((await db.query('SELECT status,accepted_result_id FROM skribbil.matches WHERE id=$1', [nextSession.matchId])).rows[0].accepted_result_id, nextResult.accepted_result_id);
+    assert.equal((await db.query('SELECT status FROM skribbil.matches WHERE id=$1', [failedReplay.target_match_id])).rows[0].status, 'cancelled');
+    report.checks.push('second game saves a separate result; failed replay leaves everyone on results; leader leaving passes controls; delete removes live room and empty reservation while preserving both results');
+  } else {
+    for (const c of clients) c.ws?.close();
+    const fresh=await json(await request(players[0],`/api/matches/${matchId}/rematch`,{}));
+    lobbyId=(await db.query('SELECT engine_room_id FROM skribbil.matches WHERE id=$1',[fresh.matchId])).rows[0].engine_room_id;
+    delete players[0].roomName;delete players[0].roomAvatar;delete players[0].playerId;
+    const freshReady=await connect(players[0],fresh.url);assert.equal(freshReady.playerName,players[0].user.display_name);
+    report.checks.push('fresh rematch resets temporary identity to permanent profile');
+  }
   report.status = 'passed'; console.log(JSON.stringify(report, null, 2));
 } finally {
   for (const client of clients) client.ws?.close();
