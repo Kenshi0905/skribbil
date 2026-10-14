@@ -1138,31 +1138,6 @@ const handleEvent = (parsed) => {
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
         applyWordHints(parsed.data);
-
-        // What it does:
-        // 1. Show new word hints when they come in.
-        // 2. Show new word hints for other players, if even you are already done guessing
-
-        // We don't do this in applyWordHints because that's called in all kinds of places
-        if (parsed.data.some((hint) => hint.character)) {
-            var hints = parsed.data
-                .map((hint) => {
-                    if (hint.character) {
-                        var char = String.fromCharCode(hint.character);
-                        if (char === " " || hint.revealed) {
-                            return char;
-                        }
-                    }
-                    return "_";
-                })
-                .join(" ");
-            appendMessage(
-                ["system-message", "hint-chat-message"],
-                '{{.Translation.Get "system"}}',
-                '{{.Translation.Get "word-hint-revealed"}}\n' + hints,
-                { dir: wordContainer.getAttribute("dir") },
-            );
-        }
     } else if (parsed.type === "message") {
         appendMessage(null, parsed.data.author, parsed.data.content);
     } else if (parsed.type === "system-message") {
