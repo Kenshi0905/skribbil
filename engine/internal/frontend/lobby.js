@@ -998,6 +998,24 @@ function updateRoomLook(profileIdentity) {
     roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, ...(profileIdentity ? {profileIdentity} : {})});
 }
 let leagueDislikes = null;
+const copyRoomInvite = document.getElementById("copy-room-invite");
+copyRoomInvite?.addEventListener("click", async () => {
+    const input = document.getElementById("room-invite-link");
+    const status = document.getElementById("room-invite-status");
+    const invite = new URL("/", location.origin);
+    invite.searchParams.set("join", copyRoomInvite.dataset.roomId);
+    input.value = invite.href;
+    try {
+        await navigator.clipboard.writeText(invite.href);
+        input.hidden = true;
+        status.textContent = "Invite link copied! Send it to your friends.";
+    } catch {
+        input.hidden = false;
+        input.focus();
+        input.select();
+        status.textContent = "Copy the selected link to invite your friends.";
+    }
+});
 const dislikeButton = document.getElementById("league-dislike-button");
 const likeButton = document.getElementById("league-like-button");
 const drawingReactions = document.getElementById("drawing-reactions");
@@ -1063,7 +1081,7 @@ const handleEvent = (parsed) => {
                 `{{.Translation.Get "guessers-disconnected"}}`,
             );
         } else {
-            showRoundEndMessage();
+            showRoundEndMessage(ready.previousWord);
         }
         handleReadyEvent(ready);
     } else if (parsed.type === "update-players") {
@@ -1192,7 +1210,7 @@ const handleEvent = (parsed) => {
                     `{{.Translation.Get "guessers-disconnected"}}`,
                 );
             } else {
-                showRoundEndMessage();
+                showRoundEndMessage(parsed.data.previousWord);
             }
         } else {
             //First turn, the game starts
@@ -1318,7 +1336,8 @@ const handleEvent = (parsed) => {
     }
 };
 
-function showRoundEndMessage() {
+function showRoundEndMessage(previousWord) {
+    if (previousWord) return;
     appendMessage(
         "system-message",
         null,

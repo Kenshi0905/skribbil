@@ -19,6 +19,7 @@ type lobbyPageData struct {
 	Translation     *translations.Translation
 	Locale          string
 	LeagueMode      string
+	LeagueMatchID   string
 	LeagueSpectator bool
 }
 
@@ -123,6 +124,7 @@ func (handler *SSRHandler) ssrEnterLobbyNoChecks(
 		}
 		if lobby.League != nil {
 			pageData.LeagueMode = lobby.League.Mode
+			pageData.LeagueMatchID = lobby.League.MatchID
 			pageData.LeagueSpectator = player != nil && (player.SpectatorOnly || player.State == game.Spectating)
 		}
 	})

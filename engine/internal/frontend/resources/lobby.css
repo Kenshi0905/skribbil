@@ -851,6 +851,9 @@ kbd {
 #league-toolbar { max-width:1400px; width:calc(100% - 24px); margin:8px auto; padding:4px 8px; box-sizing:border-box; border:0; border-radius:7px; background:transparent; color:#18344d; display:flex;align-items:center;gap:14px;flex-wrap:wrap;font:600 14px "Trebuchet MS",sans-serif;}
 #league-toolbar[hidden],#league-results-link[hidden]{display:none}
 #league-toolbar a{color:#214e85;font-weight:800}
+#copy-room-invite { cursor:pointer; border-radius:7px; font:inherit; }
+#room-invite-link { width:280px; max-width:100%; box-sizing:border-box; padding:8px; }
+#room-invite-status { font-size:12px; }
 #drawing-reactions { position:absolute; right:8px; top:8px; display:flex; gap:4px; z-index:1; }
 #drawing-reactions[hidden] { display:none; }
 .drawing-reaction { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-width:44px; height:36px; padding:4px 7px; border:1px solid #ccc; border-radius:8px; background:#fff; color:#18344d; cursor:pointer; font:700 12px sans-serif; touch-action:manipulation; }
