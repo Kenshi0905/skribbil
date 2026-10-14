@@ -93,13 +93,6 @@
                                         class="header-button-image" />
                                     {{.Translation.Get "show-help"}}
                                 </button>
-                                <button id="kick-button" class="dialog-button menu-item header-button"
-                                    alt="{{.Translation.Get "votekick-a-player"}}"
-                                    title="{{.Translation.Get "votekick-a-player"}}">
-                                    <img src='{{.RootPath}}/resources/{{.WithCacheBust "kick.png"}}'
-                                        class="header-button-image" />
-                                    {{.Translation.Get "votekick-a-player"}}
-                                </button>
                                 <button id="lobby-settings-button" style="display: none;"
                                     class="dialog-button menu-item header-button"
                                     alt="{{.Translation.Get "change-lobby-settings-tooltip"}}"
@@ -259,8 +252,8 @@
                             </div>
                         </div>
 
-                        <div id="kick-dialog" class="center-dialog">
-                            <span class="dialog-title">{{.Translation.Get "votekick-a-player"}}</span>
+                        <div id="kick-dialog" class="center-dialog" role="dialog" aria-modal="true" aria-labelledby="kick-dialog-title">
+                            <span id="kick-dialog-title" class="dialog-title">{{.Translation.Get "votekick-a-player"}}</span>
                             <div class="center-dialog-content">
                                 <div id="kick-dialog-players"></div>
                             </div>
