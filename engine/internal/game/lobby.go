@@ -86,6 +86,9 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 	if socket != nil && player.ws != socket {
 		return nil
 	}
+	if lobby.League != nil && lobby.League.Cancelled {
+		return errors.New("room is closed")
+	}
 
 	// Acknowledge pre-game commands under the same lock, to the current socket only.
 	defer func() {

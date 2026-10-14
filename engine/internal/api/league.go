@@ -227,24 +227,33 @@ func (handler *V1Handler) cancelLeagueRoom(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var input struct {
-		MatchID string `json:"matchId"`
-		LobbyID string `json:"lobbyId"`
+		MatchID      string `json:"matchId"`
+		LobbyID      string `json:"lobbyId"`
+		AllowStarted bool   `json:"allowStarted"`
 	}
 	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input) != nil {
 		http.Error(w, "invalid cancellation request", 400)
 		return
+	}
+	// A timed-out provision may have created a deterministic room even though
+	// the platform still has a pending ID. Close it without provisioning again.
+	if strings.HasPrefix(input.LobbyID, "pending-") {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(input.MatchID))
+		input.LobbyID = fmt.Sprintf("league-%x", mac.Sum(nil)[:16])
 	}
 	lobby := state.GetLobby(input.LobbyID)
 	if lobby == nil || lobby.League == nil || lobby.League.MatchID != input.MatchID {
 		http.Error(w, "match not found", 404)
 		return
 	}
-	if err := lobby.CancelLeagueBeforeStart(input.MatchID); err != nil {
+	completed, err := lobby.CloseLeagueRoom(input.MatchID, input.AllowStarted)
+	if err != nil {
 		http.Error(w, err.Error(), 409)
 		return
 	}
-	lobby.Shutdown()
-	_, _ = marshalToHTTPWriter(map[string]bool{"cancelled": true}, w)
+	state.RemoveLobby(input.LobbyID)
+	_, _ = marshalToHTTPWriter(map[string]bool{"cancelled": !completed, "completed": completed}, w)
 }
 
 // statusLeagueRoom gives the platform authoritative evidence that an in-memory

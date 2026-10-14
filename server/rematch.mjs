@@ -68,7 +68,7 @@ export class Rematch {
         requireValue(member,'This rematch is available only to current Clubhouse members.',403);
       }
       const other = await one(db, `SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
-        WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND ($2::uuid IS NULL OR m.id<>$2::uuid)
+        WHERE p.user_id=$1 AND p.left_at IS NULL AND m.status IN ('lobby','running') AND ($2::uuid IS NULL OR m.id<>$2::uuid)
         AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`, [user.id, match?.id ?? null]);
       requireValue(!other, 'Finish or cancel your current room before rematching.', 409);
       if (!match) {

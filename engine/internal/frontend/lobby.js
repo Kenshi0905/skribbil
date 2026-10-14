@@ -5,6 +5,7 @@ import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}'
 import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
 import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
 import { attachMobileViewport } from './resources/{{.WithCacheBust "mobile-viewport.js"}}';
+import { createRoomExit } from './resources/{{.WithCacheBust "room-exit.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -999,6 +1000,21 @@ const roomSession = createRoomSessionControls(document.getElementById('room-sess
         location.assign(url);
     },
 });
+const leagueHome = document.querySelector('.league-home-link');
+if (document.body.dataset.leagueMode && leagueHome) {
+    const leave = createRoomExit({
+        matchId:document.getElementById('copy-room-invite')?.dataset.roomId,
+        navigate:url => {
+            if (socket) { socket.onclose = null; socket.close(); }
+            location.assign(url);
+        },
+    });
+    leagueHome.addEventListener('click', async event => {
+        event.preventDefault();
+        try { await leave(); }
+        catch (error) { document.getElementById('room-invite-status').textContent = error.message; }
+    });
+}
 function updateRoomSession() {
     roomSession?.update({finished:gameState === 'gameOver', isLeader:ownID === ownerID,
         leaderName:getCachedPlayer(ownerID)?.name});

@@ -1,3 +1,5 @@
+import { createRoomExit } from './room-exit.js';
+
 export function createRoomSessionControls(root, {matchId, navigate, fetch: request = globalThis.fetch, origin = globalThis.location?.origin} = {}) {
     if (!root) return null;
     const actions = root.querySelector('.results-owner-actions');
@@ -6,6 +8,7 @@ export function createRoomSessionControls(root, {matchId, navigate, fetch: reque
     const retry = root.querySelector('[data-session-action="retry"]');
     const buttons = [...actions.querySelectorAll('button')];
     let isLeader = false, finished = false, busy = false, transferring = false, departing = false, next;
+    const exit = createRoomExit({matchId, navigate, fetch:request});
     const post = async (path, body) => {
         const response = await request(path, {method:'POST', credentials:'same-origin',
             headers:{'Content-Type':'application/json', 'X-Requested-With':'Skribbil'}, body:JSON.stringify(body)});
@@ -45,7 +48,14 @@ export function createRoomSessionControls(root, {matchId, navigate, fetch: reque
         const button = event.target.closest('[data-session-action]');
         if (!button || !root.contains(button)) return;
         const action = button.dataset.sessionAction;
-        if (action === 'leave') { departing = true; navigate('/#/skribbil'); return; }
+        if (action === 'leave') {
+            if (busy || departing) return;
+            busy = true;
+            try { await exit(); departing = true; }
+            catch (cause) { fail(cause.message); }
+            finally { busy = false; }
+            return;
+        }
         if (action === 'retry') { if (next) await transition(next); return; }
         if (!isLeader || !finished || busy || next || !['rematch','close'].includes(action)) return;
         busy = true;

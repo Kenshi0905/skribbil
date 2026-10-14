@@ -204,3 +204,43 @@ func TestLeagueRoomStatusRequiresControlAuthAndOnlyReportsExistence(t *testing.T
 		t.Fatalf("cancelled room returned %d", w.Code)
 	}
 }
+
+func TestRoomDeletionRemovesRunningCasualAndUncertainPendingRooms(t *testing.T) {
+	secret := strings.Repeat("c", 32)
+	t.Setenv("SKRIBBIL_ENGINE_SECRET", secret)
+	h := NewHandler(&config.Default)
+	for _, matchID := range []string{"close-running-test", "close-pending-test"} {
+		create := httptest.NewRequest("POST", "/engine/internal/rooms", strings.NewReader(`{"matchId":"`+matchID+`","mode":"private"}`))
+		create.Header.Set("Authorization", "Bearer "+secret)
+		w := httptest.NewRecorder()
+		h.postLeagueRoom(w, create)
+		if w.Code != http.StatusOK {
+			t.Fatal(w.Body.String())
+		}
+		var room map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &room); err != nil {
+			t.Fatal(err)
+		}
+		lobby := state.GetLobby(room["lobbyId"])
+		lobbyID := lobby.LobbyID
+		if matchID == "close-running-test" {
+			lobby.Synchronized(func() { lobby.State = game.Ongoing })
+		} else {
+			lobbyID = "pending-" + matchID
+		}
+		data, _ := json.Marshal(map[string]any{"matchId": matchID, "lobbyId": lobbyID, "allowStarted": true})
+		r := httptest.NewRequest("POST", "/engine/internal/rooms/cancel", strings.NewReader(string(data)))
+		unauthorized := httptest.NewRecorder()
+		h.cancelLeagueRoom(unauthorized, r)
+		if unauthorized.Code != http.StatusUnauthorized || state.GetLobby(lobby.LobbyID) == nil {
+			t.Fatal("deletion accepted without control authentication")
+		}
+		r = httptest.NewRequest("POST", "/engine/internal/rooms/cancel", strings.NewReader(string(data)))
+		r.Header.Set("Authorization", "Bearer "+secret)
+		w = httptest.NewRecorder()
+		h.cancelLeagueRoom(w, r)
+		if w.Code != http.StatusOK || state.GetLobby(lobby.LobbyID) != nil || !lobby.League.Cancelled {
+			t.Fatalf("room not removed: %d %s", w.Code, w.Body.String())
+		}
+	}
+}

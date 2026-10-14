@@ -37,7 +37,15 @@ test('leader deletion and voluntary leaving return to rooms; guests never issue 
   assert.equal(host.calls[0].options.headers['X-Requested-With'],'Skribbil');
   assert.deepEqual(host.navigations,['/#/skribbil']);
   const guest = fixture();guest.controls.update({finished:true,isLeader:false});
-  await guest.click('leave');assert.equal(guest.calls.length,0);assert.deepEqual(guest.navigations,['/#/skribbil']);
+  await guest.click('leave');assert.equal(guest.calls[0].url,`/api/rooms/${sourceId}/leave`);assert.deepEqual(guest.navigations,['/#/skribbil']);
+});
+
+test('failed leaving keeps the player on results and permits retry', async () => {
+  let failing=true;
+  const f=fixture(()=>({ok:!failing,data:failing?{error:'Server unavailable'}:{ok:true}}));
+  f.controls.update({finished:true,isLeader:false});
+  await f.click('leave');assert.equal(f.navigations.length,0);assert.match(f.error.textContent,/unavailable/);
+  failing=false;await f.click('leave');assert.deepEqual(f.navigations,['/#/skribbil']);
 });
 
 test('failed leader requests retain the podium, display the reason, and can be retried', async () => {

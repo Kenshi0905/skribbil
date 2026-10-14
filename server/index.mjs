@@ -49,6 +49,7 @@ export async function createApp({db,config,assets}={}) {
   const clubhouses=new Clubhouses(platform);
   const rematch=new Rematch({db,provision:payload=>engineRequest('/engine/internal/rooms',payload),admit,rankedEnabled:()=>config.ranked});
   const roomSessions=new RoomSessions({db,rematch,admit,engineRequest});
+  const roomOperations=new Set();
   const webRoot=resolve('web');let engineCache={at:0,available:false};
   const engineTarget=url=>{const target=new URL(config.engineUrl);target.pathname=url.pathname;target.search=url.search;target.hash='';return target;};
   const engineStatus=async()=>{
@@ -88,6 +89,12 @@ export async function createApp({db,config,assets}={}) {
       if(lobbyId)match=await one(db,'SELECT * FROM skribbil.matches WHERE engine_room_id=$1',[lobbyId]);
     }
     if(match?.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,db,{lock:false});
+    if(match) {
+      requireValue(match.status!=='cancelled','This room is closed.',409);
+      const member=await one(db,`SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2 AND left_at IS NULL
+        UNION ALL SELECT 1 FROM skribbil.spectator_sessions WHERE match_id=$1 AND user_id=$2 AND left_at IS NULL LIMIT 1`,[match.id,user.id]);
+      requireValue(member,'Join this room again from the Clubhouse.',403);
+    }
     return match;
   }
   async function admit(user,match,role='player') {
@@ -113,10 +120,10 @@ export async function createApp({db,config,assets}={}) {
       if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
       if(role==='player') {
         const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
-          WHERE p.user_id=$1 AND m.status IN ('lobby','running') AND m.id<>$2
+          WHERE p.user_id=$1 AND p.left_at IS NULL AND m.status IN ('lobby','running') AND m.id<>$2
           AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`,[user.id,match.id]);
         requireValue(!active,'Finish your current room before joining another.',409);
-        await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3) ON CONFLICT(match_id,user_id) DO NOTHING`,[match.id,user.id,user.display_name]);
+        await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3) ON CONFLICT(match_id,user_id) DO UPDATE SET left_at=NULL`,[match.id,user.id,user.display_name]);
       } else await tx.query(`INSERT INTO skribbil.spectator_sessions(match_id,user_id,delay_ms) VALUES($1,$2,0)`,[match.id,user.id]);
     });
     const debt=await one(db,`SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1 AND game_id=$2`,[user.id,match.game_id]);
@@ -132,9 +139,57 @@ export async function createApp({db,config,assets}={}) {
     const room=await engineRequest('/engine/internal/rooms',{matchId:match.id,mode:ranked?'ranked':'private',
       rounds:ranked?3:rules.rounds||3,drawTime:ranked?80:rules.drawTime||80,maxPlayers:ranked?8:rules.maxPlayers||8});
     const fresh=await one(db,`UPDATE skribbil.matches SET engine_room_id=$2 WHERE id=$1 AND status='lobby' RETURNING *`,[match.id,room.lobbyId]);
+    if(!fresh) {
+      // A second server may replace the reservation while provisioning is in
+      // flight. Remove the late-created engine room instead of orphaning it.
+      try { await engineRequest('/engine/internal/rooms/cancel',{matchId:match.id,lobbyId:room.lobbyId,allowStarted:match.mode==='casual'}); }
+      catch(error) { if(error.status!==404||error.message!=='match not found')throw error; }
+    }
     requireValue(fresh,'This room is no longer available.',409);return fresh;
   }
+  async function roomOperation(user,work) {
+    requireValue(user?.id,'Sign in to manage rooms.',401);
+    requireValue(!roomOperations.has(user.id),'Your room request is already in progress. Try again shortly.',409);
+    roomOperations.add(user.id);
+    try { return await work(); } finally { roomOperations.delete(user.id); }
+  }
+  async function closeOwnedRoom(tx,user,room,{lockClubhouse=true}={}) {
+    requireValue(room.created_by===user.id,'Only the room owner can close this room.',403);
+    if(room.clubhouse_id)await clubhouses.requireMember(user,room.clubhouse_id,tx,{lock:lockClubhouse});
+    if(room.status==='cancelled')return;
+    let result;
+    try {
+      result=await engineRequest('/engine/internal/rooms/cancel',{matchId:room.id,lobbyId:room.engine_room_id,allowStarted:room.mode==='casual'});
+    } catch(error) {
+      // Only the engine's exact missing-room response proves deletion. A
+      // proxy 404 or outage must not silently cancel a still-live game.
+      if(error.status!==404||error.message!=='match not found')throw error;
+    }
+    if(room.status!=='completed')await tx.query(`UPDATE skribbil.matches SET status=$2 WHERE id=$1 AND status IN ('lobby','running')`,
+      [room.id,result?.completed?'completed':'cancelled']);
+  }
+  async function leaveRoom(user,id,{close=false}={}) {
+    requireValue(isUuid(id),'Invalid room.');
+    return roomOperation(user,async()=>{
+      await db.transaction(async tx=>{
+        await tx.query('SELECT id FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE',[user.id]);
+        const room=await one(tx,'SELECT * FROM skribbil.matches WHERE id=$1 FOR UPDATE',[id]);
+        requireValue(room,'Room not found.',404);
+        const member=await one(tx,`SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2
+          UNION ALL SELECT 1 FROM skribbil.spectator_sessions WHERE match_id=$1 AND user_id=$2 LIMIT 1`,[id,user.id]);
+        requireValue(member||room.created_by===user.id,'You are not a member of this room.',403);
+        if(close||room.created_by===user.id)await closeOwnedRoom(tx,user,room);
+        await tx.query('UPDATE skribbil.match_players SET left_at=COALESCE(left_at,now()) WHERE match_id=$1 AND user_id=$2',[id,user.id]);
+        await tx.query('UPDATE skribbil.spectator_sessions SET left_at=COALESCE(left_at,now()) WHERE match_id=$1 AND user_id=$2',[id,user.id]);
+      });
+      disconnect(user.id);
+      return {ok:true};
+    });
+  }
   async function newRoom(user,input) {
+    return roomOperation(user,()=>reserveNewRoom(user,input));
+  }
+  async function reserveNewRoom(user,input) {
     const mode=input.mode==='ranked'?'ranked':'private';
     const clubhouseId=input.clubhouseId||null;
     requireValue(!clubhouseId||isUuid(clubhouseId),'Invalid Clubhouse.');
@@ -148,16 +203,29 @@ export async function createApp({db,config,assets}={}) {
     const reserved=await db.transaction(async tx=>{
       const account=await one(tx,`SELECT status FROM skribbil.users WHERE id=$1 FOR NO KEY UPDATE`,[user.id]);
       requireValue(account?.status==='active','This account is unavailable.',403);
+      if(clubhouseId)await clubhouses.requireMember(user,clubhouseId,tx,{lock:false});
+      const active=(await tx.query(`SELECT m.* FROM skribbil.matches m WHERE m.status IN ('lobby','running')
+        AND (m.created_by=$1 OR EXISTS(SELECT 1 FROM skribbil.match_players p WHERE p.match_id=m.id AND p.user_id=$1 AND p.left_at IS NULL))
+        AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL))
+        ORDER BY m.id FOR UPDATE OF m`,[user.id])).rows;
+      // Existing match locks precede the destination Clubhouse lock, matching
+      // admission. Old Clubhouses are checked without locking several groups
+      // in opposite orders when two owners switch groups at once.
       if(clubhouseId)await clubhouses.requireMember(user,clubhouseId,tx);
-      const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id WHERE p.user_id=$1 AND m.status IN ('lobby','running')
-        AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`,[user.id]);
-      requireValue(!active,'Finish or cancel your current room before making another.',409);
+      requireValue(active.every(previous=>previous.created_by===user.id||previous.mode==='casual'),
+        'Finish your current competitive room before making another.',409);
+      for(const previous of active) {
+        if(previous.created_by===user.id)await closeOwnedRoom(tx,user,previous,{lockClubhouse:false});
+        await tx.query('UPDATE skribbil.match_players SET left_at=COALESCE(left_at,now()) WHERE match_id=$1 AND user_id=$2',[previous.id,user.id]);
+      }
+      await tx.query('UPDATE skribbil.spectator_sessions SET left_at=COALESCE(left_at,now()) WHERE user_id=$1 AND left_at IS NULL',[user.id]);
       const context=await platform.context(tx);
       const match=await one(tx,`INSERT INTO skribbil.matches(id,game_id,rule_set_id,community_id,season_id,mode,engine_room_id,engine_instance_id,custom_rules,private,created_by,clubhouse_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,'primary',$8,$9,$10,$11) RETURNING *`,[id,context.game_id,mode==='ranked'?context.ranked_rules:context.private_rules,context.community_id,mode==='ranked'?context.season_id:null,mode==='ranked'?'ranked':'casual',`pending-${id}`,JSON.stringify(mode==='ranked'?{}:{rounds,drawTime,maxPlayers}),!!clubhouseId||(mode==='private'&&input.private!==false),user.id,clubhouseId]);
       await tx.query(`INSERT INTO skribbil.match_players(match_id,user_id,engine_player_id,display_name_snapshot) VALUES($1,$2::uuid,$2::text,$3)`,[id,user.id,user.display_name]);
       return match;
     });
+    disconnect(user.id);
     return admit(user,await provisionPending(reserved));
   }
   async function getDrawing(user,id,kind) {
@@ -305,17 +373,11 @@ export async function createApp({db,config,assets}={}) {
         if(match.engine_room_id.startsWith('pending-'))requireValue(await one(db,'SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2',[match.id,user.id]),'Only reserved participants can retry a room.',403);
         return json(res,200,await admit(user,await provisionPending(match),input.role||'player'));
       }
+      const leave=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/leave$/);
+      if(leave&&req.method==='POST')return json(res,200,await leaveRoom(user,leave[1]));
       const cancel=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/cancel$/);
       if(cancel&&req.method==='POST'){
-        requireValue(isUuid(cancel[1]),'Invalid room.');
-        let room=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running')`,[cancel[1],user.id]);
-        requireValue(room,'Only the owner can cancel an unstarted room.',409);
-        if(room.clubhouse_id)await clubhouses.requireMember(user,room.clubhouse_id,db,{lock:false});
-        room=await provisionPending(room);
-        try{await engineRequest('/engine/internal/rooms/cancel',{matchId:room.id,lobbyId:room.engine_room_id});}
-        catch(error){if(error.status!==404)throw error;} // A disappeared in-memory room is abandoned, never finalized.
-        const changed=await db.query(`UPDATE skribbil.matches SET status='cancelled' WHERE id=$1 AND created_by=$2 AND status IN ('lobby','running') RETURNING id`,[cancel[1],user.id]);
-        requireValue(changed.rows.length,'Only the owner can cancel an unstarted room.',409);return json(res,200,{ok:true});
+        return json(res,200,await leaveRoom(user,cancel[1],{close:true}));
       }
       if(path==='/api/teams'&&req.method==='POST')return json(res,201,{team:await platform.createTeam(user,input)});
       if(path==='/api/teams/mine'&&req.method==='GET')return json(res,200,await community.getMyTeams(user));
@@ -456,7 +518,7 @@ export async function createApp({db,config,assets}={}) {
         remote.on('error',()=>socket.destroy());socket.on('error',()=>remote.destroy());
         try{
           requireValue(await platform.authenticate(sessionToken(req)),'Authentication expired.',401);
-          if(match?.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,db,{lock:false});
+          await engineAccess(user,url,req);
         }catch{socket.destroy();remote.destroy();return;}
         if(socket.destroyed){remote.destroy();return;}
         socket.write(`HTTP/1.1 101 Switching Protocols\r\n${Object.entries(response.headers).map(([k,v])=>`${k}: ${v}`).join('\r\n')}\r\n\r\n`);

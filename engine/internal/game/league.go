@@ -60,6 +60,30 @@ func (lobby *Lobby) CancelLeagueBeforeStart(matchID string) error {
 	return nil
 }
 
+// Explicit owner deletion may abandon casual play. Completed results are
+// already immutable events and must still settle after the live room closes.
+func (lobby *Lobby) CloseLeagueRoom(matchID string, allowStarted bool) (bool, error) {
+	lobby.mutex.Lock()
+	defer lobby.mutex.Unlock()
+	if lobby.League == nil || lobby.League.MatchID != matchID {
+		return false, errors.New("match not found")
+	}
+	if lobby.League.Cancelled {
+		return false, nil
+	}
+	completed := lobby.State == GameOver
+	if lobby.State != Unstarted && !completed && (!allowStarted || lobby.League.Mode != "private") {
+		return false, errors.New("match already started")
+	}
+	lobby.League.Cancelled = true
+	lobby.State = GameOver
+	if lobby.timeLeftTicker != nil {
+		lobby.timeLeftTicker = nil
+	}
+	lobby.Broadcast(&EventTypeOnly{Type: "room-session-closed"})
+	return completed, nil
+}
+
 type LeagueEvent struct {
 	EventID    string `json:"eventId"`
 	Sequence   int    `json:"sequence"`
