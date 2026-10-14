@@ -202,7 +202,7 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 			if player.SpectatorOnly {
 				player.State = game.Spectating
 			}
-			if lobby.OwnerID == uuid.Nil && !player.SpectatorOnly {
+			if lobby.OwnerID == uuid.Nil && !player.SpectatorOnly && lobby.League.SessionOwnerAccountID == "" {
 				lobby.OwnerID = player.ID
 			}
 		} else if player.SpectatorOnly != (ticket.Role == "spectator") {
@@ -210,6 +210,7 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		lobby.ApplyProfileIdentity(player, ticket.Username, ticket.AvatarURL)
+		lobby.ApplySessionIdentity(player)
 		player.SetLastKnownAddress(GetIPAddressFromRequest(r))
 		SetGameplayCookies(w, r, player, lobby)
 		success = true

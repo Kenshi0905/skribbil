@@ -2,6 +2,8 @@ import KeyboardManager from "./resources/keyboardManager.js";
 import { attachCanvasInput } from './resources/{{.WithCacheBust "canvas-input.js"}}';
 import { createDrawingHistory } from './resources/{{.WithCacheBust "drawing-history.js"}}';
 import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
+import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
+import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -988,6 +990,18 @@ let rounds = 0;
 let roundEndTime = 0;
 let gameState = "unstarted";
 
+const roomSession = createRoomSessionControls(document.getElementById('room-session-controls'), {
+    matchId: document.getElementById('copy-room-invite')?.dataset.roomId,
+    navigate: url => {
+        if (socket) { socket.onclose = null; socket.close(); }
+        location.assign(url);
+    },
+});
+function updateRoomSession() {
+    roomSession?.update({finished:gameState === 'gameOver', isLeader:ownID === ownerID,
+        leaderName:getCachedPlayer(ownerID)?.name});
+}
+
 const roomLook = document.body.dataset.leagueMode
     ? (await import('/room-look.js')).createRoomLook(document.getElementById('room-look-panel'), {
         send: event => socket.send(JSON.stringify(event)),
@@ -1058,6 +1072,10 @@ const handleEvent = (parsed) => {
         }
     } else if (parsed.type === "room-command-result") {
         roomLook?.result(parsed.data);
+    } else if (parsed.type === "room-session-transition") {
+        roomSession?.transition(parsed.data);
+    } else if (parsed.type === "room-session-closed") {
+        roomSession?.closed();
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
     } else if (parsed.type === "game-over") {
@@ -1199,6 +1217,7 @@ const handleEvent = (parsed) => {
         startDialog.style.visibility = "hidden";
         forceRestartButton.style.display = "none";
         gameOverDialog.style.visibility = "hidden";
+        gameOverScoreboard.replaceChildren();
 
         //If a player doesn't choose, the dialog will still be up.
         wordDialog.style.visibility = "hidden";
@@ -1401,71 +1420,24 @@ const handleReadyEvent = (ready) => {
             forceRestartButton.style.display = "block";
         }
 
-        gameOverScoreboard.innerHTML = "";
-
-        //Copying array so we can sort.
-        const players = cachedPlayers.slice();
-        players.sort((a, b) => {
-            return a.rank - b.rank;
+        const { winners, selfPlayer } = renderGameResults(gameOverScoreboard, cachedPlayers || [], {
+            ownID, createAvatar: createCommunityAvatar,
         });
 
-        //These two are required for displaying the "game over / win / tie" message.
-        let countOfRankOnePlayers = 0;
-        let selfPlayer;
-        for (let i = 0; i < players.length; i++) {
-            const player = players[i];
-            if (!player.connected || player.state === "spectating") {
-                continue;
-            }
-
-            if (player.rank === 1) {
-                countOfRankOnePlayers++;
-            }
-            if (player.id === ownID) {
-                selfPlayer = player;
-            }
-
-            // We only display the first 5 players on the scoreboard.
-            if (player.rank <= 5) {
-                const newScoreboardEntry = document.createElement("div");
-                newScoreboardEntry.classList.add("gameover-scoreboard-entry");
-                if (player.id === ownID) {
-                    newScoreboardEntry.classList.add(
-                        "gameover-scoreboard-entry-self",
-                    );
-                }
-
-                const scoreboardRankDiv = document.createElement("div");
-                scoreboardRankDiv.classList.add("gameover-scoreboard-rank");
-                scoreboardRankDiv.innerText = player.rank;
-                newScoreboardEntry.appendChild(scoreboardRankDiv);
-
-                const scoreboardNameDiv = document.createElement("div");
-                scoreboardNameDiv.classList.add("gameover-scoreboard-name");
-                scoreboardNameDiv.innerText = player.name;
-                newScoreboardEntry.appendChild(scoreboardNameDiv);
-
-                const scoreboardScoreSpan = document.createElement("span");
-                scoreboardScoreSpan.classList.add("gameover-scoreboard-score");
-                scoreboardScoreSpan.innerText = player.score;
-                newScoreboardEntry.appendChild(scoreboardScoreSpan);
-
-                gameOverScoreboard.appendChild(newScoreboardEntry);
-            }
-        }
-
-        if (selfPlayer.rank === 1) {
-            if (countOfRankOnePlayers >= 2) {
+        if (selfPlayer?.rank === 1) {
+            if (winners.length >= 2) {
                 gameOverDialogTitle.innerText = `{{.Translation.Get "game-over-tie"}}`;
             } else {
                 gameOverDialogTitle.innerText = `{{.Translation.Get "game-over-win"}}`;
             }
-        } else {
+        } else if (selfPlayer) {
             gameOverDialogTitle.innerText =
                 `{{.Translation.Get "game-over"}}`.format(
                     selfPlayer.rank,
                     selfPlayer.score,
                 );
+        } else {
+            gameOverDialogTitle.innerText = "Game over!";
         }
     } else if (ready.gameState === "ongoing") {
         // Lack of wordHints implies that word has been chosen yet.
@@ -1477,6 +1449,7 @@ const handleReadyEvent = (ready) => {
 };
 
 function updateButtonVisibilities() {
+    updateRoomSession();
     if (ownerID === ownID) {
         lobbySettingsButton.style.display = "flex";
     } else {
@@ -1709,6 +1682,7 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+    updateRoomSession();
     if (kickTargetID && !canVotekickPlayer(getCachedPlayer(kickTargetID))) hideKickDialog();
     const self = players.find(player => player.id === ownID);
     if (roomLook && self) setUsernameLocally(self.name);

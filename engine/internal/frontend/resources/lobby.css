@@ -592,37 +592,75 @@ kbd {
     margin-top: 0.5rem;
 }
 
-.gameover-scoreboard-entry {
-    font-size: 1.3rem;
-    padding: 0.3rem 1rem 0.3rem 1rem;
-    display: flex;
-    flex-direction: row;
-    background-color: rgb(245, 245, 245);
+/* A room-wide celebration, with enough space to show every participant. */
+#game-over-dialog {
+    position:fixed;
+    top:50%; left:50%; transform:translate(-50%, -50%);
+    width:700px; max-width:calc(100% - 24px); max-height:calc(100dvh - 32px);
+    box-sizing:border-box; padding:20px; justify-content:flex-start;
+    background:var(--surface, #fffdf8); color:var(--ink, #302c3b);
+    border:2px solid var(--line, #ded7ea); border-radius:20px;
+    box-shadow:0 16px 70px #17132d55;
 }
-
-.gameover-scoreboard-entry + .gameover-scoreboard-entry {
-    margin-top: 0.5rem;
+#game-over-dialog .dialog-title { position:relative; z-index:1; margin:0 0 8px; font-size:clamp(18px, 3vw, 26px); color:inherit; }
+#game-over-dialog .center-dialog-content { display:block; overscroll-behavior:contain; min-height:0; }
+#game-over-dialog .button-bar { flex-shrink:0; position:relative; z-index:1; }
+#game-over-scoreboard { width:100%; }
+.results-confetti { position:absolute; inset:0; overflow:hidden; pointer-events:none; border-radius:inherit; }
+.results-confetti-piece { position:absolute; top:-16px; left:var(--x); width:8px; height:13px; opacity:0; border-radius:2px; animation:results-confetti-fall var(--duration) var(--delay) ease-in forwards; }
+.results-confetti-piece:nth-child(3n) { border-radius:50%; width:9px; height:9px; }
+@keyframes results-confetti-fall {
+    0% { opacity:0; transform:translate(0, -20px) rotate(0); }
+    8%, 75% { opacity:1; }
+    100% { opacity:0; transform:translate(var(--drift), 700px) rotate(600deg); }
 }
-
-.gameover-scoreboard-entry-self {
-    font-weight: bold;
+.results-winner { position:relative; text-align:center; margin:4px 0 18px; }
+.results-eyebrow { font:800 11px/1.4 system-ui,sans-serif; letter-spacing:2px; color:var(--purple, #6750c7); }
+.results-winner-name { margin:4px 0; font:900 clamp(22px, 4vw, 34px)/1.15 system-ui,sans-serif; overflow-wrap:anywhere; }
+.results-subtitle { margin:6px 0 0; font-size:12px; color:var(--muted, #686174); }
+.results-podium { display:flex; align-items:flex-end; justify-content:center; gap:10px; padding:24px 8px 0; }
+.results-podium-place { position:relative; display:flex; flex-direction:column; align-items:center; text-align:center; width:30%; min-width:0; }
+.results-podium-place[data-place="1"] { order:2; }
+.results-podium-place[data-place="2"] { order:1; }
+.results-podium-place[data-place="3"] { order:3; }
+.results-podium .community-player-avatar { width:68px; height:68px; border-radius:18px; font-size:22px; border:3px solid #c8bcf0; box-shadow:0 4px 0 #302c3b15; }
+.results-podium .community-player-avatar img { object-fit:contain; }
+.results-podium .results-champion .community-player-avatar { width:84px; height:84px; border-color:#f4c84c; }
+.results-crown { position:absolute; top:-36px; font-size:40px; line-height:1; color:#d49a08; transform:rotate(-9deg); text-shadow:0 2px 0 #fff0b1; }
+.results-player-name { margin:10px 0 3px; font-size:14px; max-width:100%; overflow-wrap:anywhere; }
+.results-points { font-size:12px; color:var(--muted, #686174); margin-bottom:10px; }
+.results-podium-step { display:grid; place-items:center; width:100%; height:90px; border-radius:12px 12px 0 0; background:linear-gradient(#ffe38a, #f2bf42); color:#614514; font:900 36px system-ui,sans-serif; box-shadow:inset 0 3px 0 #ffffff66; }
+.results-podium-place[data-place="2"] .results-podium-step { height:65px; background:linear-gradient(#e2e6f0, #bdc5d6); color:#48546b; }
+.results-podium-place[data-place="3"] .results-podium-step { height:48px; background:linear-gradient(#f7c5a3, #de9b6e); color:#714125; }
+.results-list-title { margin:18px 0 8px; font-size:13px; }
+.results-standings { list-style:none; padding:0; margin:0; display:grid; gap:6px; }
+.results-row { display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface-raised, #f5f2fa); border:1px solid transparent; border-radius:10px; font-size:13px; }
+.results-row.results-self { border-color:var(--purple, #6750c7); }
+.results-rank { width:30px; flex-shrink:0; font-weight:800; color:var(--muted, #686174); }
+.results-row .community-player-avatar { width:34px; height:34px; flex-shrink:0; grid-column:auto; grid-row:auto; }
+.results-row-name { flex:1; min-width:0; overflow-wrap:anywhere; font-weight:700; }
+.results-you, .results-left { display:inline-block; margin-left:6px; font-size:10px; color:var(--muted, #686174); font-weight:400; }
+.results-row-points { white-space:nowrap; font-size:12px; }
+#room-session-controls { width:100%; text-align:center; flex-shrink:0; position:relative; padding-top:10px; }
+#room-session-controls[hidden], #room-session-controls [hidden] { display:none; }
+.results-session-note { margin:0 0 8px; font-size:12px; color:var(--muted, #686174); }
+.results-session-error { margin:0 0 8px; font-size:12px; color:var(--red, #b42e47); }
+.results-owner-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+#room-session-controls button { min-height:44px; cursor:pointer; font:700 13px system-ui,sans-serif; border-radius:8px; }
+#room-session-controls .results-play-again { background:#ffdc70; color:#302c3b; }
+#room-session-controls .results-delete-room { background:var(--surface-raised, #f5f2fa); color:var(--red, #b42e47); }
+#room-session-controls .results-leave-room { background:transparent; color:inherit; margin-top:4px; }
+#room-session-controls button:disabled { opacity:.55; cursor:wait; }
+@media (max-width:480px) {
+    #game-over-dialog { padding:14px 10px; }
+    .results-podium { gap:6px; padding-inline:0; }
+    .results-podium .community-player-avatar { width:50px; height:50px; border-radius:14px; }
+    .results-podium .results-champion .community-player-avatar { width:64px; height:64px; }
+    .results-player-name { font-size:12px; }
+    .results-row { padding:8px; gap:7px; }
 }
-
-.gameover-scoreboard-entry:last-child {
-    margin-bottom: 1rem;
-}
-
-.gameover-scoreboard-rank {
-    margin-right: 1rem;
-}
-
-.gameover-scoreboard-name {
-    flex: 1;
-    text-align: center;
-}
-
-.gameover-scoreboard-score {
-    margin-left: 1rem;
+@media (prefers-reduced-motion:reduce) {
+    .results-confetti { display:none; }
 }
 
 #force-restart-button {

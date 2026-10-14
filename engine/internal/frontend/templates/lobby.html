@@ -239,11 +239,23 @@
                             </div>
                         </div>
 
-                        <div id="game-over-dialog" class="center-dialog">
+                        <div id="game-over-dialog" class="center-dialog" role="dialog" aria-labelledby="game-over-dialog-title">
                             <span id="game-over-dialog-title" class="dialog-title">Game over!</span>
                             <div class="center-dialog-content">
                                 <div id="game-over-scoreboard"></div>
                             </div>
+                            {{if .LeagueMode}}
+                            <div id="room-session-controls" hidden>
+                                <p class="results-session-note" role="status">Stay for another game. Waiting for the room leader to choose.</p>
+                                <p class="results-session-error" role="alert" hidden></p>
+                                <div class="results-owner-actions" hidden>
+                                    <button class="dialog-button results-play-again" type="button" data-session-action="rematch">Play again with this room</button>
+                                    <button class="dialog-button results-delete-room" type="button" data-session-action="close">Delete room</button>
+                                </div>
+                                <button class="dialog-button" type="button" data-session-action="retry" hidden>Retry joining</button>
+                                <button class="dialog-button results-leave-room" type="button" data-session-action="leave">Leave room →</button>
+                            </div>
+                            {{end}}
                             <div class="button-bar">
                                 <div class="ready-check-box-wrapper">
                                     <label class="ready-check-box" for="ready-state-game-over">

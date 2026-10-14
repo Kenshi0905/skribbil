@@ -246,6 +246,9 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 			if player.ID != lobby.OwnerID || !player.Connected {
 				return errors.New("only the connected host can start")
 			}
+			if lobby.League.SessionOwnerAccountID != "" && lobby.State == Unstarted && player.AccountID != lobby.League.SessionOwnerAccountID {
+				return errors.New("only the room leader can start the next session")
+			}
 			if err := lobby.managedStartError(); err != nil {
 				return err
 			}
@@ -497,6 +500,10 @@ func (lobby *Lobby) startGame() {
 	// technically be player a second game after the last one
 	// has already ended.
 	lobby.resetLeagueTelemetry()
+	if lobby.League != nil {
+		lobby.League.SessionPlayers = nil
+		lobby.League.SessionOwnerAccountID = ""
+	}
 	for _, otherPlayer := range lobby.players {
 		otherPlayer.Score = 0
 		otherPlayer.LastScore = 0
@@ -1236,6 +1243,12 @@ func (lobby *Lobby) SendYourTurnEvent(player *Player) {
 func (lobby *Lobby) OnPlayerConnectUnsynchronized(player *Player) {
 	player.Connected = true
 	player.hasConnectedOnce = true
+	if lobby.League != nil && lobby.League.NextSessionMatchID != "" {
+		lobby.WriteObject(player, Event{Type: EventTypeReady, Data: generateReadyData(lobby, player)})
+		lobby.sendSessionTransition(player)
+		return
+	}
+	lobby.ApplySessionIdentity(player)
 	recalculateRanks(lobby)
 	lobby.WriteObject(player, Event{Type: EventTypeReady, Data: generateReadyData(lobby, player)})
 
@@ -1253,6 +1266,7 @@ func (lobby *Lobby) OnPlayerConnectUnsynchronized(player *Player) {
 		Type: EventTypeUpdatePlayers,
 		Data: lobby.players,
 	}, ExcludePlayer(player))
+	lobby.startTransferredSessionIfReady()
 }
 
 func (lobby *Lobby) OnPlayerDisconnect(player *Player) {
@@ -1275,6 +1289,15 @@ func (lobby *Lobby) OnSocketDisconnect(player *Player, socket *gws.Conn) {
 	// writer safely rejects an already closed connection during this transition.
 	player.Connected = false
 	player.ws = nil
+	if lobby.League != nil && lobby.State == GameOver && lobby.League.NextSessionMatchID == "" && lobby.OwnerID == player.ID {
+		for _, candidate := range lobby.players {
+			if candidate.Connected && !candidate.SpectatorOnly && candidate.State != Spectating {
+				lobby.OwnerID = candidate.ID
+				lobby.Broadcast(&Event{Type: EventTypeOwnerChange, Data: &OwnerChangeEvent{PlayerID: candidate.ID, PlayerName: candidate.Name}})
+				break
+			}
+		}
+	}
 
 	player.disconnectTime = &disconnectTime
 	lobby.LastPlayerDisconnectTime = &disconnectTime

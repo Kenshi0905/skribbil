@@ -12,6 +12,7 @@ import { Social } from './social.mjs';
 import { Media } from './media.mjs';
 import { Community } from './community.mjs';
 import { Rematch } from './rematch.mjs';
+import { RoomSessions } from './room-sessions.mjs';
 import { Clubhouses } from './clubhouses.mjs';
 import { expireAssets } from './retention.mjs';
 import { AssetStore } from './assets.mjs';
@@ -47,6 +48,7 @@ export async function createApp({db,config,assets}={}) {
   const community=new Community(platform);
   const clubhouses=new Clubhouses(platform);
   const rematch=new Rematch({db,provision:payload=>engineRequest('/engine/internal/rooms',payload),admit,rankedEnabled:()=>config.ranked});
+  const roomSessions=new RoomSessions({db,rematch,admit,engineRequest});
   const webRoot=resolve('web');let engineCache={at:0,available:false};
   const engineTarget=url=>{const target=new URL(config.engineUrl);target.pathname=url.pathname;target.search=url.search;target.hash='';return target;};
   const engineStatus=async()=>{
@@ -289,6 +291,13 @@ export async function createApp({db,config,assets}={}) {
       if(partyAccept&&req.method==='POST')return json(res,200,await social.acceptInvite(user,partyAccept[1]));
       if(path==='/api/profile'&&req.method==='PATCH'){await platform.updateProfile(user,input);return json(res,200,{user:await platform.profile(user)});}
       if(path==='/api/rooms'&&req.method==='POST'){rateLimit(req,'rooms',8);return json(res,201,await newRoom(user,input));}
+      const roomSession=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/session$/);
+      if(roomSession&&req.method==='POST'){
+        rateLimit(req,'room-session',12);
+        const source=await one(db,'SELECT clubhouse_id FROM skribbil.matches WHERE id=$1',[roomSession[1]]);
+        if(source?.clubhouse_id)await clubhouses.requireMember(user,source.clubhouse_id,db,{lock:false});
+        return json(res,200,await roomSessions.control(user,roomSession[1],input.action));
+      }
       const roomJoin=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/join$/);
       if(roomJoin&&req.method==='POST'){
         requireValue(isUuid(roomJoin[1]),'Invalid room.');const match=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1`,[roomJoin[1]]);
