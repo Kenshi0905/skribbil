@@ -1063,7 +1063,7 @@ const handleEvent = (parsed) => {
                 `{{.Translation.Get "guessers-disconnected"}}`,
             );
         } else {
-            showRoundEndMessage(ready.previousWord);
+            showRoundEndMessage();
         }
         handleReadyEvent(ready);
     } else if (parsed.type === "update-players") {
@@ -1192,7 +1192,7 @@ const handleEvent = (parsed) => {
                     `{{.Translation.Get "guessers-disconnected"}}`,
                 );
             } else {
-                showRoundEndMessage(parsed.data.previousWord);
+                showRoundEndMessage();
             }
         } else {
             //First turn, the game starts
@@ -1218,7 +1218,7 @@ const handleEvent = (parsed) => {
         setRoundTimeLeft(parsed.data.choiceTimeLeft);
         applyPlayers(parsed.data.players);
 
-        set_dummy_word_hints();
+        revealRoundWord(parsed.data.previousWord);
 
         //Even though we always hide the dialog in the "your-turn"
         //event handling, it will be shortly visible if we it here.
@@ -1318,20 +1318,23 @@ const handleEvent = (parsed) => {
     }
 };
 
-function showRoundEndMessage(previousWord) {
-    if (previousWord === "") {
-        appendMessage(
-            "system-message",
-            null,
-            `{{.Translation.Get "round-over"}}`,
-        );
-    } else {
-        appendMessage(
-            "system-message",
-            null,
-            `{{.Translation.Get "round-over-no-word"}}`.format(previousWord),
-        );
+function showRoundEndMessage() {
+    appendMessage(
+        "system-message",
+        null,
+        `{{.Translation.Get "round-over"}}`,
+    );
+}
+
+function revealRoundWord(previousWord) {
+    if (!previousWord) {
+        set_dummy_word_hints();
+        return;
     }
+    applyWordHints(Array.from(previousWord, (character) => ({
+        character: character.codePointAt(0),
+        underline: ![" ", "_", "-"].includes(character),
+    })));
 }
 
 function getCachedPlayer(playerID) {
@@ -1385,6 +1388,8 @@ const handleReadyEvent = (ready) => {
     applyDrawData(ready.currentDrawing || []);
     if (ready.wordHints && ready.wordHints.length) {
         applyWordHints(ready.wordHints);
+    } else if (ready.gameState === "gameOver") {
+        revealRoundWord(ready.previousWord);
     } else {
         set_dummy_word_hints();
     }
@@ -1772,7 +1777,7 @@ const applyWordHints = (wordHints, dummy) => {
                 if (hint.underline) {
                     hintSpan.classList.add("hint-underline");
                 }
-                hintSpan.innerText = String.fromCharCode(hint.character);
+                hintSpan.innerText = String.fromCodePoint(hint.character);
             }
 
             // space
