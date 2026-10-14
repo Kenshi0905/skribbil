@@ -11,6 +11,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
+const EventTypeLike = "like-drawing"
 const EventTypeDislike = "dislike-drawing"
 const EventTypeDislikeState = "dislike-state"
 
@@ -31,6 +32,7 @@ type LeagueState struct {
 	Sequence              int
 	Eligible              map[uuid.UUID]bool
 	Votes                 map[uuid.UUID]bool
+	Likes                 map[uuid.UUID]bool
 	Applied               bool
 	HardTurn              bool
 	Emit                  func(LeagueEvent) bool
@@ -67,7 +69,10 @@ type LeagueEvent struct {
 
 type DislikeState struct {
 	TurnID   int         `json:"turnId"`
+	Active   bool        `json:"active"`
 	Votes    int         `json:"votes"`
+	Likes    int         `json:"likes"`
+	Likers   []uuid.UUID `json:"likers"`
 	Required int         `json:"required"`
 	Applied  bool        `json:"applied"`
 	Eligible []uuid.UUID `json:"eligible"`
@@ -119,6 +124,7 @@ func (lobby *Lobby) beginDislikes() {
 	ls.TurnUUID = uuid.Must(uuid.NewV4()).String()
 	ls.Eligible = map[uuid.UUID]bool{}
 	ls.Votes = map[uuid.UUID]bool{}
+	ls.Likes = map[uuid.UUID]bool{}
 	ls.Applied = false
 	for _, p := range lobby.players {
 		if p.Connected && p.State != Drawing && p.State != Spectating && !p.SpectatorOnly {
@@ -137,14 +143,34 @@ func (lobby *Lobby) dislikeState() DislikeState {
 	if ls == nil {
 		return DislikeState{}
 	}
-	d := DislikeState{TurnID: ls.TurnID, Votes: len(ls.Votes), Required: len(ls.Eligible), Applied: ls.Applied, Eligible: []uuid.UUID{}, Voters: []uuid.UUID{}}
+	d := DislikeState{TurnID: ls.TurnID, Active: lobby.State == Ongoing && lobby.CurrentWord != "", Votes: len(ls.Votes), Likes: len(ls.Likes), Likers: []uuid.UUID{}, Required: len(ls.Eligible), Applied: ls.Applied, Eligible: []uuid.UUID{}, Voters: []uuid.UUID{}}
 	for id := range ls.Eligible {
 		d.Eligible = append(d.Eligible, id)
 	}
 	for id := range ls.Votes {
 		d.Voters = append(d.Voters, id)
 	}
+	for id := range ls.Likes {
+		d.Likers = append(d.Likers, id)
+	}
 	return d
+}
+
+// Likes are per-turn reactions. They never change scores or the dislike quorum.
+func (lobby *Lobby) like(player *Player, turnID int) error {
+	ls := lobby.League
+	if ls == nil || lobby.State != Ongoing || lobby.CurrentWord == "" || turnID != ls.TurnID {
+		return errors.New("like rejected: inactive or stale turn")
+	}
+	if !player.Connected || player.State == Drawing || player.State == Spectating || player.SpectatorOnly || !ls.Eligible[player.ID] {
+		return errors.New("like rejected: player not eligible")
+	}
+	if ls.Applied || ls.Votes[player.ID] || ls.Likes[player.ID] {
+		return nil
+	}
+	ls.Likes[player.ID] = true
+	lobby.Broadcast(&Event{Type: EventTypeDislikeState, Data: lobby.dislikeState()})
+	return nil
 }
 
 func (lobby *Lobby) dislike(player *Player, turnID int) error {
@@ -159,6 +185,7 @@ func (lobby *Lobby) dislike(player *Player, turnID int) error {
 		return nil
 	}
 	ls.Votes[player.ID] = true
+	delete(ls.Likes, player.ID)
 	// Frozen membership prevents disconnect/leave from manufacturing unanimity.
 	if len(ls.Eligible) > 0 && len(ls.Votes) == len(ls.Eligible) {
 		drawer := lobby.Drawer()

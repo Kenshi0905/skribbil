@@ -230,3 +230,58 @@ func TestCancellationCannotRacePastStartedGame(t *testing.T) {
 		t.Fatal("cancellation retry not idempotent")
 	}
 }
+
+func TestLikesAreEligiblePerTurnReactionsWithoutScoreChanges(t *testing.T) {
+	l, artist, a, b, spec := penaltyFixture()
+	like := func(p *Player, turn int) error {
+		payload, _ := json.Marshal(map[string]any{"type": EventTypeLike, "data": map[string]int{"turnId": turn}})
+		return l.HandleEvent(EventTypeLike, payload, p)
+	}
+	for _, p := range []*Player{artist, spec, {ID: uuid.Must(uuid.NewV4()), State: Guessing, Connected: true}} {
+		if like(p, 1) == nil {
+			t.Fatal("ineligible like accepted")
+		}
+	}
+	if like(a, 0) == nil {
+		t.Fatal("stale like accepted")
+	}
+	if err := like(a, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := like(a, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := like(b, 1); err != nil {
+		t.Fatal(err)
+	}
+	state := l.dislikeState()
+	if state.Likes != 2 || len(state.Likers) != 2 || state.Votes != 0 || artist.Score != 40 || artist.HardWordPending {
+		t.Fatal("likes changed score or counted twice", state)
+	}
+	if err := vote(l, a, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := like(a, 1); err != nil {
+		t.Fatal(err)
+	}
+	if len(l.League.Likes) != 1 || l.League.Likes[a.ID] {
+		t.Fatal("a dislike must replace the like and remain final")
+	}
+	if err := vote(l, b, 1); err != nil {
+		t.Fatal(err)
+	}
+	if artist.Score != -60 || !artist.HardWordPending || len(l.League.Likes) != 0 {
+		t.Fatal("likes altered the existing unanimous penalty")
+	}
+	l.beginDislikes()
+	if l.dislikeState().Likes != 0 || l.dislikeState().Votes != 0 {
+		t.Fatal("reactions carried into next turn")
+	}
+	l.CurrentWord = ""
+	if l.dislikeState().Active {
+		t.Fatal("voting active while choosing a word")
+	}
+	if like(a, 2) == nil {
+		t.Fatal("like accepted while choosing a word")
+	}
+}

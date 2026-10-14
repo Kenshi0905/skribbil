@@ -27,8 +27,6 @@
 
         <div id="league-toolbar" hidden>
             <a href="/#/skribbil" class="league-home-link">← Clubhouse · Skribbil</a>
-            <button id="league-dislike-button" disabled title="Every other player must dislike before the artist loses 100 points.">Dislike drawing</button>
-            <span id="league-dislike-status" aria-live="polite">Choose a word to begin voting.</span>
             <a id="league-results-link" href="/" hidden>Back to league · rematch &amp; results →</a>
         </div>
         <div id="lobby">
@@ -127,6 +125,14 @@
             <div id="drawing-board-wrapper">
                 <div id="drawing-board-inner-wrapper">
                     <canvas id="drawing-board" width="1600" height="900"></canvas>
+                    <div id="drawing-reactions" role="group" aria-label="Drawing reactions" hidden>
+                        <button id="league-like-button" class="drawing-reaction" disabled aria-label="Like drawing" aria-pressed="false" title="Like drawing">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4Zm0 0 5-7c2 0 3 1 2 4l-1 3h6a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7"/></svg><span id="league-like-count">0</span>
+                        </button>
+                        <button id="league-dislike-button" class="drawing-reaction" disabled aria-label="Dislike drawing" aria-pressed="false" title="Dislike drawing">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H3v11h4Zm0 0 5 7c2 0 3-1 2-4l-1-3h6a2 2 0 0 0 2-2l-2-7a2 2 0 0 0-2-2H7"/></svg><span id="league-dislike-count">0</span>
+                        </button>
+                    </div>
 
                     <!-- The so called "center dialogs" are divs that float above the canvas.
                     They are are always both horizontally and vertically. They can bever be
