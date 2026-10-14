@@ -4,6 +4,7 @@ import { createDrawingHistory } from './resources/{{.WithCacheBust "drawing-hist
 import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
 import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
 import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
+import { attachMobileViewport } from './resources/{{.WithCacheBust "mobile-viewport.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -45,6 +46,7 @@ window.onbeforeunload = () => {
 };
 
 const messageInput = document.getElementById("message-input");
+attachMobileViewport();
 const messageInputPlaceholder = messageInput.dataset.defaultPlaceholder || messageInput.placeholder;
 const playerContainer = document.getElementById("player-container");
 const wordContainer = document.getElementById("word-container");
@@ -1782,7 +1784,7 @@ const set_dummy_word_hints = () => {
     applyWordHints(
         [
             {
-                character: "D",
+                character: "D".codePointAt(0),
                 underline: true,
             },
         ],

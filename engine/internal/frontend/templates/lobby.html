@@ -5,7 +5,7 @@
 <head>
     <title>Skribbil - Game</title>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     {{if .LeagueMode}}<script src="/theme.js"></script>{{end}}
     {{template "non-static-css-decl" .}}
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "root.css"}}' />
@@ -45,9 +45,9 @@
 
                 <div id="lobby-header-center-element">
                     <div id="menu-button-container">
-                        <button id="menu-button" popovertarget="menu" alt="Show menu" title="Show menu">
+                        <button id="menu-button" popovertarget="menu" aria-label="Game menu" title="Show menu">
                             <img src='{{.RootPath}}/resources/{{.WithCacheBust "menu.svg"}}'
-                                class="header-button-image" />
+                                class="header-button-image" alt="" />
                         </button>
                         <div id="menu" popover>
                             <div class="menu-list">
@@ -142,8 +142,8 @@
                         <div id="word-dialog" class="center-dialog">
                             <span class="dialog-title">{{.Translation.Get "choose-a-word"}}</span>
                             <div class="center-dialog-content">
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: center">
-                                    <div>
+                                <div class="word-choice-content">
+                                    <div class="word-choice-note">
                                         <span>{{.Translation.Get "word-choice-warning"}}:</span>
                                         <span id="word-preselected" style="font-weight: bold;"></span>
                                     </div>

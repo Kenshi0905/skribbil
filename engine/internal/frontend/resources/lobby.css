@@ -936,39 +936,108 @@ button:focus-visible, input:focus-visible, .custom-check-or-radio:focus-visible 
 @media (max-width:900px) {
     html { font-size:16px; }
     #app { min-height:100svh; padding-bottom:env(safe-area-inset-bottom); }
-    #lobby { display:flex; flex-direction:column; min-width:0; flex:none; padding:6px; gap:6px; }
-    #lobby-header { order:1; display:grid; grid-template-columns:1fr auto 1fr; grid-template-rows:auto auto; gap:5px; }
+    #lobby { display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 3fr); grid-template-rows:48px auto auto minmax(120px, 1fr) 44px; min-width:0; min-height:0; flex:1; padding:4px; gap:4px; }
+    #lobby-header { grid-column:1 / -1; grid-row:1; display:grid; grid-template-columns:64px minmax(0,1fr) 44px; grid-template-rows:24px 24px; gap:0 4px; }
     #lobby-header-center-element { display:contents; }
-    #round-container { grid-column:1; grid-row:1; justify-content:flex-start; font-size:1.1rem; }
-    #menu-button-container { grid-column:2; grid-row:1; display:flex; justify-content:center; }
-    #time-left { grid-column:3; grid-row:1; justify-content:flex-end; font-size:1.1rem; }
-    #word-container { grid-column:1 / 4; grid-row:2; width:auto; min-width:0; overflow-x:auto; justify-content:safe center; gap:3px; padding:8px 4px; }
+    #round-container { grid-column:1; grid-row:1; justify-content:center; font-size:.8rem; border-radius:8px 8px 0 0; }
+    #menu-button-container { grid-column:3; grid-row:1 / 3; display:flex; justify-content:center; padding:0; }
+    #time-left { grid-column:1; grid-row:2; justify-content:center; font-size:.85rem; border-radius:0 0 8px 8px; }
+    #time-left-value { min-width:0; width:auto; }
+    #word-container { grid-column:2; grid-row:1 / 3; width:auto; min-width:0; overflow-x:auto; align-items:center; justify-content:safe center; gap:3px; padding:4px; background:var(--component-base-color); }
+    .header-button-image { width:20px; height:20px; }
+    #round-container .header-button-image, #time-left .header-button-image { width:16px; height:16px; }
+    .hint { font-size:clamp(14px, 3.8vw, 22px); line-height:1.4; }
     #menu-button, .menu-item { min-height:44px; min-width:44px; }
-    #drawing-board-wrapper { order:2; width:100%; height:auto; padding:0; aspect-ratio:16 / 9; flex:none; }
-    #toolbox { order:3; width:100%; min-width:0; gap:6px; }
-    .color-button-container { flex:1 0 100%; box-sizing:border-box; height:90px; overflow-x:auto; overflow-y:hidden; }
+    #menu { position:fixed; position-anchor:auto; position-area:none; inset:calc(var(--game-top, 0px) + 56px + env(safe-area-inset-top)) 8px auto auto; max-width:calc(100% - 16px); max-height:calc(var(--game-height, 100dvh) - 72px - env(safe-area-inset-top)); box-sizing:border-box; overflow:auto; }
+    body[data-league-mode] #menu { top:calc(var(--game-top, 0px) + 100px + env(safe-area-inset-top)); max-height:calc(var(--game-height, 100dvh) - 116px - env(safe-area-inset-top)); }
+    #drawing-board-wrapper { --board-height:min(calc((100vw - 8px - env(safe-area-inset-left) - env(safe-area-inset-right)) * .5625), var(--game-board-limit, 46dvh)); grid-column:1 / -1; grid-row:2; width:100%; height:var(--board-height); padding:0; }
+    #drawing-board-inner-wrapper { width:min(100%, calc(var(--board-height) * 16 / 9)); height:100%; left:0; right:0; margin:auto; }
+    #toolbox { grid-column:1 / -1; grid-row:3; width:100%; min-width:0; gap:4px; }
+    .color-button-container { flex:1 0 100%; box-sizing:border-box; height:58px; overflow-x:auto; overflow-y:hidden; }
     .color-button-row { width:max-content; flex:none; }
-    .color-button { width:44px; height:44px; flex:none; }
+    .color-button { width:28px; height:28px; flex:none; }
     .canvas-button, .line-width-button-content { width:44px; height:44px; }
     .line-width-button-content > *, .canvas-button > * { width:32px; height:32px; }
-    #chat { order:4; width:100%; height:clamp(200px,30svh,300px); min-height:0; }
-    #message-container { max-height:none; min-height:0; overscroll-behavior:contain; }
-    #message-form { min-height:44px; }
+    #chat { display:contents; }
+    #message-container { grid-column:2; grid-row:4; max-height:none; min-height:0; min-width:0; overflow-y:auto; overscroll-behavior:contain; font-size:13px; border-radius:8px; }
+    #message-form { grid-column:1 / -1; grid-row:5; min-width:0; min-height:44px; margin:0; }
     #message-input { font-size:16px; padding:10px; }
     #message-send { min-width:60px; min-height:44px; }
-    #player-container { order:5; height:auto; min-height:0; flex-direction:row; gap:5px; overflow-x:auto; padding-bottom:4px; }
-    .player { flex:0 0 148px; min-width:0; }
+    #player-container { grid-column:1; grid-row:4; height:auto; min-height:0; min-width:0; flex-direction:column; gap:3px; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+    #player-container .player { flex:none; min-width:0; min-height:48px; box-sizing:border-box; padding:4px; font-size:12px; line-height:1.35; }
+    #player-container .player.community-player { grid-template-columns:18px 30px minmax(0, 1fr); column-gap:4px; }
+    #player-container .rank { width:18px; font-size:12px; }
+    #player-container .community-player-avatar { width:30px; height:30px; border-radius:8px; font-size:10px; }
+    #player-container .score-and-status { align-items:center; font-size:11px; }
+    #player-container .score-and-status img { max-width:16px; max-height:16px; }
+    #player-container .last-turn-score { font-size:10px; }
+    #player-container .playername-action { grid-row:2; align-self:stretch; }
     .player + .player { margin-top:0; }
-    .center-dialog { box-sizing:border-box; max-width:calc(100% - 12px); max-height:min(70svh,460px); padding:12px; }
+    .center-dialog { box-sizing:border-box; max-width:calc(100% - 12px); max-height:calc(var(--game-height, 100dvh) - 112px); padding:12px; }
     .center-dialog-content { min-height:0; }
+    .center-dialog:not(#word-dialog):not(#waitchoose-dialog):not(#start-dialog):not(#game-over-dialog) { position:fixed; top:calc(var(--game-top, 0px) + var(--game-height, 100dvh) / 2); left:50%; transform:translate(-50%, -50%); width:min(480px, calc(100% - 16px)); max-height:calc(var(--game-height, 100dvh) - 24px); }
+    #game-over-dialog { top:calc(var(--game-top, 0px) + var(--game-height, 100dvh) / 2); max-height:calc(var(--game-height, 100dvh) - 24px); }
     .dialog-title { flex:none; font-size:1.3rem; margin-bottom:8px; }
     .dialog-button, .ready-check-box { min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; }
     .button-bar { flex-wrap:wrap; flex:none; }
-    #word-button-container { margin:0; grid-template-columns:1fr; }
     #help-dialog { width:calc(100% - 12px); }
     .namechange-field, .input-container input { min-height:44px; font-size:16px; }
-    #league-toolbar { width:calc(100% - 12px); margin:6px; padding:8px; gap:8px; font-size:13px; }
-    .drawing-reaction { height:44px; }
+    #league-toolbar { flex:none; width:100%; margin:0; padding:4px; gap:4px; font-size:11px; flex-wrap:nowrap; min-height:44px; background:var(--surface, #fffdf8); }
+    #league-toolbar .league-home-link { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #league-toolbar #copy-room-invite { min-height:36px; padding:4px 8px; font-size:11px; }
+    #league-toolbar #room-invite-link { width:90px; min-width:0; font-size:16px; }
+    #room-invite-status { position:absolute; top:44px; left:8px; z-index:30; background:var(--component-base-color); border-radius:4px; }
+    #league-toolbar .league-theme-toggle { margin-inline-start:auto; flex:none; min-width:44px; min-height:36px; padding:4px 8px; }
+    #drawing-reactions { top:4px; right:4px; }
+    .drawing-reaction { height:36px; min-width:40px; padding:4px; }
+    html[data-theme="dark"] #lobby-header .header-button-image { filter:brightness(0) invert(1); }
+
+    html.mobile-game, .mobile-game body { min-height:0; height:100%; overflow:hidden; overscroll-behavior:none; }
+    .mobile-game #app { position:fixed; top:var(--game-top, 0px); left:0; right:0; height:var(--game-height, 100dvh); min-height:0; box-sizing:border-box; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+    .mobile-game #lobby { grid-template-rows:48px auto auto minmax(0, 1fr) 44px; overflow:hidden; }
+    .mobile-game-short #toolbox { flex-wrap:nowrap; overflow-x:auto; }
+    .mobile-game-short .color-button-container { flex:0 0 140px; }
+    .mobile-game-short .toolbox-group { flex-shrink:0; }
+
+    /* The pre-game editor remains a normal, scrollable document. */
+    body:has(#room-look-panel:not([hidden])) #lobby { display:flex; flex-direction:column; }
+    body:has(#room-look-panel:not([hidden])) #lobby-header { order:0; flex:none; }
+    body:has(#room-look-panel:not([hidden])) #room-look-panel { order:1; }
+    body:has(#room-look-panel:not([hidden])) #drawing-board-wrapper { order:2; flex:none; }
+    body:has(#room-look-panel:not([hidden])) #toolbox { order:3; }
+    body:has(#room-look-panel:not([hidden])) #player-container { order:4; max-height:240px; }
+    body:has(#room-look-panel:not([hidden])) #chat { display:flex; order:5; height:240px; min-height:0; width:100%; }
+}
+
+/* Keep the canvas' native 16:9 coordinates while giving short landscape
+   screens the same three-column arrangement as desktop. */
+@media (min-width:600px) and (max-width:900px) and (max-height:500px) {
+    .mobile-game #lobby { grid-template-columns:130px minmax(0, 1fr) minmax(180px, .7fr); grid-template-rows:48px minmax(0, 1fr) auto 44px; }
+    .mobile-game #drawing-board-wrapper { grid-column:2; grid-row:2; height:100%; min-height:0; }
+    .mobile-game #drawing-board-inner-wrapper { width:min(100%, calc(var(--game-content-height, 40dvh) * 16 / 9)); height:auto; aspect-ratio:16 / 9; top:0; bottom:0; }
+    .mobile-game #player-container { grid-column:1; grid-row:2; }
+    .mobile-game #message-container { grid-column:3; grid-row:2; }
+    .mobile-game #message-form { grid-row:4; }
+    .mobile-game #toolbox { flex-wrap:nowrap; overflow-x:auto; }
+    .mobile-game .color-button-container { flex:1; min-width:100px; }
+    .mobile-game .toolbox-group { flex-shrink:0; }
+}
+
+/* Word choices stay balanced for short words, long translations and larger
+   room word counts. The list scrolls inside the card instead of covering chat. */
+#word-dialog { width:580px; box-sizing:border-box; padding:22px; border:2px solid var(--purple, #6750c7); border-radius:18px; background:var(--surface, #fffdf8); color:var(--ink, #302c3b); box-shadow:0 8px 28px #21174733; }
+#word-dialog .dialog-title { margin:0 0 12px; color:var(--purple, #6750c7); font-size:clamp(20px, 2.5vw, 30px); line-height:1.2; }
+.word-choice-content { display:flex; flex-direction:column; gap:14px; width:100%; min-width:0; }
+.word-choice-note { text-align:center; font-size:12px; line-height:1.4; color:var(--muted, #686174); overflow-wrap:anywhere; }
+#word-button-container { margin:0; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+#word-button-container .dialog-button { min-width:0; min-height:48px; padding:10px 8px; border:1px solid var(--purple, #6750c7); border-radius:10px; background:var(--purple-light, #eee8ff); color:var(--ink, #302c3b); font-family:inherit; font-weight:700; font-size:15px; line-height:1.3; overflow-wrap:anywhere; cursor:pointer; }
+#word-button-container .dialog-button:hover, #word-button-container .dialog-button:focus-visible { background:var(--yellow, #ffdc72); color:#302c3b; border-color:#bd8d25; }
+@media (max-width:900px) {
+    #word-dialog { width:calc(100% - 16px); max-width:480px; max-height:calc(100% - 12px); padding:12px; border-radius:14px; }
+    #word-dialog .dialog-title { font-size:20px; margin-bottom:8px; }
+    .word-choice-content { gap:10px; }
+    #word-button-container { grid-template-columns:repeat(auto-fit, minmax(min(90px, 100%), 1fr)); gap:6px; }
+    #word-button-container .dialog-button { min-height:44px; padding:8px 5px; font-size:14px; }
 }
 
 body[data-league-mode] #start-dialog .center-dialog-content,
