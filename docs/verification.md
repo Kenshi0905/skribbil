@@ -5,6 +5,27 @@ on **13 October 2026 (India time)**. It does not certify physical-phone
 compatibility, sustained production capacity or crash recovery. Feature boundaries
 remain in [implementation status](feature-status.md).
 
+## Room looks and the Character Workshop — 14 October 2026
+
+The permanent editor keeps its profile save/upload contract and gains a costume
+drawer presentation. Managed rooms add temporary server-authoritative identities
+and an explicit host start. No database migration or drawing-loop rewrite is involved.
+
+Local verification: 147 Node tests passed, with one optional integration skip;
+the full Go suite and the game/API race suites passed. The ten-player protocol
+playtest completed 20 turns, checked broadcasts of two independent room looks,
+unchanged profile records, reconnect preservation, readiness resets, forbidden
+guest starts, and fresh-rematch profile defaults. Preset bounds have a JS/Go parity test.
+
+Manual verification used two isolated browser sessions against an in-memory test
+database. Host/member customization appeared in both rosters; profile reset stayed
+a draft until Apply, Cancel discarded it, refresh preserved the room override,
+editing revoked readiness, and only the host started. Both panels closed at start.
+The permanent name/avatar stayed unchanged. Desktop and 390px phone layouts had
+no horizontal overflow in the editor/panel, keyboard focus was visible, and both
+browser sessions reported no console errors. These are viewport checks, not
+physical-device certification. Test accounts were never created in production.
+
 ## Clubhouse identity and player avatars — pre-push checks
 
 The hygiene update starts from merged `main` revision `65d8ea8`, preserving the

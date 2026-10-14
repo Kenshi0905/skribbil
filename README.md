@@ -17,6 +17,10 @@ only Skribbil is playable today. Open **Clubhouse → Skribbil** to play, or
 **Your Clubhouses** to find invite-only groups. Saved avatars appear beside
 players' ranks and scores inside the game.
 
+Make your permanent avatar in the **Character Workshop**. Before a managed game,
+**Edit room look** gives you a temporary name and preset character just for that
+match. Your profile stays unchanged; guests ready up and the host starts the game.
+
 **[Play Skribbil →](https://skribbil.pages.dev)**
 
 **Live casual preview · Free hosting · Ranked disabled**

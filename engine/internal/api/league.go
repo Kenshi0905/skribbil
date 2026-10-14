@@ -60,7 +60,7 @@ func verifyJoinTicket(token, secret string, now time.Time) (*joinTicket, error) 
 		return nil, errors.New("invalid or expired ticket")
 	}
 	// Cosmetic data must never make the browser contact a third-party image host.
-	if t.AvatarURL != "" && !leagueAvatarPath.MatchString(t.AvatarURL) {
+	if t.AvatarURL != "" && (!leagueAvatarPath.MatchString(t.AvatarURL) || (strings.HasPrefix(t.AvatarURL, "/api/avatar-presets/") && !game.ValidPresetAvatarURL(t.AvatarURL))) {
 		return nil, errors.New("invalid avatar path")
 	}
 	return &t, nil
@@ -209,7 +209,7 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "role cannot change within a match", 409)
 			return
 		}
-		player.AvatarURL = ticket.AvatarURL
+		lobby.ApplyProfileIdentity(player, ticket.Username, ticket.AvatarURL)
 		player.SetLastKnownAddress(GetIPAddressFromRequest(r))
 		SetGameplayCookies(w, r, player, lobby)
 		success = true

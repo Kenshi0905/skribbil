@@ -24,7 +24,7 @@ function setup() {
     WebSocket: Socket, location: { hostname: 'localhost', port: '3000', protocol: 'http:' },
     console: { log() {} }, rootPath: '/engine', reconnectDialogId: 'reconnect-dialog',
     closeDialog() {}, showTextDialog: (...args) => notices.push(args),
-    showReconnectDialogIfNotShown() {}, handleEvent() {},
+    showReconnectDialogIfNotShown() {}, handleEvent() {}, roomLook: {disconnect() {}},
     window: { setInterval(fn) { tick = fn; } },
   });
   vm.runInContext(`let socket; let socketIsConnecting = false; let hasSocketEverConnected = false;

@@ -140,10 +140,11 @@ The inherited test suite is retained. Added tests exercise quorum, duplicates, s
 
 Managed room admission includes an optional `avatarUrl` taken from the
 authenticated account, inside the existing signed ticket. The engine accepts
-only local preset-avatar and profile-media paths, sets the cosmetic field under
-the lobby mutex, and includes it in the existing player snapshot. No new socket
-message or game-loop change is needed. Re-admission refreshes the saved avatar;
-changing it elsewhere does not continuously update an already open room. Missing
+only canonical, in-range preset-avatar and local profile-media paths. It stores
+that trusted profile baseline separately from the effective room name/avatar.
+Only the owner of that baseline receives it in their initial ready event.
+Re-admission refreshes the baseline without erasing a selected room override;
+in-game identities are frozen. A newly created room/rematch starts from the profile. Missing
 or failed images display initials. Uploaded image permissions still go through
 the existing media endpoint. Native unmanaged rooms retain their original layout.
 
@@ -154,3 +155,27 @@ Run `node tests/playtest-10.mjs` with `ENGINE_BINARY` pointing to a current engi
 For a live screenshot fixture, append `--demo`. It creates an isolated Clubhouse and an administrator spectator with synthetic local credentials. The ignored `.data/playtest-demo-<pid>.json` metadata contains the local origin, login, Clubhouse ID and two control-file paths. The lobby waits up to 12 minutes for `startFile`, allowing browser login and Clubhouse inspection. After that file is created, the native game starts with a 300-second drawing timer; metadata gains a fresh spectator launch URL and the first real canvas pauses for at most four minutes, until `continueFile` is created. The Go game timer is never paused or bypassed. Credentials and metadata are removed on normal exit; never commit, publish or include them in screenshots.
 
 The native sound toggle remains in the game menu, alongside one persisted Effects volume slider with a 44px interaction target. New preferences default to 40% master volume, with the correct-guess pop at half gain (20% effective default). Existing mute preferences are honored. A single Web Audio context unlocks on pointer/keyboard gestures, and per-effect GainNodes control amplitude on browsers such as iOS Safari that do not reliably apply HTML media volume. Sources and gains disconnect after playback. Moving the slider changes active effects, muting stops them immediately, and suspended or rejected playback is skipped without queuing stale sounds. A simultaneous burst of correct guesses shares one pop until it finishes; turn notifications remain independent. Browsers without Web Audio use the HTML audio fallback. Audio behavior is covered by `tests/game-audio.test.mjs`; physical iPhone playback still requires device verification.
+
+## Managed pre-game identity and start contract
+
+The permanent character workshop retains the existing profile API, uploads and
+save/cancel behavior. The separate room panel never writes a profile or database
+record. It sends `room-identity-change` with `data: {displayName, avatarUrl}`.
+The Go handler rejects spectators, native rooms, started matches, unknown fields,
+payloads over 2 KiB and invalid avatar URLs. Names are stripped of control/bidi
+formatting and limited to 30 Unicode code points. Avatars are restricted to the
+player’s own signed profile image or a canonical v1 preset with every index
+checked. A Node parity test compares the Go bounds with `web/avatar.js`.
+
+All admission, identity, readiness, disconnect and start mutations share the
+existing lobby mutex and current-socket guard. A successful identity change
+broadcasts the effective Player snapshot and resets a ready guest to standby.
+`room-command-result` acknowledges identity/readiness/start requests (an `error`
+field means rejection). The client keeps rejected drafts, prevents duplicate
+submissions, and closes the panel when play begins.
+
+Managed hosts never ready up: only the current connected host starts, with at
+least two connected participants and every connected non-host participant ready.
+Spectators are excluded. Ready/disconnect/kick events cannot auto-start a managed
+lobby. Owner transfer clears the new host’s readiness. Unmanaged rooms retain
+the upstream ready/force-start behavior. The drawing and guessing loop is unchanged.

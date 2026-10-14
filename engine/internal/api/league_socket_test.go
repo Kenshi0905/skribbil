@@ -83,22 +83,29 @@ func TestRoomCreatorRejoinsWhilePreviousSocketIsStillConnected(t *testing.T) {
 		player.Score = 42
 		player.HardWordPending = true
 	})
+	if err := lobby.HandleEvent(game.EventTypeRoomIdentityChange, []byte(`{"type":"room-identity-change","data":{"displayName":"Temporary host","avatarUrl":"/api/avatar-presets/v1/7-0-0-0-0-1-1-0-0.svg"}}`), player); err != nil {
+		t.Fatal(err)
+	}
 	if next := admit(); next != cookie {
 		t.Fatal("rejoin replaced the player's identity")
 	}
 	_, second := connect(cookie)
+	if second["playerName"] != "Temporary host" {
+		t.Fatal("signed re-admission erased room name")
+	}
 	if first["playerId"] != second["playerId"] || first["ownerId"] != second["ownerId"] {
 		t.Fatal("reconnect changed the owner's seat")
 	}
 	// Delayed callbacks and queued packets from the old connection are harmless.
 	lobby.OnSocketDisconnect(player, previous)
+	_ = lobby.HandleSocketEvent(game.EventTypeRoomIdentityChange, []byte(`{"data":{"displayName":"Stale","avatarUrl":""}}`), player, previous)
 	if err := lobby.HandleSocketEvent(game.EventTypeToggleReadiness, []byte(`{"type":"toggle-readiness"}`), player, previous); err != nil {
 		t.Fatal(err)
 	}
 	var current *gws.Conn
 	lobby.Synchronized(func() {
 		current = player.GetWebsocket()
-		if !player.Connected || current == previous || len(lobby.GetPlayers()) != 1 || len(lobby.League.Roster) != 1 || player.Score != 42 || !player.HardWordPending || player.State != game.Standby {
+		if player.Name != "Temporary host" || !player.Connected || current == previous || len(lobby.GetPlayers()) != 1 || len(lobby.League.Roster) != 1 || player.Score != 42 || !player.HardWordPending || player.State != game.Standby {
 			t.Error("replacement lost player state or duplicated the roster")
 		}
 	})
@@ -192,6 +199,8 @@ func TestOriginalWebsocketDrawingGuessingAndLeaguePenaltyTogether(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
+	send(1, `{"type":"toggle-readiness"}`)
+	waitSocketEvent(t, handlers[1], "room-command-result")
 	send(0, `{"type":"start"}`)
 	choice := waitSocketEvent(t, handlers[0], "your-turn")["data"].(map[string]any)["words"].([]any)[0].(string)
 	send(0, `{"type":"choose-word","data":0}`)

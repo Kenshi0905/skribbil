@@ -960,6 +960,15 @@ let rounds = 0;
 let roundEndTime = 0;
 let gameState = "unstarted";
 
+const roomLook = document.body.dataset.leagueMode
+    ? (await import('/room-look.js')).createRoomLook(document.getElementById('room-look-panel'), {
+        send: event => socket.send(JSON.stringify(event)),
+        isConnected: () => socket?.readyState === WebSocket.OPEN,
+        focusAfterStart: () => messageInput.focus(),
+    }) : null;
+function updateRoomLook(profileIdentity) {
+    roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, ...(profileIdentity ? {profileIdentity} : {})});
+}
 let leagueDislikes = null;
 const dislikeButton = document.getElementById("league-dislike-button");
 const dislikeLabel = document.getElementById("league-dislike-status");
@@ -987,6 +996,8 @@ const handleEvent = (parsed) => {
         if (parsed.data.leagueMode) {
             renderLeagueDislikes(parsed.data.dislikes);
         }
+    } else if (parsed.type === "room-command-result") {
+        roomLook?.result(parsed.data);
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
     } else if (parsed.type === "game-over") {
@@ -1158,6 +1169,7 @@ const handleEvent = (parsed) => {
         } else {
             //First turn, the game starts
             gameState = "ongoing";
+            updateRoomLook();
         }
 
         //As soon as a turn starts, the round should be ongoing, so we make
@@ -1221,6 +1233,7 @@ const handleEvent = (parsed) => {
         }
     } else if (parsed.type === "owner-change") {
         ownerID = parsed.data.playerId;
+        updateRoomLook();
         updateButtonVisibilities();
         appendMessage(
             "system-message",
@@ -1334,6 +1347,7 @@ const handleReadyEvent = (ready) => {
     round = ready.round;
     rounds = ready.rounds;
     gameState = ready.gameState;
+    updateRoomLook(ready.profileIdentity);
     updateRoundsDisplay();
     updateButtonVisibilities();
 
@@ -1674,6 +1688,9 @@ function applyPlayers(players) {
     // We do this at the end, so we can access the old values while
     // iterating over the new ones
     cachedPlayers = players;
+    const self = players.find(player => player.id === ownID);
+    if (roomLook && self) setUsernameLocally(self.name);
+    updateRoomLook();
 }
 
 function createCommunityAvatar(player) {
@@ -2019,6 +2036,7 @@ const connectToWebsocket = () => {
         socketIsConnecting = false;
 
         socket.onclose = (event) => {
+            roomLook?.disconnect();
             //We want to avoid handling the error multiple times and showing the incorrect dialogs.
             socket.onerror = null;
 

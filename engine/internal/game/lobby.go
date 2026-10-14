@@ -73,7 +73,7 @@ func (lobby *Lobby) HandleEvent(eventType string, payload []byte, player *Player
 
 // HandleSocketEvent ignores queued messages from a connection replaced by a
 // reconnect. Socket identity and game mutations share the same lobby lock.
-func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *Player, socket *gws.Conn) error {
+func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *Player, socket *gws.Conn) (result error) {
 	if eventType == EventTypeKeepAlive {
 		// This is a known dummy event in order to avoid accidental websocket
 		// connection closure. However, no action is required on the server.
@@ -85,6 +85,20 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 	defer lobby.mutex.Unlock()
 	if socket != nil && player.ws != socket {
 		return nil
+	}
+
+	// Acknowledge pre-game commands under the same lock, to the current socket only.
+	defer func() {
+		if lobby.League != nil && (eventType == EventTypeRoomIdentityChange || eventType == EventTypeStart || eventType == EventTypeToggleReadiness) {
+			data := map[string]any{"action": eventType}
+			if result != nil {
+				data["error"] = result.Error()
+			}
+			_ = lobby.WriteObject(player, &Event{Type: "room-command-result", Data: data})
+		}
+	}()
+	if eventType == EventTypeRoomIdentityChange {
+		return lobby.changeRoomIdentity(player, payload)
 	}
 
 	// For all followup unmarshalling of the already unmarshalled Event, we
@@ -216,8 +230,21 @@ func (lobby *Lobby) HandleSocketEvent(eventType string, payload []byte, player *
 
 		handleKickVoteEvent(lobby, player, toKickID)
 	} else if eventType == EventTypeToggleReadiness {
+		if lobby.League != nil {
+			if lobby.State != Unstarted || player.ID == lobby.OwnerID || player.SpectatorOnly || player.State == Spectating || !player.Connected {
+				return errors.New("only connected guests can ready up before the match")
+			}
+		}
 		lobby.handleToggleReadinessEvent(player)
 	} else if eventType == EventTypeStart {
+		if lobby.League != nil {
+			if player.ID != lobby.OwnerID || !player.Connected {
+				return errors.New("only the connected host can start")
+			}
+			if err := lobby.managedStartError(); err != nil {
+				return err
+			}
+		}
 		if lobby.State != Ongoing && player.ID == lobby.OwnerID {
 			lobby.startGame()
 		}
@@ -247,7 +274,7 @@ func (lobby *Lobby) handleToggleReadinessEvent(player *Player) {
 			player.State = Standby
 		}
 
-		if lobby.readyToStart() {
+		if lobby.League == nil && lobby.readyToStart() {
 			lobby.startGame()
 		} else {
 			lobby.Broadcast(&Event{Type: EventTypeUpdatePlayers, Data: lobby.players})
@@ -450,6 +477,9 @@ func (lobby *Lobby) broadcastConditional(data any, condition func(*Player) bool)
 }
 
 func (lobby *Lobby) startGame() {
+	if lobby.League != nil && lobby.managedStartError() != nil {
+		return
+	}
 	if lobby.League != nil {
 		count := 0
 		for _, p := range lobby.players {
@@ -553,6 +583,9 @@ func kickPlayer(lobby *Lobby, playerToKick *Player, playerToKickIndex int) {
 			potentialOwner := otherPlayer
 			if potentialOwner.Connected && (lobby.League == nil || (potentialOwner != playerToKick && !potentialOwner.SpectatorOnly)) {
 				lobby.OwnerID = potentialOwner.ID
+				if lobby.League != nil && lobby.State == Unstarted && potentialOwner.State == Ready {
+					potentialOwner.State = Standby
+				}
 				lobby.Broadcast(&Event{
 					Type: EventTypeOwnerChange,
 					Data: &OwnerChangeEvent{
@@ -581,6 +614,11 @@ func kickPlayer(lobby *Lobby, playerToKick *Player, playerToKickIndex int) {
 		advanceLobbyPredefineDrawer(lobby, roundOver, newDrawer)
 	} else {
 		lobby.players = append(lobby.players[:playerToKickIndex], lobby.players[playerToKickIndex+1:]...)
+		if lobby.League != nil && lobby.State == Unstarted {
+			recalculateRanks(lobby)
+			lobby.Broadcast(&Event{Type: EventTypeUpdatePlayers, Data: lobby.players})
+			return
+		}
 
 		if lobby.isAnyoneStillGuessing() {
 			// This isn't necessary in case we need to advanced the lobby, as it has
@@ -1176,6 +1214,8 @@ func generateReadyData(lobby *Lobby, player *Player) *ReadyEvent {
 		state := lobby.dislikeState()
 		ready.Dislikes = &state
 		ready.LeagueMode = lobby.League.Mode
+		baseline := player.ProfileIdentity
+		ready.ProfileIdentity = &baseline
 	}
 	return ready
 }
@@ -1244,7 +1284,7 @@ func (lobby *Lobby) OnSocketDisconnect(player *Player, socket *gws.Conn) {
 		if !player.SpectatorOnly {
 			player.State = Standby
 		}
-		if lobby.readyToStart() {
+		if lobby.League == nil && lobby.readyToStart() {
 			lobby.startGame()
 			// Rank Calculation and sending out player updates happened anyway,
 			// so there's no need to keep going.

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { loadImage } from '@napi-rs/canvas';
@@ -60,4 +61,9 @@ test('profile presets persist across sessions, reject forged choices and serve s
     assert.equal(concurrentProfile.displayName,'Fresh scribbler','an avatar-only update cannot overwrite newer profile edits');
     assert.equal(concurrentProfile.bio,'A new bio');
   } finally { await app.close(); }
+});
+test('Go room preset bounds match the permanent v1 avatar catalog',()=>{
+  const source=readFileSync(new URL('../engine/internal/game/room_identity.go',import.meta.url),'utf8');
+  const bounds=source.match(/PresetAvatarBounds = \[\.\.\.\]int\{([^}]+)\}/)[1].split(',').map(Number);
+  assert.deepEqual(bounds,avatarKeys.map(key=>avatarOptions[key].length));
 });
