@@ -14,11 +14,15 @@ export function roomRules({players=[],ownID,ownerID,gameState}) {
 
 // All player strings go through textContent or input.value. This component only
 // emits match-scoped WS commands; it has no profile API or persistence access.
-export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
+export function createRoomLook(root,{send,isConnected,focusAfterStart,editSettings}) {
   let snapshot={players:[],gameState:'unstarted'},draft=null,pending=null,error='',notice='',vibe='Cute';
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;if(cls)el.className=cls;return el;};
   const button=(text,fn,cls='')=>{const b=node('button',text,cls);b.type='button';b.addEventListener('click',fn);return b;};
-  const title=node('h2','Before we draw…'), hint=node('p','Pick your room look.');
+  const title=node('h2','Waiting room'), hint=node('p','Gather your crew. Get ready to draw.');
+  const header=node('div',null,'room-look-header'),heading=node('div');heading.append(title,hint);
+  const settingsButton=button('Edit settings',()=>{const rules=roomRules(snapshot);if(rules.host&&rules.editable&&snapshot.mode!=='ranked'&&isConnected()&&!pending){settingsButton.focus();editSettings?.();}},'room-look-settings');
+  settingsButton.setAttribute('aria-haspopup','dialog');settingsButton.setAttribute('aria-controls','lobbysettings-dialog');header.append(heading,settingsButton);
+  const settingsSummary=node('div',null,'room-look-settings-summary');settingsSummary.setAttribute('aria-label','Room settings');
   title.id='room-look-title';root.setAttribute('aria-labelledby',title.id);
   const scope=node('p','This only changes how you appear in this room. Your profile stays untouched.','room-look-scope');
   const columns=node('div',null,'room-look-columns'), identity=node('div',null,'room-look-identity');
@@ -45,15 +49,14 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
   form.addEventListener('keydown',e=>{if(e.key==='Escape'&&!pending){e.preventDefault();cancel.click();}});
   form.addEventListener('submit',e=>{e.preventDefault();if(!canEdit())return;if(!draft.displayName.trim()){error='Enter a room name.';render();name.focus();return;}command('room-identity-change',{...draft});});
   identity.append(edit,form);
-  const rosterSection=node('section',null,'room-look-roster-section'),roster=node('ul',null,'room-look-roster');roster.setAttribute('aria-label','Room roster');rosterSection.append(node('h3','The drawing crew'),roster);
-  const aside=node('div',null,'room-look-aside');aside.append(rosterSection,preview);columns.append(identity,aside);
+  const aside=node('div',null,'room-look-aside');aside.append(preview);columns.append(identity,aside);
   const status=node('p',null,'room-look-status');status.setAttribute('role','status');
   const errors=node('p',null,'room-look-error');errors.setAttribute('role','alert');
   const bottom=node('div',null,'room-look-actions');
   const readyLabel=node('label',null,'room-look-ready'),ready=node('input');ready.type='checkbox';ready.id='room-ready';readyLabel.htmlFor=ready.id;const readyText=node('span','Ready');readyLabel.append(ready,readyText);
   ready.addEventListener('change',()=>command('toggle-readiness'));
   const start=button('Start game',()=>command('start'),'room-look-primary');bottom.append(readyLabel,start);
-  root.append(title,hint,scope,columns,errors,status,bottom);
+  root.append(header,settingsSummary,errors,status,bottom,columns,scope);
 
   function avatar(person) {
     const holder=node('span',Array.from(person.displayName||person.name||'?').slice(0,2).join('').toUpperCase(),'room-look-avatar');holder.setAttribute('aria-hidden','true');
@@ -68,7 +71,7 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
     const raw=draft||{displayName:self.name,avatarUrl:self.avatarUrl},look={...raw,displayName:roomDisplayName(raw.displayName)};
     const changed=Boolean(draft)&&(look.displayName!==self.name||look.avatarUrl!==(self.avatarUrl||''));
     preview.setAttribute('role','group');preview.setAttribute('aria-label','Room look preview for '+(look.displayName||'Your room name'));
-    const badges=node('div',null,'room-look-badges');badges.append(node('span','You'));if(rules.host)badges.append(node('span','♛ Host'));
+    const badges=node('div',null,'room-look-badges');badges.append(node('span','You'));if(rules.host)badges.append(node('span','♛ Host'));if(self.state==='spectating')badges.append(node('span','Spectating'));
     preview.append(node('small','ROOM LOOK PREVIEW','room-look-stamp'),avatar(look),node('strong',look.displayName||'Your room name'),badges,node('small',changed?'Not applied yet':'Current room look','room-look-draft-status'),node('small','Only for this room.'));
   }
   function syncDraft(){name.value=draft.displayName;const preset=editableAvatar(avatarFromUrl(draft.avatarUrl));for(const key of avatarKeys)fields[key].value=String(preset[key]);updatePreview();}
@@ -82,7 +85,16 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
   function render(){
     const rules=roomRules(snapshot),open=snapshot.gameState==='unstarted';
     if(!open){const hadFocus=root.contains(document.activeElement);root.hidden=true;draft=null;pending=null;form.hidden=true;if(hadFocus)focusAfterStart?.();return;}
-    root.hidden=false;edit.hidden=!rules.editable||Boolean(draft);form.hidden=!draft||!rules.editable;
+    root.hidden=false;
+    settingsButton.hidden=!rules.host||!rules.editable||snapshot.mode==='ranked';
+    settingsButton.disabled=Boolean(pending)||!isConnected();
+    settingsSummary.replaceChildren();
+    const settings=snapshot.settings||{};
+    for(const [label,value] of [['Draw time',settings.drawingTime?`${settings.drawingTime} sec`:'—'],['Rounds',settings.rounds||'—'],['Players',`${rules.count}${settings.maxPlayers?` / ${settings.maxPlayers}`:''}`],['Word choices',settings.wordsPerTurn||'—']]){
+      const item=node('div');item.append(node('small',label),node('strong',String(value)));settingsSummary.append(item);
+    }
+    const settingsNote=node('small',snapshot.mode==='ranked'?'Ranked settings are locked.':rules.host?'You control the room settings.':'The room leader controls settings.','room-look-settings-note');settingsSummary.append(settingsNote);
+    edit.hidden=!rules.editable||Boolean(draft);form.hidden=!draft||!rules.editable;
     readyLabel.hidden=!rules.editable||rules.host;start.hidden=!rules.editable||!rules.host;
     const busy=Boolean(pending)||!isConnected();root.setAttribute('aria-busy',String(Boolean(pending)));
     for(const el of [edit,name,shuffle,restore,apply,cancel,ready,...vibeButtons,...Object.values(fields)])el.disabled=busy;
@@ -91,10 +103,7 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart}) {
     ready.checked=rules.self?.state==='ready';readyText.textContent=ready.checked?'Ready':'Not ready · tick when you’re set';
     errors.textContent=error;errors.hidden=!error;
     status.textContent=(notice?notice+' ':'') + (!isConnected()?'Reconnecting…':`${rules.ready}/${rules.needed} guests ready. ${rules.count<2?'Waiting for at least two players.':rules.host?'You start when the crew is ready.':'The host starts the game.'}`);
-    updatePreview();roster.replaceChildren();
-    for(const p of snapshot.players.filter(p=>p.connected)) {
-      const row=node('li'),who=node('span',null,'room-look-roster-name');who.append(node('strong',p.name),node('small',`${p.id===snapshot.ownID?'You · ':''}${p.id===snapshot.ownerID?'♛ Host':p.state==='spectating'?'Spectating':p.state==='ready'?'Ready':'Not ready'}`));row.append(avatar(p),who);roster.append(row);
-    }
+    updatePreview();
   }
   return {
     update(next){snapshot={...snapshot,...next};render();},

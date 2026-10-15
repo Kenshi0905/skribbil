@@ -363,15 +363,47 @@ function increaseLobbyDrawingTime() {
 addDrawingTimeButton.addEventListener("click", increaseLobbyDrawingTime);
 lobbyDrawingTime.addEventListener("input", updateDrawingTimeIncrement);
 
+let settingsReturnFocus;
+function positionLobbySettingsDialog() {
+    if (window.matchMedia('(max-width:900px)').matches) {
+        const viewport = window.visualViewport;
+        const height = viewport?.height || window.innerHeight;
+        lobbySettingsDialog.style.maxHeight = `${Math.max(0, height - 24)}px`;
+        lobbySettingsDialog.style.top = `${(viewport?.offsetTop || 0) + height / 2}px`;
+    } else {
+        lobbySettingsDialog.style.removeProperty('max-height');
+        lobbySettingsDialog.style.removeProperty('top');
+    }
+}
+function updateVisibleSettingsDialog() {
+    if (lobbySettingsDialog.style.visibility === 'visible') positionLobbySettingsDialog();
+}
+window.addEventListener('resize', updateVisibleSettingsDialog);
+window.visualViewport?.addEventListener('resize', updateVisibleSettingsDialog);
+window.visualViewport?.addEventListener('scroll', updateVisibleSettingsDialog);
 function showLobbySettingsDialog() {
+    if (ownID !== ownerID || document.body.dataset.leagueMode === 'ranked') return;
+    settingsReturnFocus = document.activeElement;
     hideMenu();
     updateDrawingTimeIncrement();
     lobbySettingsDialog.style.visibility = "visible";
+    positionLobbySettingsDialog();
+    lobbyDrawingTime.focus();
 }
 lobbySettingsButton.addEventListener("click", showLobbySettingsDialog);
+lobbySettingsDialog.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); hideLobbySettingsDialog(); }
+    if (event.key === 'Tab') {
+        const controls = [...lobbySettingsDialog.querySelectorAll('input:not([disabled]),button:not([disabled])')];
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+});
 
 function hideLobbySettingsDialog() {
     lobbySettingsDialog.style.visibility = "hidden";
+    settingsReturnFocus?.focus();
 }
 document
     .getElementById("lobby-settings-close-button")
@@ -1037,14 +1069,16 @@ function updateRoomSession() {
         leaderName:getCachedPlayer(ownerID)?.name});
 }
 
+let roomSettings = {drawingTime:Number(lobbyDrawingTime.value), rounds:Number(document.getElementById('lobby-settings-max-rounds').value), maxPlayers:Number(document.getElementById('lobby-settings-max-players').value), wordsPerTurn:Number(document.getElementById('lobby-settings-words-per-turn').value)};
 const roomLook = document.body.dataset.leagueMode
     ? (await import('/room-look.js')).createRoomLook(document.getElementById('room-look-panel'), {
         send: event => socket.send(JSON.stringify(event)),
         isConnected: () => socket?.readyState === WebSocket.OPEN,
         focusAfterStart: () => messageInput.focus(),
+        editSettings: showLobbySettingsDialog,
     }) : null;
 function updateRoomLook(profileIdentity) {
-    roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, ...(profileIdentity ? {profileIdentity} : {})});
+    roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, mode:document.body.dataset.leagueMode, settings:roomSettings, ...(profileIdentity ? {profileIdentity} : {})});
 }
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
@@ -1335,7 +1369,13 @@ const handleEvent = (parsed) => {
             '{{.Translation.Get "drawer-kicked"}}',
         );
     } else if (parsed.type === "lobby-settings-changed") {
-        lobbyDrawingTime.value = parsed.data.drawingTime;
+        for (const [field,key] of [['drawing-time','drawingTime'],['max-rounds','rounds'],['max-players','maxPlayers'],['words-per-turn','wordsPerTurn'],['custom-words-per-turn','customWordsPerTurn'],['clients-per-ip-limit','clientsPerIpLimit']]) {
+            const input = document.getElementById(`lobby-settings-${field}`);
+            if (parsed.data[key] !== undefined) input.value = parsed.data[key];
+        }
+        roomSettings = {...parsed.data};
+        document.getElementById('lobby-settings-public').checked = parsed.data.public;
+        updateRoomLook();
         updateDrawingTimeIncrement();
         rounds = parsed.data.rounds;
         updateRoundsDisplay();
