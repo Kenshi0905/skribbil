@@ -295,8 +295,7 @@ export async function createApp({db,config,assets}={}) {
       const mediaAsset=path.match(/^\/api\/media\/([a-f0-9-]+)$/);
       if(mediaAsset&&req.method==='GET'){
         const asset=await media.read(mediaAsset[1]);
-        if(asset.url){res.writeHead(302,{Location:asset.url,'Cache-Control':'no-store'});res.end();}
-        else{res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});res.end(asset.body);}return;
+        res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});res.end(asset.body);return;
       }
       const bracket=path.match(/^\/api\/tournaments\/([a-f0-9-]+)\/bracket$/);
       if(bracket&&req.method==='GET'){

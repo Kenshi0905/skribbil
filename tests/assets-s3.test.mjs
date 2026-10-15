@@ -11,11 +11,11 @@ test('compatible S3 requests preserve payloads and signing without optional AWS 
   process.env.S3_REGION='ap-south-1';
   process.env.S3_ACCESS_KEY_ID=randomBytes(16).toString('hex');
   process.env.S3_SECRET_ACCESS_KEY=randomBytes(32).toString('hex');
-  const store=new AssetStore({bucket:'test-private'}),client=await store.client(),requests=[];
+  const store=new AssetStore({bucket:'test-private'}),client=await store.client(),requests=[],downloadBytes=randomBytes(1024);
   client.config.requestHandler={
     async handle(request){
       requests.push(request);
-      return {response:{statusCode:request.method==='DELETE'?204:200,headers:{etag:'"test-object"'},body:Readable.from([])}};
+      return {response:{statusCode:request.method==='DELETE'?204:200,headers:{etag:'"test-object"'},body:Readable.from(request.method==='GET'?[downloadBytes]:[])}};
     },
     destroy(){},
   };
@@ -44,11 +44,17 @@ test('compatible S3 requests preserve payloads and signing without optional AWS 
     for(const parameter of download.searchParams.keys())assert.ok(!/checksum/i.test(parameter),`unexpected optional extension ${parameter}`);
     assert.equal(requests.length,1,'presigning must not fetch the private object');
 
-    await store.remove(key);
-    assert.equal(requests.length,2);
-    assert.equal(requests[1].method,'DELETE');
+    const inline=await store.get(key,{inline:true});
+    assert.deepEqual(inline.body,downloadBytes,'same-origin media can serve bytes from private storage');
+    assert.equal(inline.url,undefined);
+    assert.equal(requests[1].method,'GET');
     assert.equal(requests[1].path,upload.path);
-    assert.match(requests[1].headers.authorization,/^AWS4-HMAC-SHA256 /);
+
+    await store.remove(key);
+    assert.equal(requests.length,3);
+    assert.equal(requests[2].method,'DELETE');
+    assert.equal(requests[2].path,upload.path);
+    assert.match(requests[2].headers.authorization,/^AWS4-HMAC-SHA256 /);
   }finally{
     client.destroy();
     for(const name of ['S3_ENDPOINT','S3_REGION','S3_ACCESS_KEY_ID','S3_SECRET_ACCESS_KEY'])delete process.env[name];

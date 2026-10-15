@@ -47,9 +47,14 @@ export class AssetStore {
     else { const {PutObjectCommand}=await import('@aws-sdk/client-s3');await (await this.client()).send(new PutObjectCommand({Bucket:this.bucket,Key:key,Body:bytes,ContentType:mediaType})); }
     return {key,bytes:bytes.length,sha256:hash(bytes),mediaType,backend:this.backend,bucket:this.bucket};
   }
-  async get(key) {
+  async get(key,{inline=false}={}) {
     if(this.backend==='local')return {body:await readFile(this.path(key))};
-    const {GetObjectCommand}=await import('@aws-sdk/client-s3');const {getSignedUrl}=await import('@aws-sdk/s3-request-presigner');
+    const {GetObjectCommand}=await import('@aws-sdk/client-s3');
+    if(inline) {
+      const object=await (await this.client()).send(new GetObjectCommand({Bucket:this.bucket,Key:key}));
+      return {body:Buffer.from(await object.Body.transformToByteArray())};
+    }
+    const {getSignedUrl}=await import('@aws-sdk/s3-request-presigner');
     return {url:await getSignedUrl(await this.client(),new GetObjectCommand({Bucket:this.bucket,Key:key}),{expiresIn:60})};
   }
   async remove(key) {
