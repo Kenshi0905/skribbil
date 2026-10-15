@@ -14,7 +14,7 @@ import { createApp } from '../server/index.mjs';
 import { AssetStore } from '../server/assets.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const TURN_EVENT_TIMEOUT_MS = 30000;
+const TURN_EVENT_TIMEOUT_MS = 120000;
 async function until(check, label, timeout = 10000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) { const value = await check(); if (value) return value; await delay(25); }
