@@ -560,6 +560,8 @@ func handleKickVoteEvent(lobby *Lobby, player *Player, toKickID uuid.UUID) {
 	lobby.Broadcast(&Event{
 		Type: EventTypeKickVote,
 		Data: &KickVote{
+			VoterName:         player.Name,
+			VoterID:           player.ID,
 			PlayerID:          playerToKick.ID,
 			PlayerName:        playerToKick.Name,
 			VoteCount:         voteKickCount,
