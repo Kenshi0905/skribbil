@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { leaderboard as communityLeaderboard } from './leaderboard.mjs';
 import { avatarUrl, avatarFromUrl } from '../web/avatar.js';
 import { ApiError, requireValue, textField, isUuid, hash, passwordHash, passwordMatches, newSession } from './security.mjs';
 
@@ -158,8 +159,7 @@ export class Platform {
     const [leagues,profile,leaderboard,seasonBoard,challenges,tournaments,teams,friends,rooms,drawings,season] = await Promise.all([
       this.db.query(`SELECT l.id,l.name,l.slug FROM skribbil.leagues l WHERE l.community_id=$1 ORDER BY EXISTS(SELECT 1 FROM skribbil.seasons s WHERE s.league_id=l.id AND s.id=$2) DESC,l.created_at DESC,l.id`,[context.community_id,context.season_id]),
       this.profile(user),
-      this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",s.total_points AS points,s.wins,s.matches_played AS played
-        FROM skribbil.all_time_game_standings s JOIN skribbil.users u ON u.id=s.user_id WHERE s.game_id=$1 AND u.status<>'erased' ORDER BY s.total_points DESC,s.wins DESC,u.username LIMIT 50`,[context.game_id]),
+      communityLeaderboard(this,null).then(board => ({rows:board.players})),
       this.db.query(`SELECT u.id,u.username,u.display_name AS name,u.avatar_color AS "avatarColor",u.avatar_url AS "avatarUrl",s.league_points AS points,s.wins,s.matches_played AS played
         FROM skribbil.season_standings s JOIN skribbil.users u ON u.id=s.user_id WHERE s.season_id=$1 ORDER BY s.league_points DESC,s.wins DESC,u.username LIMIT 50`,[context.season_id]),
       this.db.query(`SELECT w.id,d.title,d.cadence,d.metric,w.target,w.xp_reward AS xp,w.ends_at AS "endsAt",coalesce(p.progress,0) AS progress,

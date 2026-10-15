@@ -49,9 +49,10 @@ test('a fresh or unavailable community renders honest empty pages without manufa
     noInventedCards(html);
   }
   assert.match(ui.homePage(),/No public rooms are open/);
-  assert.doesNotMatch(ui.sidebar(),/href="#\/league"|season-card/);
-  assert.doesNotMatch(ui.homePage(),/href="#\/league"/);
-  assert.doesNotMatch(ui.leaguePage(),/A league of your own|league-season/);
+  assert.match(ui.sidebar(),/href="#\/league"/);
+  assert.doesNotMatch(ui.sidebar(),/season-card/);
+  assert.match(ui.homePage(),/href="#\/league"/);
+  assert.match(ui.leaguePage(),/Leaderboard/);
   assert.match(ui.tournamentsPage(),/No tournaments scheduled/);
   assert.match(ui.communityPage(),/No drawings have been curated/);
   assert.match(ui.profilePage(),/Sign in to see your own match history/);
@@ -65,11 +66,15 @@ test('a fresh or unavailable community renders honest empty pages without manufa
 
 test('season standings never substitute all-time results and search distinguishes no results from no match', () => {
   const ui = client({leagues:[{id:'test-league',name:'Weekend league'}],leaderboard:[{username:'render_test_player',points:840,wins:2,played:5}],seasonLeaderboard:[],season:null});
+  ui.state.leaderboardTab = 'season';
+  ui.state.board = {players:[],top:[],total:0,page:1};
   assert.equal(ui.boardPlayers().length,0);
   assert.doesNotMatch(ui.leaguePage(),/render_test_player/);
   ui.state.leaderboardTab = 'all-time';
+  ui.state.board = {players:[{username:'render_test_player',points:840,wins:2,played:5,rank:1}],top:[],total:1,page:1};
   assert.match(ui.leaguePage(),/render_test_player/);
   assert.match(ui.leaguePage(),/>840</);
+  ui.state.search = 'unknown';
   assert.match(ui.leaderboardTableRows([]),/No scribblers found/);
   assert.doesNotMatch(ui.leaguePage(),/Certified scribbler|Fresh pencil/);
 });
@@ -142,8 +147,29 @@ test('admin-created leagues supply escaped names and reveal league navigation', 
   assert.match(ui.sidebar(),/Weekend &lt;league&gt;/);
   assert.match(ui.topbar(),/Weekend &lt;league&gt;/);
   assert.match(ui.homePage(),/Weekend &lt;league&gt;/);
-  assert.match(ui.leaguePage(),/Weekend &lt;league&gt;/);
+  assert.match(ui.leaguePage(),/Leaderboard/);
+  ui.state.leaderboardTab = 'season';
   assert.match(ui.leaguePage(),/No active season/);
   ui.state.data.leagues=[];
-  assert.doesNotMatch(ui.sidebar(),/season-card|href="#\/league"/);
+  assert.doesNotMatch(ui.sidebar(),/season-card/);
+  assert.match(ui.sidebar(),/href="#\/league"/);
+});
+
+
+test('public leaderboard defaults to all time and renders independent period and audience controls',()=>{
+  const ui=client({user:{id:'mine',username:'my_name'}});
+  assert.equal(ui.state.leaderboardTab,'all-time');
+  ui.state.board={players:[{id:'mine',displayName:'<Player>',rank:29,points:123,wins:1,played:4,level:2}],top:[],me:{rank:29,points:123},total:30,page:2};
+  let html=ui.leaguePage();
+  for(const period of ['all-time','weekly','monthly','season']) assert.match(html,new RegExp(`data-value="${period}"`));
+  for(const scope of ['everyone','friends']) assert.match(html,new RegExp(`data-value="${scope}"`));
+  assert.match(html,/Your rank/);assert.match(html,/#29/);assert.match(html,/&lt;Player&gt;/);
+  assert.match(html,/leaderboard-you/);assert.match(html,/Page 2 of 2/);
+  assert.match(html,/data-label="Matches"/);
+  ui.state.boardLoading=true;ui.state.board=null;
+  assert.match(ui.leaguePage(),/Loading standings/);
+  ui.state.boardLoading=false;ui.state.boardError='Server unavailable';
+  assert.match(ui.leaguePage(),/Server unavailable/);assert.match(ui.leaguePage(),/Try again/);
+  ui.state.data.user=null;ui.state.leaderboardScope='friends';
+  html=ui.leaguePage();assert.match(html,/Sign in to compare/);assert.doesNotMatch(html,/community-leaderboard/);
 });
