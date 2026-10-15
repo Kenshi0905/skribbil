@@ -1037,6 +1037,7 @@ button:focus-visible, input:focus-visible, .custom-check-or-radio:focus-visible 
 #word-dialog .dialog-title { margin:0 0 12px; color:var(--purple, #6750c7); font-size:clamp(20px, 2.5vw, 30px); line-height:1.2; }
 .word-choice-content { display:flex; flex-direction:column; gap:14px; width:100%; min-width:0; }
 .word-choice-note { text-align:center; font-size:12px; line-height:1.4; color:var(--muted, #686174); overflow-wrap:anywhere; }
+#word-choice-summary { margin:0; font-size:14px; font-weight:600; color:var(--ink, #302c3b); }
 #word-button-container { margin:0; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
 #word-button-container .dialog-button { min-width:0; min-height:48px; padding:10px 8px; border:1px solid var(--purple, #6750c7); border-radius:10px; background:var(--purple-light, #eee8ff); color:var(--ink, #302c3b); font-family:inherit; font-weight:700; font-size:15px; line-height:1.3; overflow-wrap:anywhere; cursor:pointer; }
 #word-button-container .dialog-button:hover, #word-button-container .dialog-button:focus-visible { background:var(--yellow, #ffdc72); color:#302c3b; border-color:#bd8d25; }

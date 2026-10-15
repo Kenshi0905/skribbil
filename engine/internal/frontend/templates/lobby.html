@@ -143,11 +143,12 @@
                             <span class="dialog-title">{{.Translation.Get "choose-a-word"}}</span>
                             <div class="center-dialog-content">
                                 <div class="word-choice-content">
+                                    <p id="word-choice-summary" class="word-choice-note" role="status"></p>
+                                    <div id="word-button-container"> </div>
                                     <div class="word-choice-note">
                                         <span>{{.Translation.Get "word-choice-warning"}}:</span>
                                         <span id="word-preselected" style="font-weight: bold;"></span>
                                     </div>
-                                    <div id="word-button-container"> </div>
                                 </div>
                             </div>
                         </div>

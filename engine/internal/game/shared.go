@@ -171,6 +171,7 @@ type YourTurn struct {
 	TimeLeft        int      `json:"timeLeft"`
 	PreSelectedWord int      `json:"preSelectedWord"`
 	Words           []string `json:"words"`
+	HardWord        bool     `json:"hardWord"`
 }
 
 // NextTurn represents the data necessary for displaying the lobby state right

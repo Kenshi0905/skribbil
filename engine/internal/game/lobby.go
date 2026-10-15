@@ -1241,6 +1241,7 @@ func (lobby *Lobby) SendYourTurnEvent(player *Player) {
 			TimeLeft:        int(lobby.wordChoiceEndTime.UnixMilli() - getTimeAsMillis()),
 			PreSelectedWord: lobby.preSelectedWord,
 			Words:           lobby.wordChoice,
+			HardWord:        lobby.League != nil && lobby.League.HardTurn,
 		},
 	})
 }

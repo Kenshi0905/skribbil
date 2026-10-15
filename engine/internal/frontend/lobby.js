@@ -1506,6 +1506,12 @@ function updateButtonVisibilities() {
 }
 
 function promptWords(data) {
+    const summary = document.getElementById("word-choice-summary");
+    summary.textContent = data.hardWord
+        ? "Hard-word penalty: your previous drawing received all required dislikes. This turn has one forced hard word."
+        : data.words.length === 1
+            ? "This room is set to offer one word per turn. The leader can change this in Edit settings."
+            : `Choose one of these ${data.words.length} words.`;
     wordPreSelected.textContent = data.words[data.preSelectedWord];
     wordButtonContainer.replaceChildren(
         ...data.words.map((word, index) => {
