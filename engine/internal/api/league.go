@@ -32,6 +32,7 @@ type joinTicket struct {
 	ExpiresAt       int64  `json:"expiresAt"`
 	Role            string `json:"role,omitempty"`
 	HardWordPending bool   `json:"hardWordPending,omitempty"`
+	ResetScore      bool   `json:"resetScore,omitempty"`
 }
 
 func verifyJoinTicket(token, secret string, now time.Time) (*joinTicket, error) {
@@ -190,10 +191,6 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 				http.Error(w, "room full", 409)
 				return
 			}
-			if lobby.League.Mode == "ranked" && lobby.State == game.Ongoing && ticket.Role != "spectator" {
-				http.Error(w, "ranked match already started", 409)
-				return
-			}
 			player = lobby.JoinPlayer(ticket.Username)
 			player.AccountID = ticket.UserID
 			player.HardWordPending = ticket.HardWordPending
@@ -206,8 +203,29 @@ func (handler *V1Handler) joinLeagueRoom(w http.ResponseWriter, r *http.Request)
 				lobby.OwnerID = player.ID
 			}
 		} else if player.SpectatorOnly != (ticket.Role == "spectator") {
-			http.Error(w, "role cannot change within a match", 409)
-			return
+			if ticket.Role == "spectator" || lobby.State == game.GameOver {
+				http.Error(w, "role cannot change within a match", 409)
+				return
+			}
+			if !lobby.HasFreePlayerSlot() {
+				http.Error(w, "room full", 409)
+				return
+			}
+			player.SpectatorOnly = false
+			// Spectators may have seen the answer. Join the drawing rotation
+			// now, and start guessing when the next word is chosen.
+			player.State = game.Standby
+			player.Score, player.LastScore = 0, 0
+			player.SpectateToggleRequested = false
+		}
+		if lobby.State == game.Ongoing && !player.SpectatorOnly && (!player.Connected || ticket.ResetScore) {
+			// A new invite admission after leaving starts at zero. Ordinary
+			// websocket reconnects do not pass through this admission handler.
+			player.Score, player.LastScore = 0, 0
+			player.SpectateToggleRequested = false
+			if player.State == game.Spectating {
+				player.State = game.Standby
+			}
 		}
 		lobby.ApplyProfileIdentity(player, ticket.Username, ticket.AvatarURL)
 		lobby.ApplySessionIdentity(player)

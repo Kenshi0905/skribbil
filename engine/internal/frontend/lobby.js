@@ -820,7 +820,7 @@ function setSpectateMode(requestedValue, spectatingValue) {
         showInfoDialog(
             `{{.Translation.Get "now-spectating-title"}}`,
             managedRoom
-                ? "You are watching this match. Spectators cannot draw, chat, guess or vote. To play, return to the league or your Clubhouse and join a new room as a player."
+                ? "You are watching this match. Spectators cannot draw, chat, guess or vote. To play, open the room invite link and take a player seat."
                 : `{{.Translation.Get "now-spectating-text"}}`,
             `{{.Translation.Get "confirm"}}`,
         );
@@ -1031,7 +1031,9 @@ function updateRoomLook(profileIdentity) {
 }
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
+let roomInviteStatusTimer;
 copyRoomInvite?.addEventListener("click", async () => {
+    clearTimeout(roomInviteStatusTimer);
     const input = document.getElementById("room-invite-link");
     const status = document.getElementById("room-invite-status");
     const invite = new URL("/", location.origin);
@@ -1041,6 +1043,10 @@ copyRoomInvite?.addEventListener("click", async () => {
         await navigator.clipboard.writeText(invite.href);
         input.hidden = true;
         status.textContent = "Invite link copied! Send it to your friends.";
+        const message = status.textContent;
+        roomInviteStatusTimer = setTimeout(() => {
+            if (status.textContent === message) status.textContent = "";
+        }, 3000);
     } catch {
         input.hidden = false;
         input.focus();

@@ -17,6 +17,37 @@ function sample(format='image/png') {
   ctx.fillStyle='#ab23fe';ctx.fillRect(0,0,40,20);
   return canvas.toBuffer(format);
 }
+test('private-storage profile photos are served inline to other players and public leaderboards',{timeout:60000},async()=>{
+  const db=await openDatabase({url:'',dataDir:':memory:'});
+  const assets=new AssetStore({bucket:'profile-photo-fixture'}),objects=new Map();
+  // Exercise the production S3 byte-download path without external storage.
+  assets.s3={async send(command){
+    const {Key,Body}=command.input;
+    if(command.constructor.name==='PutObjectCommand'){objects.set(Key,Buffer.from(Body));return {};}
+    if(command.constructor.name==='GetObjectCommand')return {Body:{async transformToByteArray(){return objects.get(Key);}}};
+    if(command.constructor.name==='DeleteObjectCommand'){objects.delete(Key);return {};}
+    throw Error('Unexpected storage operation');
+  }};
+  const app=await createApp({db,assets,config:{secret:randomBytes(32).toString('hex'),origin:'',secure:false}});
+  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${app.server.address().port}`;app.config.origin=base;
+  try{
+    const owner=await app.platform.register({username:'stored_photo_owner',email:'stored-photo@example.test',password:randomBytes(24).toString('hex')});
+    const viewer=await app.platform.register({username:'stored_photo_viewer',email:'stored-viewer@example.test',password:randomBytes(24).toString('hex')});
+    const media=new Media(app.platform,assets);
+    const {url}=await media.upload(owner.user,{image:sample().toString('base64')});
+    for(const token of [owner.token,viewer.token,null]){
+      const response=await fetch(base+url,{redirect:'manual',headers:token?{Cookie:`skribbil_session=${token}`}:{}});
+      assert.equal(response.status,200,'profile pictures must not redirect outside the page image policy');
+      assert.equal(response.headers.get('location'),null);
+      assert.equal(response.headers.get('content-type'),'image/png');
+      assert.equal(response.headers.get('cache-control'),'no-store');
+      const image=await loadImage(Buffer.from(await response.arrayBuffer()));
+      assert.equal(image.width,512);assert.equal(image.height,512);
+    }
+    await media.remove(owner.user);
+    assert.equal((await fetch(base+url)).status,404,'removed profile pictures stay unavailable');
+  }finally{await app.close();}
+});
 test('PNG uploads reject arbitrary content and excessive dimensions before decoding',async()=>{
   assert.throws(()=>validatePng(Buffer.from('<svg onload="evil()"/>').toString('base64')));
   const bomb=sample();bomb.writeUInt32BE(1000000,16);

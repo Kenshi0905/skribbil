@@ -98,6 +98,7 @@ export async function createApp({db,config,assets}={}) {
     return match;
   }
   async function admit(user,match,role='player') {
+    let resetScore=false;
     requireValue(['player','spectator'].includes(role),'Invalid role.');
     requireValue(match&&['lobby','running'].includes(match.status),'This match has finished.',409);
     if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
@@ -119,6 +120,8 @@ export async function createApp({db,config,assets}={}) {
       if(match.clubhouse_id)await clubhouses.requireMember(user,match.clubhouse_id,tx);
       if(match.mode==='ranked')requireValue(config.ranked,'Ranked play is not open.',503);
       if(role==='player') {
+        const previous=await one(tx,'SELECT left_at FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2',[match.id,user.id]);
+        resetScore=previous?.left_at!=null;
         const active=await one(tx,`SELECT m.id FROM skribbil.match_players p JOIN skribbil.matches m ON m.id=p.match_id
           WHERE p.user_id=$1 AND p.left_at IS NULL AND m.status IN ('lobby','running') AND m.id<>$2
           AND (m.clubhouse_id IS NULL OR EXISTS(SELECT 1 FROM skribbil.clubhouse_members cm WHERE cm.clubhouse_id=m.clubhouse_id AND cm.user_id=$1 AND cm.left_at IS NULL)) LIMIT 1`,[user.id,match.id]);
@@ -128,7 +131,7 @@ export async function createApp({db,config,assets}={}) {
     });
     const debt=await one(db,`SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1 AND game_id=$2`,[user.id,match.game_id]);
     const avatarUrl=(avatarFromUrl(user.avatar_url)||/^\/api\/media\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(user.avatar_url||''))?user.avatar_url:'';
-    const token=signedTicket({userId:user.id,username:user.display_name,avatarUrl,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,hardWordPending:debt?.pending||false},config.secret);
+    const token=signedTicket({userId:user.id,username:user.display_name,avatarUrl,matchId:match.id,lobbyId:match.engine_room_id,expiresAt:Math.floor(Date.now()/1000)+120,role,resetScore,hardWordPending:debt?.pending||false},config.secret);
     return {url:`/engine/league/join?ticket=${encodeURIComponent(token)}`,matchId:match.id};
   }
   async function provisionPending(match) {
@@ -292,8 +295,7 @@ export async function createApp({db,config,assets}={}) {
       const mediaAsset=path.match(/^\/api\/media\/([a-f0-9-]+)$/);
       if(mediaAsset&&req.method==='GET'){
         const asset=await media.read(mediaAsset[1]);
-        if(asset.url){res.writeHead(302,{Location:asset.url,'Cache-Control':'no-store'});res.end();}
-        else{res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});res.end(asset.body);}return;
+        res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});res.end(asset.body);return;
       }
       const bracket=path.match(/^\/api\/tournaments\/([a-f0-9-]+)\/bracket$/);
       if(bracket&&req.method==='GET'){

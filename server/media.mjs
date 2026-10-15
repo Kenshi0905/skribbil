@@ -88,6 +88,8 @@ export class Media {
       AND (EXISTS(SELECT 1 FROM skribbil.users u WHERE u.avatar_url='/api/media/'||a.id AND u.status='active')
       OR EXISTS(SELECT 1 FROM skribbil.teams t WHERE t.logo_url='/api/media/'||a.id AND t.archived_at IS NULL))`,[id]);
     requireValue(row,'Image is unavailable.',404);
-    return this.assets.get(row.object_key);
+    // Room pages permit same-origin images. Serve profile photos through our
+    // media endpoint so private storage redirects cannot hide player avatars.
+    return this.assets.get(row.object_key,{inline:true});
   }
 }

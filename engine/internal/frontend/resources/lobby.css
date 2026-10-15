@@ -886,12 +886,16 @@ kbd {
 }
 
 /* Skribbil league chrome, preserving the native game board and controls. */
-#league-toolbar { max-width:1400px; width:calc(100% - 24px); margin:8px auto; padding:4px 8px; box-sizing:border-box; border:0; border-radius:7px; background:transparent; color:#18344d; display:flex;align-items:center;gap:14px;flex-wrap:wrap;font:600 14px "Trebuchet MS",sans-serif;}
+#league-toolbar { position:relative; max-width:1400px; width:calc(100% - 24px); margin:8px auto; padding:8px 12px; box-sizing:border-box; border:1px solid var(--line, #e5e0ed); border-radius:10px; background:var(--surface, #fffdf8); color:var(--ink, #302c3b); display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:600 13px/1.4 Inter,system-ui,sans-serif;}
 #league-toolbar[hidden],#league-results-link[hidden]{display:none}
-#league-toolbar a{color:#214e85;font-weight:800}
-#copy-room-invite { cursor:pointer; border-radius:7px; font:inherit; }
+#league-toolbar a{color:var(--purple, #6750c7);font-weight:700}
+#league-toolbar .league-home-link { margin-inline-end:auto; }
+#league-toolbar :is(#copy-room-invite,.league-theme-toggle) { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:36px; padding:7px 11px; border:1px solid var(--line, #e5e0ed); border-radius:8px; background:var(--surface, #fffdf8); color:var(--ink, #302c3b); cursor:pointer; font:inherit; white-space:nowrap; }
+#league-toolbar :is(#copy-room-invite,.league-theme-toggle):hover { background:var(--purple-light, #eee8ff); border-color:var(--purple, #6750c7); }
+#league-toolbar :is(#copy-room-invite,.league-theme-toggle):focus-visible { outline:2px solid var(--purple, #6750c7); outline-offset:2px; }
 #room-invite-link { width:280px; max-width:100%; box-sizing:border-box; padding:8px; }
-#room-invite-status { font-size:12px; }
+#room-invite-status { position:absolute; inset-block-start:calc(100% + 6px); inset-inline-end:0; z-index:30; max-width:calc(100% - 16px); padding:9px 12px; border:1px solid var(--line, #e5e0ed); border-radius:8px; background:var(--surface, #fffdf8); color:var(--ink, #302c3b); box-shadow:0 4px 12px #0002; font-size:12px; }
+#room-invite-status:empty { display:none; }
 #drawing-reactions { position:absolute; right:8px; top:8px; display:flex; gap:4px; z-index:1; }
 #drawing-reactions[hidden] { display:none; }
 .drawing-reaction { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-width:44px; height:36px; padding:4px 7px; border:1px solid #ccc; border-radius:8px; background:#fff; color:#18344d; cursor:pointer; font:700 12px sans-serif; touch-action:manipulation; }
@@ -986,7 +990,6 @@ button:focus-visible, input:focus-visible, .custom-check-or-radio:focus-visible 
     #league-toolbar .league-home-link { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #league-toolbar #copy-room-invite { min-height:36px; padding:4px 8px; font-size:11px; }
     #league-toolbar #room-invite-link { width:90px; min-width:0; font-size:16px; }
-    #room-invite-status { position:absolute; top:44px; left:8px; z-index:30; background:var(--component-base-color); border-radius:4px; }
     #league-toolbar .league-theme-toggle { margin-inline-start:auto; flex:none; min-width:44px; min-height:36px; padding:4px 8px; }
     #drawing-reactions { top:4px; right:4px; }
     .drawing-reaction { height:36px; min-width:40px; padding:4px; }
