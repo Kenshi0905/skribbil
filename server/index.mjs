@@ -9,6 +9,7 @@ import { openDatabase } from './db.mjs';
 import { Platform } from './platform.mjs';
 import { leaderboard } from './leaderboard.mjs';
 import { Competition } from './competition.mjs';
+import { GalleryVotes } from './gallery.mjs';
 import { Social } from './social.mjs';
 import { Media } from './media.mjs';
 import { Community } from './community.mjs';
@@ -45,6 +46,7 @@ export async function createApp({db,config,assets}={}) {
   const platform=new Platform(db),connections=new Map(),limits=new Map();
   const competition=new Competition(platform);
   const social=new Social(platform);
+  const gallery=new GalleryVotes(platform);
   const media=new Media(platform,assets);
   const community=new Community(platform);
   const clubhouses=new Clubhouses(platform);
@@ -232,6 +234,12 @@ export async function createApp({db,config,assets}={}) {
     disconnect(user.id);
     return admit(user,await provisionPending(reserved));
   }
+  async function refreshRoomIdentity(user) {
+    const profile=await platform.profile(user);
+    const rooms=await db.query(`SELECT m.id,m.engine_room_id FROM skribbil.matches m WHERE m.status IN ('lobby','running') AND (EXISTS(SELECT 1 FROM skribbil.match_players p WHERE p.match_id=m.id AND p.user_id=$1) OR EXISTS(SELECT 1 FROM skribbil.spectator_sessions s WHERE s.match_id=m.id AND s.user_id=$1))`,[user.id]);
+    await Promise.allSettled(rooms.rows.map(room=>engineRequest('/engine/internal/rooms/identity',{matchId:room.id,lobbyId:room.engine_room_id,userId:user.id,name:profile.displayName,avatarUrl:profile.avatarUrl||''})));
+    return profile;
+  }
   async function getDrawing(user,id,kind) {
     requireValue(isUuid(id),'Invalid drawing.');
     const d=await one(db,`SELECT d.*,a.object_key,a.media_type,a.state,a.expires_at FROM skribbil.drawings d
@@ -361,7 +369,7 @@ export async function createApp({db,config,assets}={}) {
       if(partyInvite&&req.method==='POST')return json(res,201,await social.invite(user,partyInvite[1],input));
       const partyAccept=path.match(/^\/api\/party\/invites\/([a-f0-9-]+)\/accept$/);
       if(partyAccept&&req.method==='POST')return json(res,200,await social.acceptInvite(user,partyAccept[1]));
-      if(path==='/api/profile'&&req.method==='PATCH'){await platform.updateProfile(user,input);return json(res,200,{user:await platform.profile(user)});}
+      if(path==='/api/profile'&&req.method==='PATCH'){await platform.updateProfile(user,input);return json(res,200,{user:await refreshRoomIdentity(user)});}
       if(path==='/api/rooms'&&req.method==='POST'){rateLimit(req,'rooms',8);return json(res,201,await newRoom(user,input));}
       const roomSession=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/session$/);
       if(roomSession&&req.method==='POST'){
@@ -400,6 +408,11 @@ export async function createApp({db,config,assets}={}) {
       }
       const rematchRequest=path.match(/^\/api\/matches\/([a-f0-9-]+)\/rematch$/);
       if(rematchRequest&&req.method==='POST'){rateLimit(req,'rooms',8);return json(res,200,await rematch.join(user,rematchRequest[1]));}
+      if(path==='/api/profile/refresh-rooms'&&req.method==='POST')return json(res,200,{user:await refreshRoomIdentity(user)});
+      const galleryRoom=path.match(/^\/api\/rooms\/([^/]+)\/gallery-votes$/);
+      if(galleryRoom&&req.method==='GET')return json(res,200,await gallery.room(user,galleryRoom[1]));
+      const galleryVote=path.match(/^\/api\/turns\/([a-f0-9-]+)\/gallery-vote$/);
+      if(galleryVote&&req.method==='POST'){rateLimit(req,'gallery-votes',30);return json(res,200,await gallery.vote(user,galleryVote[1],input.choice));}
       if(path==='/api/friends'&&req.method==='POST'){await platform.friend(user,input);return json(res,200,{ok:true});}
       const friendResponse=path.match(/^\/api\/friends\/([^/]+)\/respond$/);
       if(friendResponse&&req.method==='POST'){await platform.respondFriend(user,friendResponse[1],input);return json(res,200,{ok:true});}
@@ -419,7 +432,8 @@ export async function createApp({db,config,assets}={}) {
           const result=await tx.query(`UPDATE skribbil.drawings SET publication_consent_at=CASE WHEN $3 THEN now() ELSE publication_consent_at END,
             consent_revoked_at=CASE WHEN $3 THEN NULL ELSE now() END,visibility=CASE WHEN $3 THEN visibility ELSE 'private' END WHERE id=$1 AND artist_id=$2 RETURNING image_asset_id`,[consent[1],user.id,input.allow]);
           requireValue(result.rows.length,'Drawing not found.',404);
-          if(!input.allow)await tx.query(`UPDATE skribbil.object_assets SET policy_id='drawing-original',expires_at=now()+interval '30 days' WHERE id=$1 AND NOT legal_hold`,[result.rows[0].image_asset_id]);
+          if(!input.allow)await tx.query(`UPDATE skribbil.gallery_entries SET unpublished_at=now() WHERE drawing_id=$1 AND published_at IS NOT NULL`,[consent[1]]);
+          if(!input.allow)await tx.query(`UPDATE skribbil.object_assets SET policy_id='drawing-original',expires_at=LEAST(coalesce(expires_at,now()+interval '24 hours'),now()+interval '24 hours') WHERE id=$1 AND NOT legal_hold`,[result.rows[0].image_asset_id]);
         });return json(res,200,{ok:true});
       }
       const detail=path.match(/^\/api\/matches\/([a-f0-9-]+)(\/mvp)?$/);
@@ -463,7 +477,7 @@ export async function createApp({db,config,assets}={}) {
           users:(await db.query(`SELECT u.id,u.username,u.status,e.cosmetic_id AS "titleId" FROM skribbil.users u LEFT JOIN skribbil.equipped_cosmetics e ON e.user_id=u.id AND e.slot='title' WHERE u.username<>'skribbil_system' ORDER BY u.created_at DESC LIMIT 100`)).rows,
           titles:(await db.query(`SELECT id,name FROM skribbil.cosmetic_definitions WHERE slot='title' ORDER BY name`)).rows,
           matches:(await db.query(`SELECT id,mode,status,ended_at FROM skribbil.matches ORDER BY created_at DESC LIMIT 100`)).rows,
-          drawings:(await db.query(`SELECT id,prompt_snapshot AS prompt,publication_consent_at AS consent,visibility FROM skribbil.drawings ORDER BY created_at DESC LIMIT 100`)).rows});
+          drawings:(await db.query(`SELECT d.id,d.prompt_snapshot AS prompt,d.publication_consent_at AS consent,d.visibility,coalesce(v.candidate,'no-decision') AS candidate,coalesce(v.fame,0) AS "fameVotes",coalesce(v.shame,0) AS "shameVotes" FROM skribbil.drawings d LEFT JOIN skribbil.gallery_vote_totals v ON v.turn_id=d.turn_id ORDER BY d.created_at DESC LIMIT 100`)).rows});
         if(path==='/api/admin/adjustments'&&req.method==='POST')return json(res,200,await platform.adjust(user,input));
         if(path==='/api/admin/bans'&&req.method==='POST'){await platform.ban(user,input);disconnect(input.userId);return json(res,200,{ok:true});}
         const curate=path.match(/^\/api\/admin\/drawings\/([a-f0-9-]+)$/);
@@ -482,7 +496,7 @@ export async function createApp({db,config,assets}={}) {
             }else{
               await tx.query(`UPDATE skribbil.gallery_entries SET unpublished_at=now() WHERE drawing_id=$1 AND published_at IS NOT NULL`,[drawing.id]);
               await tx.query(`UPDATE skribbil.drawings SET visibility='private' WHERE id=$1`,[drawing.id]);
-              await tx.query(`UPDATE skribbil.object_assets SET policy_id='drawing-original',expires_at=now()+interval '30 days' WHERE id=$1`,[drawing.image_asset_id]);
+              await tx.query(`UPDATE skribbil.object_assets SET policy_id='drawing-original',expires_at=LEAST(coalesce(expires_at,now()+interval '24 hours'),now()+interval '24 hours') WHERE id=$1`,[drawing.image_asset_id]);
             }
             await platform.audit(tx,user,'drawing.curated','drawing',drawing.id,'Gallery moderation',drawing,{hall:input.hall});
           });return json(res,200,{ok:true});

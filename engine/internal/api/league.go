@@ -307,3 +307,52 @@ func (handler *V1Handler) statusLeagueRoom(w http.ResponseWriter, r *http.Reques
 	}
 	_, _ = marshalToHTTPWriter(map[string]bool{"exists": true}, w)
 }
+
+// Only the authenticated platform may refresh an account's trusted profile.
+func (handler *V1Handler) refreshLeagueIdentity(w http.ResponseWriter, r *http.Request) {
+	secret := os.Getenv("SKRIBBIL_ENGINE_SECRET")
+	if len(secret) < 32 || !hmac.Equal([]byte(r.Header.Get("Authorization")), []byte("Bearer "+secret)) {
+		http.Error(w, "unauthorized", 401)
+		return
+	}
+	var input struct {
+		MatchID   string `json:"matchId"`
+		LobbyID   string `json:"lobbyId"`
+		UserID    string `json:"userId"`
+		Name      string `json:"name"`
+		AvatarURL string `json:"avatarUrl"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&input) != nil || input.UserID == "" || input.Name == "" {
+		http.Error(w, "invalid identity", 400)
+		return
+	}
+	lobby := state.GetLobby(input.LobbyID)
+	if lobby == nil {
+		http.Error(w, "room not found", 404)
+		return
+	}
+	found := false
+	lobby.Synchronized(func() {
+		if lobby.League == nil || lobby.League.MatchID != input.MatchID {
+			return
+		}
+		for _, player := range lobby.GetPlayers() {
+			if player.AccountID == input.UserID {
+				beforeName, beforeAvatar := player.Name, player.AvatarURL
+				lobby.ApplyProfileIdentity(player, input.Name, input.AvatarURL)
+				if beforeName != player.Name || beforeAvatar != player.AvatarURL {
+					lobby.Broadcast(&game.Event{Type: game.EventTypeUpdatePlayers, Data: lobby.GetPlayers()})
+				}
+				found = true
+				break
+			}
+		}
+	})
+	if !found {
+		http.Error(w, "player not found", 404)
+		return
+	}
+	_, _ = marshalToHTTPWriter(map[string]bool{"ok": true}, w)
+}

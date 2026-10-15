@@ -355,3 +355,33 @@ func TestUndoPreservesServerStrokeBoundariesAndDrawingAuthority(t *testing.T) {
 		}
 	}
 }
+
+func TestDislikeBudgetIsOncePerAccountPerRound(t *testing.T) {
+	l, _, a, b, _ := penaltyFixture()
+	a.AccountID = "account-a"
+	l.Round = 1
+	if vote(l, a, l.League.TurnID) != nil {
+		t.Fatal("first vote rejected")
+	}
+	l.beginDislikes()
+	if vote(l, a, l.League.TurnID) == nil || len(l.League.Votes) != 0 {
+		t.Fatal("second turn reused round budget")
+	}
+	// A replacement seat cannot evade the account budget.
+	replacement := &Player{ID: uuid.Must(uuid.NewV4()), AccountID: a.AccountID, State: Guessing, Connected: true}
+	l.players = append(l.players, replacement)
+	l.League.Eligible[replacement.ID] = true
+	if vote(l, replacement, l.League.TurnID) == nil {
+		t.Fatal("replacement seat evaded budget")
+	}
+	b.Connected = false
+	b.Connected = true
+	if vote(l, b, l.League.TurnID) != nil {
+		t.Fatal("unused reconnect vote rejected")
+	}
+	l.Round = 2
+	l.beginDislikes()
+	if vote(l, a, l.League.TurnID) != nil {
+		t.Fatal("next round did not replenish budget")
+	}
+}

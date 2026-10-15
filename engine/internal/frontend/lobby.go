@@ -108,7 +108,9 @@ func (handler *SSRHandler) ssrEnterLobbyNoChecks(
 			newPlayer.SetLastKnownAddress(requestAddress)
 			api.SetGameplayCookies(writer, request, newPlayer, lobby)
 		} else {
-			if player.Connected && player.GetWebsocket() != nil {
+			// Managed pages already verified the gateway account above. Let the
+			// subsequent authenticated upgrade replace a suspended tab socket.
+			if lobby.League == nil && player.Connected && player.GetWebsocket() != nil {
 				handler.userFacingError(writer, translation.Get("lobby-open-tab-exists"), translation)
 				return
 			}

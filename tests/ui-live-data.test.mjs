@@ -145,7 +145,7 @@ test('admin-created leagues supply escaped names and reveal league navigation', 
   const ui = client({leagues:[{id:'test-league',name:'Weekend <league>'}],season:null});
   assert.match(ui.sidebar(),/href="#\/league"/);
   assert.match(ui.sidebar(),/Weekend &lt;league&gt;/);
-  assert.match(ui.topbar(),/Weekend &lt;league&gt;/);
+  assert.doesNotMatch(ui.topbar(),/status-pill|SKRIBBIL COMMUNITY/);
   assert.match(ui.homePage(),/Weekend &lt;league&gt;/);
   assert.match(ui.leaguePage(),/Leaderboard/);
   ui.state.leaderboardTab = 'season';

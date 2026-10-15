@@ -15,7 +15,7 @@ export function roomRules({players=[],ownID,ownerID,gameState}) {
 // All player strings go through textContent or input.value. This component only
 // emits match-scoped WS commands; it has no profile API or persistence access.
 export function createRoomLook(root,{send,isConnected,focusAfterStart,editSettings}) {
-  let snapshot={players:[],gameState:'unstarted'},draft=null,pending=null,error='',notice='',vibe='Cute';
+  let snapshot={players:[],gameState:'unstarted'},draft=null,pending=null,pendingReady=false,error='',notice='',vibe='Cute';
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;if(cls)el.className=cls;return el;};
   const button=(text,fn,cls='')=>{const b=node('button',text,cls);b.type='button';b.addEventListener('click',fn);return b;};
   const title=node('h2','Waiting room'), hint=node('p','Gather your crew. Get ready to draw.');
@@ -79,6 +79,7 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart,editSettin
   function command(action,data){
     const rules=roomRules(snapshot);
     if(pending||!rules.editable||!isConnected()||(action==='start'&&(!rules.host||!rules.canStart))||(action==='toggle-readiness'&&rules.host))return;
+    if(action==='toggle-readiness')pendingReady=rules.self?.state!=='ready';
     pending=action;error='';notice='';render();
     try{send({type:action,...(data?{data}:{})});}catch{pending=null;error='Connection lost. Your draft is still here; reconnect and try again.';render();}
   }
@@ -100,7 +101,7 @@ export function createRoomLook(root,{send,isConnected,focusAfterStart,editSettin
     for(const el of [edit,name,shuffle,restore,apply,cancel,ready,...vibeButtons,...Object.values(fields)])el.disabled=busy;
     for(const b of vibeButtons)b.setAttribute('aria-pressed',String(b.textContent===vibe));
     start.disabled=busy||!rules.canStart;apply.textContent=pending==='room-identity-change'?'Applying…':'Apply room look';
-    ready.checked=rules.self?.state==='ready';readyText.textContent=ready.checked?'Ready':'Not ready · tick when you’re set';
+    ready.checked=pending==='toggle-readiness'?pendingReady:rules.self?.state==='ready';readyText.textContent=ready.checked?'Ready':'Not ready · tick when you’re set';
     errors.textContent=error;errors.hidden=!error;
     status.textContent=(notice?notice+' ':'') + (!isConnected()?'Reconnecting…':`${rules.ready}/${rules.needed} guests ready. ${rules.count<2?'Waiting for at least two players.':rules.host?'You start when the crew is ready.':'The host starts the game.'}`);
     updatePreview();

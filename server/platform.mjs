@@ -178,8 +178,8 @@ export class Platform {
         (SELECT count(*) FROM skribbil.match_players p WHERE p.match_id=m.id AND p.left_at IS NULL) AS players
         FROM skribbil.matches m WHERE m.status IN ('lobby','running') AND NOT m.private AND m.created_at>now()-interval '6 hours' ORDER BY m.created_at DESC LIMIT 20`),
       this.db.query(`SELECT p.id,p.hall,p.title,p.caption,p.prompt_snapshot AS prompt,p.artist_id AS "artistId",u.display_name AS artist,
-        p.dislike_count AS dislikes,p.published_at AS date,'/api/drawings/'||p.drawing_id||'/image' AS url
-        FROM skribbil.public_gallery p JOIN skribbil.users u ON u.id=p.artist_id ORDER BY p.published_at DESC LIMIT 30`),
+        p.dislike_count AS dislikes,coalesce(v.fame,0) AS "fameVotes",coalesce(v.shame,0) AS "shameVotes",p.published_at AS date,'/api/drawings/'||p.drawing_id||'/image' AS url
+        FROM skribbil.public_gallery p JOIN skribbil.users u ON u.id=p.artist_id LEFT JOIN skribbil.drawings d ON d.id=p.drawing_id LEFT JOIN skribbil.gallery_vote_totals v ON v.turn_id=d.turn_id ORDER BY p.published_at DESC LIMIT 30`),
       one(this.db,`SELECT id,name,starts_at AS "startsAt",ends_at AS "endsAt",status FROM skribbil.seasons WHERE id=$1`,[context.season_id]),
     ]);
     return {leagues:leagues.rows,user:profile,leaderboard:leaderboard.rows,seasonLeaderboard:seasonBoard.rows,challenges:challenges.rows,

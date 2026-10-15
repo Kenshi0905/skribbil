@@ -111,6 +111,8 @@ try {
   // has disconnected, without creating a second seat or losing ownership.
   const previousOwnerSocket = players[0].ws;
   const ownerId = players[0].playerId;
+  const returningPage=await request(players[0],`/engine/lobby/${lobbyId}`,undefined,{Cookie:`${players[0].cookie}; ${players[0].nativeCookie}`});
+  assert.equal(returningPage.status,200);assert.match(await returningPage.text(),/id="drawing-board"/,'managed HTML must not block a returning account before socket replacement');
   const returnTicket = await json(await request(players[0], `/api/rooms/${matchId}/join`, {}));
   const returnedOwner = await connect(players[0], returnTicket.url);
   assert.equal(returnedOwner.playerId, ownerId);
@@ -123,6 +125,15 @@ try {
   // account's engine cookie to view its private drawing/word state.
   const borrowed = await request(clients[1], `/engine/lobby/${lobbyId}`, undefined, { Cookie: `${clients[1].cookie}; ${clients[0].nativeCookie}` });
   assert.equal(borrowed.status, 403); report.checks.push('borrowed native cookie rejected for a different logged-in account');
+  const renamed=players[2],oldHandle=renamed.user.username;
+  const renameResponse=await fetch(base+'/api/profile',{method:'PATCH',headers:{Cookie:renamed.cookie,Origin:base,'Content-Type':'application/json','X-Requested-With':'Skribbil'},body:JSON.stringify({displayName:'jane'})});
+  assert.equal(renameResponse.status,200);assert.equal((await renameResponse.json()).user.username,oldHandle);
+  await Promise.all(clients.map(c=>c.ws.wait('update-players',rows=>rows.some(p=>p.id===renamed.playerId&&p.name==='jane'))));
+  renamed.user.display_name='jane';
+  const renamedSeat=renamed.playerId;renamed.ws.close();await delay(100);
+  const renameTicket=await json(await request(renamed,`/api/rooms/${matchId}/join`,{}));
+  const renamedReady=await connect(renamed,renameTicket.url);assert.equal(renamedReady.playerId,renamedSeat);assert.equal(renamedReady.playerName,'jane');
+  report.checks.push('profile name change broadcasts to 11 clients; handle and seat preserved across reconnect');
   players[0].ws.send('message', 'Ten-player protocol check');
   await Promise.all(players.map(c => c.ws.wait('message', d => d.content === 'Ten-player protocol check')));
   if (demo) {
@@ -208,6 +219,16 @@ try {
     FROM skribbil.drawings d JOIN skribbil.drawing_turns t ON t.id=d.turn_id WHERE d.match_id=$1`, [matchId])).rows[0];
   assert.equal(Number(archive.total), 20); assert.equal(Number(archive.hard), 1);
   const debt = (await db.query('SELECT pending FROM skribbil.user_game_penalty_state WHERE user_id=$1', [penalized.user.id])).rows[0]; assert.equal(debt.pending, false);
+  const calibration=(await db.query(`SELECT count(*)::int AS turns,sum(solved_count)::int AS solved,sum(electorate_size)::int AS eligible,min(median_guess_ms)::int AS fastest,max(median_guess_ms)::int AS slowest FROM skribbil.drawing_turns WHERE match_id=$1`,[matchId])).rows[0];
+  assert.equal(calibration.turns,20);assert.equal(calibration.solved,180);assert.equal(calibration.eligible,180);assert.ok(calibration.fastest>0);
+  report.protocolTiming={...calibration,note:'Scripted agents know the answer; these times validate telemetry, not human difficulty.'};
+  const retention=(await db.query(`SELECT max(extract(epoch from (a.expires_at-now())))::int AS remaining FROM skribbil.object_assets a JOIN skribbil.drawings d ON d.replay_asset_id=a.id WHERE d.match_id=$1`,[matchId])).rows[0];assert.ok(retention.remaining<=3601);
+  const nomination=(await db.query(`SELECT id FROM skribbil.drawing_turns WHERE match_id=$1 ORDER BY turn_number DESC LIMIT 1`,[matchId])).rows[0];
+  const nominations=await json(await request(players[0],`/api/rooms/${lobbyId}/gallery-votes`));assert.ok(nominations.turns.some(t=>t.turnId===nomination.id));
+  const voters=(await db.query('SELECT voter_id FROM skribbil.turn_eligible_voters WHERE turn_id=$1 LIMIT 3',[nomination.id])).rows;
+  await Promise.all(voters.map(v=>request(players.find(p=>p.user.id===v.voter_id),`/api/turns/${nomination.id}/gallery-vote`,{choice:'fame'}).then(json)));
+  assert.equal((await request(spectator,`/api/turns/${nomination.id}/gallery-vote`,{choice:'shame'})).status,403);
+  report.checks.push('gallery HTTP votes record separately after game; spectators rejected; replay expiry capped at one hour');
   report.checks.push('20 real turns archived;10 results with18 correct guesses each; spectator absent from results; debt consumed');
   report.archivedDrawings = Number(archive.total); report.authoritativeResults = results.length;
   if (sessionFlow) {

@@ -20,6 +20,7 @@ func (lobby *Lobby) resetLeagueTelemetry() {
 	}
 	ls := lobby.League
 	ls.Stats = make(map[uuid.UUID]*LeaguePlayerStats)
+	ls.RoundDislikes = make(map[string]int)
 	ls.WordStartedAt = time.Time{}
 	ls.FinalRoundNumber = 0
 	ls.LastAtFinalRoundStart = nil
@@ -46,6 +47,11 @@ func (lobby *Lobby) recordLeagueGuess(player *Player, now time.Time) {
 	elapsed := now.Sub(ls.WordStartedAt).Milliseconds()
 	if elapsed < 0 {
 		return
+	}
+	if ls.TurnGuessTimes != nil && ls.Eligible[player.ID] {
+		if _, exists := ls.TurnGuessTimes[player.ID]; !exists {
+			ls.TurnGuessTimes[player.ID] = elapsed
+		}
 	}
 	if stats.FastestGuessMs == nil || elapsed < *stats.FastestGuessMs {
 		stats.FastestGuessMs = &elapsed

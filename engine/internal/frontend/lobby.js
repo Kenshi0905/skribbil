@@ -1080,6 +1080,38 @@ const roomLook = document.body.dataset.leagueMode
 function updateRoomLook(profileIdentity) {
     roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, mode:document.body.dataset.leagueMode, settings:roomSettings, ...(profileIdentity ? {profileIdentity} : {})});
 }
+const galleryRoot = document.getElementById('gallery-voting');
+const galleryVoting = galleryRoot && document.body.dataset.leagueSpectator !== 'true'
+    ? (await import('/gallery-votes.js')).createGalleryVoting(galleryRoot, {roomCode: location.pathname.split('/').filter(Boolean).at(-1)}) : null;
+window.addEventListener('pageshow', () => galleryVoting?.refresh());
+document.addEventListener('visibilitychange', () => galleryVoting?.refresh());
+window.addEventListener('pagehide', () => galleryVoting?.dispose(), {once:true});
+let profileRefreshBusy = false;
+async function refreshProfileIdentity() {
+    if (!document.body.dataset.leagueMode || document.hidden || profileRefreshBusy) return;
+    profileRefreshBusy = true;
+    try { await fetch('/api/profile/refresh-rooms',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'Skribbil'},body:'{}',signal:AbortSignal.timeout(10000)}); }
+    catch { /* Re-admission also refreshes the authoritative profile. */ }
+    finally { profileRefreshBusy = false; }
+}
+setInterval(refreshProfileIdentity,20000);
+window.addEventListener('online',refreshProfileIdentity);
+window.addEventListener('focus',refreshProfileIdentity);
+const profileChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('skribbil-profile') : null;
+if (profileChannel) profileChannel.onmessage = refreshProfileIdentity;
+function smoothTurnHandoff() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const board = document.getElementById('drawing-board');
+    const wrapper = document.getElementById('drawing-board-inner-wrapper');
+    if (!board || !wrapper) return;
+    const previous = document.createElement('canvas');
+    previous.width = board.width; previous.height = board.height;
+    previous.className = 'turn-handoff'; previous.setAttribute('aria-hidden','true');
+    previous.getContext('2d').drawImage(board,0,0);
+    wrapper.append(previous);
+    if (!previous.animate) { previous.remove(); return; }
+    previous.animate([{opacity:1},{opacity:0}],{duration:240,easing:'ease-out'}).finished.then(()=>previous.remove(),()=>previous.remove());
+}
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
 let roomInviteStatusTimer;
@@ -1112,10 +1144,13 @@ const renderLeagueDislikes = (state) => {
     leagueDislikes = state;
     if (!state) return;
     document.getElementById("league-toolbar").hidden = false;
-    dislikeButton.disabled = !state.active || state.applied || !state.eligible?.includes(ownID) || state.voters?.includes(ownID) || !state.turnId;
+    dislikeButton.disabled = !state.active || state.applied || !state.eligible?.includes(ownID) || state.voters?.includes(ownID) || state.usedThisRound?.includes(ownID) || !state.turnId;
     const disliked = state.voters?.includes(ownID) || false;
     const liked = state.likers?.includes(ownID) || false;
-    likeButton.disabled = dislikeButton.disabled || liked;
+    likeButton.disabled = !state.active || state.applied || !state.eligible?.includes(ownID) || disliked || liked || !state.turnId;
+    const budgetNote=document.getElementById('round-dislike-note');
+    if (budgetNote) budgetNote.textContent=state.usedThisRound?.includes(ownID) ? 'Round dislike used' : '1 dislike / round';
+    dislikeButton.title = state.usedThisRound?.includes(ownID) ? 'Your dislike for this round is used.' : 'One dislike for the entire round. Choose carefully.';
     dislikeButton.setAttribute("aria-pressed", String(disliked));
     likeButton.setAttribute("aria-pressed", String(liked));
     document.getElementById("league-like-count").textContent = state.likes || 0;
@@ -1158,6 +1193,8 @@ const handleEvent = (parsed) => {
             document.body.dataset.leagueMode = parsed.data.leagueMode;
         }
         handleReadyEvent(parsed.data);
+        galleryVoting?.refresh();
+        refreshProfileIdentity();
         if (parsed.data.leagueMode) {
             renderLeagueDislikes(parsed.data.dislikes);
         }
@@ -1250,7 +1287,7 @@ const handleEvent = (parsed) => {
         waitChooseDialog.style.visibility = "hidden";
         applyWordHints(parsed.data);
     } else if (parsed.type === "message") {
-        appendMessage(null, parsed.data.author, parsed.data.content);
+        appendMessage(null, getCachedPlayer(parsed.data.authorId)?.name || parsed.data.author, parsed.data.content, null, parsed.data.authorId);
     } else if (parsed.type === "system-message") {
         appendMessage(
             "system-message",
@@ -1262,6 +1299,7 @@ const handleEvent = (parsed) => {
             "non-guessing-player-message",
             parsed.data.author,
             parsed.data.content,
+            null, parsed.data.authorId,
         );
     } else if (parsed.type === "line" || parsed.type === "fill") {
         drawingHistory.append({type: parsed.type, data: parsed.data});
@@ -1278,6 +1316,7 @@ const handleEvent = (parsed) => {
         applyWordHints(parsed.data.hints);
         setAllowDrawing(drawerID === ownID);
     } else if (parsed.type === "next-turn") {
+        smoothTurnHandoff();
         dislikeButton.disabled = true;
         likeButton.disabled = true;
         drawingReactions.hidden = true;
@@ -1582,7 +1621,7 @@ window.setInterval(() => {
 //appendMessage adds a new message to the message container. If the
 //message amount is too high, we cut off a part of the messages to
 //prevent lagging and useless memory usage.
-function appendMessage(styleClass, author, message, attrs) {
+function appendMessage(styleClass, author, message, attrs, authorId) {
     if (messageContainer.childElementCount >= 100) {
         messageContainer.removeChild(messageContainer.firstChild);
     }
@@ -1603,6 +1642,7 @@ function appendMessage(styleClass, author, message, attrs) {
     if (author !== null && author !== "") {
         const authorNameSpan = document.createElement("span");
         authorNameSpan.classList.add("chat-name");
+        if (authorId) authorNameSpan.dataset.playerId = authorId;
         authorNameSpan.innerText = author;
         newMessageDiv.appendChild(authorNameSpan);
     }
@@ -1628,6 +1668,10 @@ let cachedPlayers;
 //applyPlayers takes the players passed, assigns them to cachedPlayers,
 //refreshes the scoreboard and updates the drawerID and drawerName variables.
 function applyPlayers(players) {
+    for (const name of messageContainer.querySelectorAll('.chat-name[data-player-id]')) {
+        const player = players.find(p => p.id === name.dataset.playerId);
+        if (player) name.textContent = player.name;
+    }
     const matchOngoing = gameState === "ongoing";
     if (!matchOngoing) {
         let readyPlayers = 0;

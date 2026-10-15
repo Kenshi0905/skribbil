@@ -6,14 +6,14 @@ const rows=async(db,sql,values=[]) => (await db.query(sql,values)).rows;
 const validId=(id,label) => requireValue(isUuid(id),`Invalid ${label}.`);
 const teamRow=(t,userId) => ({id:t.id,name:t.name,tag:t.tag,logoUrl:t.logo_url,captainId:t.captain_id,
   myRole:t.captain_id===userId?'captain':t.role||null});
-const disputeRow=d => ({id:d.id,matchId:d.match_id,submittedBy:{id:d.submitted_by,username:d.username},
+const disputeRow=d => ({id:d.id,matchId:d.match_id,submittedBy:{id:d.submitted_by,username:d.username,displayName:d.display_name},
   reason:d.reason,status:d.status,resolution:d.resolution,createdAt:d.created_at,resolvedAt:d.resolved_at});
 
 export class Community {
   constructor(platform){this.platform=platform;this.db=platform.db;}
   async account(db,user,lock=false){
     requireValue(user&&isUuid(user.id),'Sign in first.',401);
-    const account=await one(db,`SELECT id,username,status FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
+    const account=await one(db,`SELECT id,username,display_name AS "displayName",status FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
     requireValue(account&&account.status==='active','Account unavailable.',403);return account;
   }
   async member(db,userId,communityId){
@@ -35,7 +35,7 @@ export class Community {
     const account=await this.account(this.db,user);
     const teams=await rows(this.db,`SELECT t.*,m.role FROM skribbil.teams t JOIN skribbil.team_members m ON m.team_id=t.id
       WHERE m.user_id=$1 AND m.left_at IS NULL AND t.archived_at IS NULL ORDER BY t.name,t.id`,[account.id]);
-    const invitations=await rows(this.db,`SELECT i.id,i.team_id,t.name AS team_name,u.username AS sender,i.expires_at
+    const invitations=await rows(this.db,`SELECT i.id,i.team_id,t.name AS team_name,u.display_name AS sender,i.expires_at
       FROM skribbil.team_invitations i JOIN skribbil.teams t ON t.id=i.team_id JOIN skribbil.users u ON u.id=i.inviter_id
       JOIN skribbil.team_members m ON m.team_id=i.team_id AND m.user_id=i.inviter_id
       WHERE i.invitee_id=$1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>now()
@@ -47,7 +47,7 @@ export class Community {
     validId(id,'team');const account=await this.account(this.db,user);
     const t=await one(this.db,'SELECT * FROM skribbil.teams WHERE id=$1',[id]);requireValue(t,'Team not found.',404);
     requireValue(await this.member(this.db,account.id,t.community_id),'Join this community to view its team roster.',403);
-    const members=await rows(this.db,`SELECT u.id,u.username,m.role FROM skribbil.team_members m
+    const members=await rows(this.db,`SELECT u.id,u.username,u.display_name AS "displayName",m.role FROM skribbil.team_members m
       JOIN skribbil.users u ON u.id=m.user_id WHERE m.team_id=$1 AND m.left_at IS NULL
       ORDER BY (m.user_id=$2) DESC,m.joined_at,u.id`,[id,t.captain_id]);
     const own=members.find(m=>m.id===account.id);
@@ -74,8 +74,8 @@ export class Community {
           VALUES($1,$2,$3,$4,$5,now()+interval '7 days') RETURNING *`,[id,t.community_id,account.id,target.id,hash(randomBytes(32))]);
         await this.audit(db,account,'team.invited','team',id,'Team officer invited an eligible community account.',null,{inviteId:invite.id,inviteeId:target.id});
       }
-      const sender=invite.inviter_id===account.id?account:await one(db,'SELECT username FROM skribbil.users WHERE id=$1',[invite.inviter_id]);
-      return {id:invite.id,teamId:id,teamName:t.name,from:sender.username,expiresAt:invite.expires_at};
+      const sender=invite.inviter_id===account.id?account:await one(db,'SELECT username,display_name AS "displayName" FROM skribbil.users WHERE id=$1',[invite.inviter_id]);
+      return {id:invite.id,teamId:id,teamName:t.name,from:sender.displayName,expiresAt:invite.expires_at};
     });
   }
   async acceptTeamInvite(user,id){
@@ -137,7 +137,7 @@ export class Community {
 
   async getDisputes(user,{admin=false}={}){
     const account=await this.account(this.db,user);if(admin)await this.platform.admin(account);
-    const disputes=await rows(this.db,`SELECT d.*,u.username FROM skribbil.disputes d JOIN skribbil.users u ON u.id=d.submitted_by
+    const disputes=await rows(this.db,`SELECT d.*,u.username,u.display_name FROM skribbil.disputes d JOIN skribbil.users u ON u.id=d.submitted_by
       WHERE ($1::boolean OR d.submitted_by=$2) ORDER BY (d.status IN ('open','reviewing')) DESC,d.created_at DESC,d.id LIMIT 200`,[admin,account.id]);
     return {disputes:disputes.map(disputeRow)};
   }
@@ -163,7 +163,7 @@ export class Community {
     const resolution=textField(body?.resolution,10,2000,'Resolution');
     return this.db.transaction(async db=>{
       const dispute=await one(db,'SELECT * FROM skribbil.disputes WHERE id=$1 FOR UPDATE',[id]);requireValue(dispute,'Dispute not found.',404);
-      const owner=await one(db,'SELECT username FROM skribbil.users WHERE id=$1',[dispute.submitted_by]);
+      const owner=await one(db,'SELECT username,display_name AS "displayName" FROM skribbil.users WHERE id=$1',[dispute.submitted_by]);
       if(['resolved','rejected'].includes(dispute.status)){
         requireValue(dispute.status===body.status&&dispute.resolution===resolution,'This dispute is already closed; its resolution cannot be overwritten.',409);
         return {dispute:disputeRow({...dispute,username:owner.username})};

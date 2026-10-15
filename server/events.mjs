@@ -1,3 +1,4 @@
+import { galleryPolicy } from './gallery.mjs';
 import { randomUUID } from 'node:crypto';
 import { hash, requireValue, isUuid } from './security.mjs';
 
@@ -26,7 +27,7 @@ export async function acceptEngineEvent(platform,assets,event,raw) {
     const match=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1 FOR UPDATE`,[event.matchId]);
     const duplicate=await one(db,`SELECT payload_sha256 FROM skribbil.engine_receipts WHERE event_id=$1`,[event.eventId]);
     if(duplicate){requireValue(duplicate.payload_sha256===fingerprint,'Conflicting event.',409);return {duplicate:true};}
-    const metadata={...p};delete metadata.drawing;
+    const metadata={...p};delete metadata.drawing;delete metadata.solveTimesMs;
     await db.query(`INSERT INTO skribbil.engine_events(id,match_id,engine_instance_id,sequence,event_type,payload,occurred_at,processed_at)
       VALUES($1,$2,$3,$4,$5,$6,$7,now())`,[event.eventId,event.matchId,match.engine_instance_id,event.sequence,event.type,JSON.stringify(metadata),event.occurredAt]);
     await db.query(`INSERT INTO skribbil.engine_receipts(event_id,payload_sha256) VALUES($1,$2)`,[event.eventId,fingerprint]);
@@ -48,7 +49,16 @@ export async function acceptEngineEvent(platform,assets,event,raw) {
       await db.query(`UPDATE skribbil.matches SET status='running',started_at=coalesce(started_at,$2) WHERE id=$1 AND status='lobby'`,[match.id,event.occurredAt]);
       await db.query(`INSERT INTO skribbil.drawing_turns(id,match_id,artist_id,turn_number,round_number,status,word,difficulty,ended_at,electorate_size)
         VALUES($1,$2,$3,$4,$5,'ended',$6,$7,$8,$9)`,[p.turnId,match.id,p.artistId,p.turnNumber,p.round,p.word,p.hardWord?'hard':'normal',event.occurredAt,p.eligibleVoterIds.length]);
+      const policy=galleryPolicy();
+      await db.query(`INSERT INTO skribbil.gallery_vote_windows(turn_id,closes_at,minimum_voters,majority_percent) VALUES($1,$2::timestamptz+($3 * interval '1 second'),$4,$5)`,[p.turnId,event.occurredAt,policy.seconds,policy.minimum,policy.percent]);
       for(const id of p.eligibleVoterIds)await db.query(`INSERT INTO skribbil.turn_eligible_voters(turn_id,match_id,artist_id,voter_id) VALUES($1,$2,$3,$4)`,[p.turnId,match.id,p.artistId,id]);
+      if(p.solveTimesMs!==undefined) {
+        requireValue(Array.isArray(p.solveTimesMs)&&p.solveTimesMs.length<=p.eligibleVoterIds.length&&Number.isInteger(p.drawTimeMs)&&p.drawTimeMs>0&&p.drawTimeMs<=10000000,'Invalid solve telemetry.');
+        requireValue(p.solveTimesMs.every(ms=>Number.isInteger(ms)&&ms>=0&&ms<=p.drawTimeMs),'Invalid guess time.');
+        const times=[...p.solveTimesMs].sort((a,b)=>a-b),n=times.length;
+        const median=n?Math.round((times[Math.floor((n-1)/2)]+times[Math.floor(n/2)])/2):null;
+        await db.query(`UPDATE skribbil.drawing_turns SET difficulty_version=$2,solved_count=$3,median_guess_ms=$4,draw_time_ms=$5 WHERE id=$1`,[p.turnId,['upstream-shuffle-v1','curated-hard-v1','curated-v1'].includes(p.difficultyVersion)?p.difficultyVersion:'unrecognized',n,median,p.drawTimeMs]);
+      }
       for(const id of p.voterIds)await db.query(`INSERT INTO skribbil.drawing_dislikes(turn_id,voter_id) VALUES($1,$2)`,[p.turnId,id]);
       if(p.penaltyApplied) {
         const score=await one(db,`INSERT INTO skribbil.score_events(match_id,user_id,kind,delta,idempotency_key,engine_event_id)
@@ -113,6 +123,12 @@ export async function acceptEngineEvent(platform,assets,event,raw) {
         await platform.grantLevelRewards(db,v.userId);
       }
       await db.query(`UPDATE skribbil.matches SET status='completed',accepted_result_id=$2,started_at=coalesce(started_at,created_at),ended_at=$3,custom_rules=$4 WHERE id=$1`,[match.id,result.id,event.occurredAt,JSON.stringify(finalRules)]);
+      // Keep the short post-game review window, never an indefinite vote hold.
+      await db.query(`UPDATE skribbil.object_assets a SET expires_at=LEAST(a.expires_at,now()+CASE WHEN a.policy_id='drawing-replay' THEN interval '1 hour' ELSE interval '24 hours' END)
+        WHERE a.id IN (SELECT image_asset_id FROM skribbil.drawings WHERE match_id=$1 AND visibility<>'public'
+          UNION SELECT replay_asset_id FROM skribbil.drawings WHERE match_id=$1)
+        AND a.state='ready' AND NOT a.legal_hold AND a.policy_id IN ('drawing-original','drawing-replay')`,[match.id]);
+
     }
     return {accepted:true};
   });

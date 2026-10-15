@@ -16,7 +16,7 @@ export class Clubhouses {
     requireValue(user&&isUuid(user.id),'Sign in first.',401);
     // Serialize this account's mutations without conflicting with foreign-key
     // references when two administrators approve each other's requests.
-    const account=await one(db,`SELECT id,username,status FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
+    const account=await one(db,`SELECT id,username,display_name AS "displayName",status FROM skribbil.users WHERE id=$1${lock?' FOR NO KEY UPDATE':''}`,[user.id]);
     requireValue(account?.status==='active','Account unavailable.',403);return account;
   }
   async administrator(db,userId){
@@ -60,7 +60,7 @@ export class Clubhouses {
       (SELECT count(*) FROM skribbil.clubhouse_members x WHERE x.clubhouse_id=c.id AND x.left_at IS NULL) AS member_count
       FROM skribbil.clubhouses c JOIN skribbil.clubhouse_members m ON m.clubhouse_id=c.id
       WHERE m.user_id=$1 AND m.left_at IS NULL AND c.archived_at IS NULL ORDER BY c.name,c.id`,[account.id]);
-    const potential=await rows(this.db,`SELECT i.*,c.name AS clubhouse_name,u.username AS sender FROM skribbil.clubhouse_invitations i
+    const potential=await rows(this.db,`SELECT i.*,c.name AS clubhouse_name,u.display_name AS sender FROM skribbil.clubhouse_invitations i
       JOIN skribbil.clubhouses c ON c.id=i.clubhouse_id JOIN skribbil.users u ON u.id=i.inviter_id
       WHERE i.invitee_id=$1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>now() AND c.archived_at IS NULL
       ORDER BY i.created_at,i.id`,[account.id]);
@@ -75,7 +75,7 @@ export class Clubhouses {
   async detail(user,clubhouseId){
     id(clubhouseId,'clubhouse');const account=await this.account(this.db,user);
     const {clubhouse:c,membership}=await this.access(this.db,account,clubhouseId);
-    const members=await rows(this.db,`SELECT u.id,u.username,CASE WHEN u.id=$2 THEN 'owner' ELSE m.role END AS role
+    const members=await rows(this.db,`SELECT u.id,u.username,u.display_name AS "displayName",CASE WHEN u.id=$2 THEN 'owner' ELSE m.role END AS role
       FROM skribbil.clubhouse_members m JOIN skribbil.users u ON u.id=m.user_id WHERE m.clubhouse_id=$1 AND m.left_at IS NULL
       ORDER BY (u.id=$2) DESC,m.joined_at,u.id`,[clubhouseId,c.owner_id]);
     const rooms=membership?await rows(this.db,`SELECT m.id,m.engine_room_id AS code,m.mode,m.status,(m.created_by=$2) AS owner,
@@ -101,11 +101,11 @@ export class Clubhouses {
   }
   async listRequests(user){
     const account=await this.account(this.db,user);await this.admin(this.db,account);
-    const requests=await rows(this.db,`SELECT r.*,u.username AS requester_name,a.username AS decider_name
+    const requests=await rows(this.db,`SELECT r.*,u.username AS requester_name,u.display_name AS requester_display_name,a.username AS decider_name,a.display_name AS decider_display_name
       FROM skribbil.clubhouse_requests r JOIN skribbil.users u ON u.id=r.requested_by LEFT JOIN skribbil.users a ON a.id=r.decided_by
       ORDER BY (r.status='pending') DESC,r.created_at DESC,r.id LIMIT 200`);
-    return {requests:requests.map(r=>({...requestRow(r),requester:{id:r.requested_by,username:r.requester_name},
-      decidedBy:r.decided_by?{id:r.decided_by,username:r.decider_name}:null}))};
+    return {requests:requests.map(r=>({...requestRow(r),requester:{id:r.requested_by,username:r.requester_name,displayName:r.requester_display_name},
+      decidedBy:r.decided_by?{id:r.decided_by,username:r.decider_name,displayName:r.decider_display_name}:null}))};
   }
   async insert(db,actor,data,ownerId){
     const owner=await one(db,"SELECT id FROM skribbil.users WHERE id=$1 AND status='active'",[ownerId]);
@@ -162,8 +162,8 @@ export class Clubhouses {
           VALUES($1,$2,$3,$4,now()+interval '7 days') RETURNING *`,[clubhouseId,account.id,target.id,hash(randomBytes(32))]);
         await this.audit(db,account,'clubhouse.invited','clubhouse',clubhouseId,'An authorized manager invited a specific account.',null,{inviteId:invite.id,inviteeId:target.id});
       }
-      const sender=await one(db,'SELECT username FROM skribbil.users WHERE id=$1',[invite.inviter_id]);
-      return inviteRow({...invite,clubhouse_name:c.name,sender:sender.username});
+      const sender=await one(db,'SELECT username,display_name AS "displayName" FROM skribbil.users WHERE id=$1',[invite.inviter_id]);
+      return inviteRow({...invite,clubhouse_name:c.name,sender:sender.displayName});
     });
   }
   async acceptInvite(user,inviteId){

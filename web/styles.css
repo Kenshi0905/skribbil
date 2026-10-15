@@ -59,3 +59,42 @@
 .leaderboard-friend-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:44px;max-width:100%;padding:6px 9px;margin-top:7px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--purple);font-size:11px;font-weight:600;line-height:1.4;white-space:normal;text-align:center;text-decoration:none;vertical-align:middle}.leaderboard-friend-button svg{width:14px;height:14px;flex-shrink:0}.leaderboard-friend-button:hover:enabled{background:var(--purple-light)}.leaderboard-friend-button:disabled{cursor:default;color:var(--muted)}.leaderboard-friend-button:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
 
 .room-time-controls{display:flex;align-items:center;gap:8px;min-width:0}.room-time-controls select{flex:1;min-width:0}.room-time-controls .button{flex-shrink:0;min-height:44px;padding:9px 11px;font-size:12px}
+/* Header and narrow-screen hygiene. Keep account controls readable after the status pill removal. */
+.topbar-actions { gap:16px; min-width:0; margin-left:auto; }
+.account-button,.account-text { min-width:0; }
+.account-text { overflow-wrap:anywhere; }
+.modal { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; scroll-padding-block:24px; }
+input,textarea,select { scroll-margin-block:24px; }
+:where(button,a,input,textarea,select,summary):focus-visible { outline:3px solid var(--purple,#5744e9); outline-offset:3px; }
+@media(max-width:760px) {
+ .topbar-actions {gap:8px;}
+ .topbar {gap:10px; padding-inline:16px;}
+ .breadcrumb {min-width:0; overflow-wrap:anywhere;}
+ .account-button {min-height:44px;}
+ .theme-toggle-label {display:none;}
+ .button,.icon-button,.text-link,.clubhouse-member-actions .button {min-height:44px;}
+ .modal input,.modal textarea,.modal select {font-size:16px;}
+ .clubhouse-member {flex-wrap:wrap;}
+ .clubhouse-member-actions {flex-basis:100%;justify-content:flex-start;}
+ .game-entry-link {min-height:44px;}
+ .party-note {font-size:12px;line-height:1.5;}
+}
+@media(max-width:430px) {
+ .breadcrumb>span,.breadcrumb>svg {display:none;}
+ .topbar .account-text {max-width:110px;}
+ .topbar .account-text small {display:none;}
+ .topbar .account-button {gap:6px;}
+ .topbar .account-button>.avatar {width:34px;height:34px;}
+ .modal-backdrop {padding:8px;}
+ .modal {max-height:calc(100dvh - 16px);padding:24px 18px;}
+ .connection-note {font-size:11px;}
+}
+
+.room-entry-prompt {text-align:center;}
+.room-entry-prompt .modal-icon {margin-inline:auto;}
+.room-entry-summary {display:flex;align-items:center;gap:14px;text-align:left;border:2px solid var(--purple);border-radius:14px;padding:18px;margin:22px 0;background:var(--surface,#f4f0ff);}
+.room-entry-summary svg {width:32px;height:32px;color:var(--purple);}
+.room-entry-summary strong,.room-entry-summary span {display:block;}
+.room-entry-summary span {font-size:12px;line-height:1.5;margin-top:5px;color:var(--muted);}
+.room-entry-prompt>.button {display:flex;width:100%;min-height:56px;justify-content:center;font-size:18px;border:2px solid #342c60;box-shadow:0 4px 0 #342c60;}
+@media(prefers-reduced-motion:no-preference) {.room-entry-prompt {animation:room-entry-in 200ms ease-out;} @keyframes room-entry-in {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}

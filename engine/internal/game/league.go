@@ -30,6 +30,8 @@ var hardWordsV1 = []string{"time travel", "optical illusion", "photosynthesis", 
 
 type LeagueState struct {
 	Stats                 map[uuid.UUID]*LeaguePlayerStats
+	RoundDislikes         map[string]int
+	TurnGuessTimes        map[uuid.UUID]int64
 	WordStartedAt         time.Time
 	FinalRoundNumber      int
 	LastAtFinalRoundStart map[uuid.UUID]bool
@@ -105,15 +107,17 @@ type LeagueEvent struct {
 }
 
 type DislikeState struct {
-	TurnID   int         `json:"turnId"`
-	Active   bool        `json:"active"`
-	Votes    int         `json:"votes"`
-	Likes    int         `json:"likes"`
-	Likers   []uuid.UUID `json:"likers"`
-	Required int         `json:"required"`
-	Applied  bool        `json:"applied"`
-	Eligible []uuid.UUID `json:"eligible"`
-	Voters   []uuid.UUID `json:"voters"`
+	TurnID        int         `json:"turnId"`
+	Active        bool        `json:"active"`
+	Votes         int         `json:"votes"`
+	Likes         int         `json:"likes"`
+	Likers        []uuid.UUID `json:"likers"`
+	Required      int         `json:"required"`
+	Applied       bool        `json:"applied"`
+	Eligible      []uuid.UUID `json:"eligible"`
+	Voters        []uuid.UUID `json:"voters"`
+	UsedThisRound []uuid.UUID `json:"usedThisRound"`
+	Round         int         `json:"round"`
 }
 
 // ConfigureLeague runs before publication. Remove CreateLobby's placeholder;
@@ -158,6 +162,10 @@ func (lobby *Lobby) beginDislikes() {
 	ls := lobby.League
 	ls.TurnID++
 	ls.WordStartedAt = time.Now()
+	ls.TurnGuessTimes = make(map[uuid.UUID]int64)
+	if ls.RoundDislikes == nil {
+		ls.RoundDislikes = make(map[string]int)
+	}
 	ls.TurnUUID = uuid.Must(uuid.NewV4()).String()
 	ls.Eligible = map[uuid.UUID]bool{}
 	ls.Votes = map[uuid.UUID]bool{}
@@ -180,9 +188,14 @@ func (lobby *Lobby) dislikeState() DislikeState {
 	if ls == nil {
 		return DislikeState{}
 	}
-	d := DislikeState{TurnID: ls.TurnID, Active: lobby.State == Ongoing && lobby.CurrentWord != "", Votes: len(ls.Votes), Likes: len(ls.Likes), Likers: []uuid.UUID{}, Required: len(ls.Eligible), Applied: ls.Applied, Eligible: []uuid.UUID{}, Voters: []uuid.UUID{}}
+	d := DislikeState{TurnID: ls.TurnID, Active: lobby.State == Ongoing && lobby.CurrentWord != "", Votes: len(ls.Votes), Likes: len(ls.Likes), Likers: []uuid.UUID{}, Required: len(ls.Eligible), Applied: ls.Applied, Eligible: []uuid.UUID{}, Voters: []uuid.UUID{}, Round: lobby.Round, UsedThisRound: []uuid.UUID{}}
 	for id := range ls.Eligible {
 		d.Eligible = append(d.Eligible, id)
+	}
+	for _, player := range lobby.players {
+		if used, ok := ls.RoundDislikes[dislikeAccountKey(player)]; ok && used == lobby.Round {
+			d.UsedThisRound = append(d.UsedThisRound, player.ID)
+		}
 	}
 	for id := range ls.Votes {
 		d.Voters = append(d.Voters, id)
@@ -210,6 +223,13 @@ func (lobby *Lobby) like(player *Player, turnID int) error {
 	return nil
 }
 
+func dislikeAccountKey(p *Player) string {
+	if p.AccountID != "" {
+		return p.AccountID
+	}
+	return p.ID.String()
+}
+
 func (lobby *Lobby) dislike(player *Player, turnID int) error {
 	ls := lobby.League
 	if ls == nil || lobby.State != Ongoing || lobby.CurrentWord == "" || turnID != ls.TurnID {
@@ -225,6 +245,11 @@ func (lobby *Lobby) dislike(player *Player, turnID int) error {
 	if drawer == nil {
 		return errors.New("no active artist")
 	}
+	key := dislikeAccountKey(player)
+	if used, ok := ls.RoundDislikes[key]; ok && used == lobby.Round {
+		return errors.New("one dislike per round: choose carefully")
+	}
+	ls.RoundDislikes[key] = lobby.Round
 	ls.Votes[player.ID] = true
 	delete(ls.Likes, player.ID)
 	// Frozen membership prevents disconnect/leave from manufacturing unanimity.
@@ -266,7 +291,11 @@ func (lobby *Lobby) archiveLeagueTurn() {
 	}
 	// Accepted event objects are immutable; copy the slice before clear/undo.
 	drawing := append([]any{}, lobby.currentDrawing...)
-	lobby.emitLeague("turn.completed", map[string]any{"turnId": lobby.League.TurnUUID, "turnNumber": lobby.League.TurnID, "artistId": drawer.AccountID, "artistUsername": drawer.Name, "eligibleVoterIds": lobby.leagueAccountIDs(lobby.League.Eligible), "voterIds": lobby.leagueAccountIDs(lobby.League.Votes), "word": lobby.CurrentWord, "dislikeCount": len(lobby.League.Votes), "penaltyApplied": lobby.League.Applied, "drawing": drawing, "round": lobby.Round, "hardWord": lobby.League.HardTurn})
+	selectionVersion := "upstream-shuffle-v1"
+	if lobby.League.HardTurn {
+		selectionVersion = "curated-hard-v1"
+	}
+	lobby.emitLeague("turn.completed", map[string]any{"turnId": lobby.League.TurnUUID, "turnNumber": lobby.League.TurnID, "artistId": drawer.AccountID, "artistUsername": drawer.Name, "eligibleVoterIds": lobby.leagueAccountIDs(lobby.League.Eligible), "voterIds": lobby.leagueAccountIDs(lobby.League.Votes), "word": lobby.CurrentWord, "dislikeCount": len(lobby.League.Votes), "penaltyApplied": lobby.League.Applied, "drawing": drawing, "round": lobby.Round, "hardWord": lobby.League.HardTurn, "difficultyVersion": selectionVersion, "solveTimesMs": lobby.turnSolveTimes(), "drawTimeMs": lobby.DrawingTime * 1000})
 }
 
 func (lobby *Lobby) completeLeagueMatch() {
@@ -298,6 +327,11 @@ func (lobby *Lobby) completeLeagueMatch() {
 	}
 	settings := map[string]int{"rounds": lobby.Rounds, "drawTime": drawTime, "maxPlayers": lobby.MaxPlayers}
 	lobby.emitLeague("match.completed", map[string]any{"participants": participants, "mode": lobby.League.Mode, "rulesVersion": "skribbil-ranked-v1", "deliveryFailed": lobby.LeagueDeliveryFailed, "settings": settings})
+	// The final turn was copied into the durable outbox before this event.
+	// Drop transient drawing operations; reconnects use results and archived art.
+	lobby.currentDrawing = nil
+	lobby.League.TurnGuessTimes = nil
+
 }
 
 func (lobby *Lobby) leagueAccountIDs(ids map[uuid.UUID]bool) []string {
@@ -314,4 +348,16 @@ func (lobby *Lobby) leagueAccountIDs(ids map[uuid.UUID]bool) []string {
 // subsequently kicked/removed from the native active player list. Caller holds lobby mutex.
 func (lobby *Lobby) RegisterLeaguePlayer(p *Player) {
 	lobby.League.Roster = append(lobby.League.Roster, p)
+}
+
+// Only accepted, eligible first solutions; no player identifiers in the export.
+func (lobby *Lobby) turnSolveTimes() []int64 {
+	times := []int64{}
+	for id, ms := range lobby.League.TurnGuessTimes {
+		if lobby.League.Eligible[id] {
+			times = append(times, ms)
+		}
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i] < times[j] })
+	return times
 }

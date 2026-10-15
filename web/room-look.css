@@ -88,3 +88,50 @@ html[data-theme="dark"] #room-look-panel .room-look-primary { color:#242540; }
 @media(max-width:374px) { .room-look-settings-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:360px) { .room-look-header { flex-wrap:wrap; } .room-look-header>div { flex:1 0 100%; } #room-look-panel { padding:13px; } body:has(#room-look-panel:not([hidden])) #player-container { grid-template-columns:1fr; max-height:220px; } }
 @media(prefers-reduced-motion:reduce) { #room-look-panel * { animation:none!important; transition:none!important; scroll-behavior:auto; } }
+
+/* Quiet, separate post-turn gallery voting; no canvas overlays. */
+#gallery-voting { margin: .5rem auto; padding: .65rem; max-width: 1160px; background: var(--surface, #fff); color: var(--text, #222438); border: 1px solid var(--border, #c6c4d0); border-radius: 12px; }
+#gallery-voting[hidden] { display: none; }
+.gallery-turn-vote { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; padding:.35rem 0; }
+.gallery-turn-vote strong { overflow-wrap:anywhere; flex:1 1 160px; }
+.gallery-turn-vote small { flex-basis:100%; }
+.gallery-turn-vote button { min-height:44px; min-width:88px; border:1px solid #77718e; border-radius:8px; background:#f3efff; color:#342c60; font:inherit; cursor:pointer; }
+.gallery-turn-vote button[aria-pressed=true] { background:#5141d9; color:white; }
+.gallery-turn-vote button:disabled { cursor:default; opacity:.65; }
+.gallery-turn-vote button:focus-visible { outline:3px solid #d58b00; outline-offset:3px; }
+#gallery-voting p { margin:.3rem 0; }
+html[data-theme=dark] #gallery-voting { background:#24262c; color:#f4f0ff; border-color:#666477; }
+html[data-theme=dark] .gallery-turn-vote button { background:#373247; color:#f6f0ff; }
+@media(max-width:600px) { #gallery-voting { margin: .4rem; } #gallery-voting>div { max-height:190px; overflow-y:auto; overscroll-behavior:contain; } }
+
+.turn-handoff { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+@media(prefers-reduced-motion:no-preference) {
+ #room-look-panel:not([hidden]), #lobby { animation:lobby-enter 180ms ease-out; }
+ #lobby .center-dialog { transition:opacity 160ms ease-out; }
+ @keyframes lobby-enter { from {opacity:.4;transform:translateY(5px)} to {opacity:1;transform:none} }
+}
+@media(prefers-reduced-motion:reduce) { .turn-handoff {display:none;} }
+
+#drawing-reactions {flex-wrap:wrap;justify-content:flex-end;max-width:150px;}
+#round-dislike-note {flex-basis:100%;text-align:right;color:#332c47;background:#fff9e4;border:1px solid #d9c98c;padding:3px 6px;border-radius:5px;font:600 10px/1.2 system-ui;}
+#gallery-voting {flex:none;box-sizing:border-box;width:calc(100% - 16px);}
+
+@media(max-width:900px) {
+ .room-look-header p {display:none;}
+ #gallery-voting {max-height:154px;overflow:auto;overscroll-behavior:contain;margin:4px 8px;padding:6px 8px;}
+ .gallery-turn-vote {gap:5px;}
+ .gallery-turn-vote strong {flex-basis:100%;font-size:12px;}
+ .gallery-turn-vote>span {font-size:11px;}
+ .gallery-turn-vote small,#gallery-voting>small {font-size:11px;line-height:1.3;}
+}
+.mobile-game-short #gallery-voting {max-height:72px;}
+
+@media(max-width:900px) {
+ .color-button-container {height:90px!important;}
+ .color-button {width:44px!important;height:44px!important;min-width:44px;min-height:44px;}
+ .drawing-reaction {min-height:44px;}
+ #league-toolbar :is(#copy-room-invite,.league-theme-toggle) {min-height:44px;}
+}
+
+#gallery-voting summary {min-height:44px;display:list-item;align-content:center;cursor:pointer;font:600 12px/1.4 system-ui;overflow-wrap:anywhere;}
+#gallery-voting summary:focus-visible {outline:3px solid #d58b00;outline-offset:2px;}

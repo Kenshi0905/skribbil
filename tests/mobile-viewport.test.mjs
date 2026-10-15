@@ -74,3 +74,11 @@ test('fallback viewport, initial desktop and disposal do not leave scroll locks 
   assert.equal(f.frames.size, 0); assert.equal(f.classes.size, 0); assert.equal(f.styles.size, 0);
   f.view.dispatchEvent(new Event('resize')); assert.equal(f.frames.size, 0);
 });
+
+test('gallery nominations reserve viewport space instead of covering the phone guess field',()=>{
+ const f=setup();const before=parseFloat(f.styles.get('--game-board-limit'));
+ f.heights['gallery-voting']=154;f.resize();f.flush();
+ assert.equal(parseFloat(f.styles.get('--game-board-limit')),before-154);
+ f.visualViewport.height=400;f.visualViewport.dispatchEvent(new Event('resize'));f.flush();
+ assert.ok(parseFloat(f.styles.get('--game-board-limit'))>=0);f.detach();
+});

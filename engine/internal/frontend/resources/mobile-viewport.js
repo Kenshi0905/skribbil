@@ -17,7 +17,7 @@ export function attachMobileViewport(view = window, doc = document) {
             root.classList.toggle('mobile-game-short', height < 500);
             root.style.setProperty('--game-height', `${height}px`);
             root.style.setProperty('--game-top', `${viewport?.offsetTop ?? 0}px`);
-            const chromeHeight = ['league-toolbar', 'lobby-header', 'toolbox', 'message-form']
+            const chromeHeight = ['league-toolbar', 'gallery-voting', 'lobby-header', 'toolbox', 'message-form']
                 .reduce((sum, id) => sum + (doc.getElementById(id)?.getBoundingClientRect().height ?? 0), 0);
             const padding = view.getComputedStyle(doc.getElementById('app'));
             const safeArea = (parseFloat(padding.paddingTop) || 0) + (parseFloat(padding.paddingBottom) || 0);
@@ -43,7 +43,7 @@ export function attachMobileViewport(view = window, doc = document) {
     const observer = panel ? new view.MutationObserver(schedule) : null;
     observer?.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
     const sizes = new view.ResizeObserver(schedule);
-    for (const id of ['league-toolbar', 'lobby-header', 'toolbox', 'message-form']) {
+    for (const id of ['league-toolbar', 'gallery-voting', 'lobby-header', 'toolbox', 'message-form']) {
         const element = doc.getElementById(id);
         if (element) sizes.observe(element);
     }

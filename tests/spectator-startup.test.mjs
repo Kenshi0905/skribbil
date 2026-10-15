@@ -26,6 +26,7 @@ function client(initialMode = '') {
     spectateRequested: false,
     showInfoDialog: (...args) => notices.push(args),
     renderLeagueDislikes: () => {},
+    galleryVoting: null, refreshProfileIdentity: () => {},
   });
   vm.runInContext(`${spectateFunction}\nfunction handleReadyEvent(data) { setSpectateMode(false, data.spectator); }\n${eventFunction}\nglobalThis.receive = handleEvent;`, context);
   return { context, controls, notices };

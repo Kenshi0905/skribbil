@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-15 — Identity, gallery nominations and phone hygiene
+
+- Integrated the latest main changes while preserving avatar/photo uploads, auth, waiting-room settings, room controls and results.
+- Removed the community header status pill; current display names replace account handles in social rosters. Trusted engine identity refresh broadcasts profile name changes, including reconnects, while retaining explicit room looks.
+- Added separate persisted Fame/Shame nominations with fixed eligibility, one vote, closing windows, minimum/majority thresholds and no-decision handling. Publication still requires consent and moderation; withdrawal requires fresh curation.
+- Limited penalty dislikes to one per account per round without changing the unanimous −100/hard-word consequence. Added reduced-motion-aware visual turn handoffs and a prominent room-entry action.
+- Capped post-game unpublished art at 24 hours and replays at one hour; transient engine strokes are released after durable archival events are queued. Votes never retain or duplicate images.
+- Added original versioned difficulty calibration telemetry and documented public skribbl.io observations separately from design choices. Human difficulty calibration remains unverified; REA capture was unavailable without a CDP endpoint.
+
+
 Each major milestone is committed and pushed separately under the repository
 owner's configured Git identity. Unreleased work is described honestly; feature
 designs are not treated as completed runtime features.

@@ -48,3 +48,10 @@ test('artists, spectators, inactive turns and applied penalties cannot react', (
   ui.update({...turn,active:false});
   assert.equal(ui.node('drawing-reactions').hidden,true);
 });
+
+test('spent round dislikes stay disabled while ordinary likes remain per drawing',()=>{
+ const ui=client();ui.update({...turn,usedThisRound:['guesser']});
+ assert.equal(ui.node('league-dislike-button').disabled,true);
+ assert.equal(ui.node('league-like-button').disabled,false);
+ assert.match(ui.node('league-dislike-button').title,/round is used/);
+});

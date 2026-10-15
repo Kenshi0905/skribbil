@@ -101,3 +101,10 @@ test('waiting room exposes settings to the private leader and keeps shared summa
   assert.equal(guest.isShown(guest.find('button','Edit settings')),false);
   const host=fixture('host');host.disconnect();assert.equal(host.find('button','Edit settings').disabled,true);
 });
+
+test('ready checkbox holds its intended state while waiting for an authoritative acknowledgement',()=>{
+ const f=fixture();const ready=f.find('input','room-ready');ready.checked=true;ready.fire('change');
+ assert.equal(ready.checked,true);assert.equal(ready.disabled,true);
+ f.ui.result({action:'toggle-readiness',error:'Try again'});assert.equal(ready.checked,false);
+ assert.equal(ready.disabled,false);
+});

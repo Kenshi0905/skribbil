@@ -5,6 +5,27 @@ on **13 October 2026 (India time)**. It does not certify physical-phone
 compatibility, sustained production capacity or crash recovery. Feature boundaries
 remain in [implementation status](feature-status.md).
 
+## Identity, nominations and phone hygiene — 15 October 2026
+
+Integrated main through `3d7e023` before the final checks; retained the existing avatar/upload/auth/waiting-room changes. Tested changes include current profile names across social views and 11 connected clients, authenticated page re-entry with an old socket alive, unchanged account handles, frozen room looks, separate post-turn gallery nominations and the one-dislike-per-round account budget.
+
+- Node: 225 tests, 224 passed, one optional external PostgreSQL integration skipped, zero failures. Focused gallery UI, consent/takedown/retention, mobile viewport and readiness acknowledgement checks also passed after their final edits.
+- Go: all packages passed with the race detector; final game binary built. Original drawing/guessing loop remains intact.
+- Infrastructure: all eight deployment/proxy tests passed. No hosting credentials were changed.
+- Ten-player protocol run: ten authenticated participants plus a spectator, three mobile User-Agent clients, 20 completed drawing turns, ten verified results; profile rename broadcast to all 11 clients and preserved on reconnect. Gallery votes remained separate from the unanimous penalty. Pending hard-word debt was consumed correctly. Scripted timing summaries were populated and replay expiry was capped at one hour. Mobile User-Agent headers are not evidence of physical-phone testing.
+- Storage test: two vote tuples used 141 bytes excluding indexes; zero extra blob bytes/objects. Duplicate simultaneous requests counted once; self/spectators/late votes rejected; tied/insufficient ballots returned no-decision. Re-consenting did not revive withdrawn gallery entries.
+
+### Dedicated phone pass
+
+Real Chromium browser viewport screenshots at 360, 390 and 430px, both themes: no horizontal page overflow; palette swatches and guess input at least 44px; gallery choice persisted after full reload and disabled duplicates. Closed votes collapse to a summary. Freehand drag reached a second independent browser client. Enter-room invitation is a prominent full-width action with initial keyboard focus.
+
+The 390×400 short-screen check exposed a missing gallery-height deduction. The rebuilt version fixed it: guess-form bottom 396px in a 400px viewport, canvas height 115px, no horizontal overflow. Unit tests cover visualViewport resizing/panning and gallery resize observations. Readiness now holds the intended checkbox state while waiting for the server instead of visibly unticking it.
+
+Evidence images are local ignored QA artifacts under `.tmp/phone-*-light.png`, `.tmp/phone-*-dark.png`, `.tmp/phone-short-390-final.png`, `.tmp/room-entry-360.png`. They contain disposable test identities, not production data. The user-supplied Discord icon remains untouched.
+
+Limits: no physical iOS/Android software-keyboard/touch or Safari device run, no sustained production capacity test, and no external PostgreSQL concurrency test in this session. Pointer/browser and protocol checks do not certify every device. Public word observations and the unavailable REA runtime are documented separately in [word research](word-selection-research.md); no human difficulty calibration is claimed.
+
+
 ## Room looks and the Character Workshop — 14 October 2026
 
 The permanent editor keeps its profile save/upload contract and gains a costume

@@ -158,8 +158,8 @@ func TestProfileRefreshPreservesRoomOverrideAndNewSeatResets(t *testing.T) {
 	}
 	l.State = Ongoing
 	l.ApplyProfileIdentity(fresh, "Later profile", roomPreset)
-	if fresh.Name != "Updated profile" || fresh.AvatarURL != profilePhoto {
-		t.Fatal("ticket changed in-game identity")
+	if fresh.Name != "Later profile" || fresh.AvatarURL != profilePhoto {
+		t.Fatal("profile name did not refresh or in-game avatar changed")
 	}
 }
 

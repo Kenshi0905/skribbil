@@ -34,6 +34,7 @@
             {{end}}
             <a id="league-results-link" href="/" hidden>Back to league · rematch &amp; results →</a>
         </div>
+        {{if .LeagueMode}}<aside id="gallery-voting" aria-label="Drawing gallery nominations" hidden></aside>{{end}}
         <div id="lobby">
             <div id="lobby-header">
                 <div id="round-container">
@@ -124,10 +125,11 @@
                 <div id="drawing-board-inner-wrapper">
                     <canvas id="drawing-board" width="1600" height="900"></canvas>
                     <div id="drawing-reactions" role="group" aria-label="Drawing reactions" hidden>
+                        <small id="round-dislike-note">1 dislike / round</small>
                         <button id="league-like-button" class="drawing-reaction" disabled aria-label="Like drawing" aria-pressed="false" title="Like drawing">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4Zm0 0 5-7c2 0 3 1 2 4l-1 3h6a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2H7"/></svg><span id="league-like-count">0</span>
                         </button>
-                        <button id="league-dislike-button" class="drawing-reaction" disabled aria-label="Dislike drawing" aria-pressed="false" title="Dislike drawing">
+                        <button id="league-dislike-button" class="drawing-reaction" disabled aria-label="Dislike drawing" aria-pressed="false" title="One dislike for the whole round. Choose carefully.">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H3v11h4Zm0 0 5 7c2 0 3-1 2-4l-1-3h6a2 2 0 0 0 2-2l-2-7a2 2 0 0 0-2-2H7"/></svg><span id="league-dislike-count">0</span>
                         </button>
                     </div>

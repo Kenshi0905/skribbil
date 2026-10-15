@@ -11,7 +11,7 @@ export class Social {
 
   async account(db, user, lock = false) {
     requireValue(user && isUuid(user.id), 'Sign in first.', 401);
-    const account = await one(db, `SELECT id,username,status FROM skribbil.users WHERE id=$1${lock ? ' FOR NO KEY UPDATE' : ''}`, [user.id]);
+    const account = await one(db, `SELECT id,username,display_name AS "displayName",status FROM skribbil.users WHERE id=$1${lock ? ' FOR NO KEY UPDATE' : ''}`, [user.id]);
     requireValue(account && account.status === 'active', 'Account unavailable.', 403);
     return account;
   }
@@ -22,12 +22,12 @@ export class Social {
       WHERE m.user_id=$1 AND m.left_at IS NULL AND p.closed_at IS NULL`, [userId]);
     let current = null;
     if (party) {
-      const members = await rows(db, `SELECT u.id,u.username FROM skribbil.party_members m
+      const members = await rows(db, `SELECT u.id,u.username,u.display_name AS "displayName" FROM skribbil.party_members m
         JOIN skribbil.users u ON u.id=m.user_id WHERE m.party_id=$1 AND m.left_at IS NULL
         ORDER BY (m.user_id=$2) DESC,m.joined_at,u.id`, [party.id,party.leader_id]);
       current = { id: party.id, leaderId: party.leader_id, members };
     }
-    const invitations = await rows(db, `SELECT i.id,i.party_id,u.username AS sender,i.expires_at
+    const invitations = await rows(db, `SELECT i.id,i.party_id,u.display_name AS sender,i.expires_at
       FROM skribbil.party_invites i JOIN skribbil.parties p ON p.id=i.party_id
       JOIN skribbil.users u ON u.id=i.inviter_id
       JOIN skribbil.party_members m ON m.party_id=p.id AND m.user_id=i.inviter_id
@@ -76,7 +76,7 @@ export class Social {
         AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>now() ORDER BY created_at LIMIT 1`,[partyId,target.id]);
       const invite = existing || await one(db,`INSERT INTO skribbil.party_invites(party_id,inviter_id,invitee_id,token_hash,expires_at)
         VALUES($1,$2,$3,$4,now()+interval '24 hours') RETURNING id,expires_at`,[partyId,account.id,target.id,hash(randomBytes(32))]);
-      return {id:invite.id,partyId,from:account.username,expiresAt:invite.expires_at};
+      return {id:invite.id,partyId,from:account.displayName,expiresAt:invite.expires_at};
     });
   }
 

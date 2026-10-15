@@ -189,7 +189,7 @@ guessing, timers, and concurrent rooms. The gateway streams WebSocket traffic
 without rewriting game packets; authenticated asynchronous results enter
 transactional receipts and ledgers that prevent duplicate awards.
 
-Drawings normally expire after **30 days**, canonical replay data after **7 days**.
+After a match ends, unpublished drawings expire within **24 hours** and canonical replay data within **one hour**. Gallery votes add no image copies.
 Public artwork needs artist consent and admin selection; active curation and
 legal holds affect retention. Production uses PostgreSQL for metadata and a
 private object store for artwork. Local OMV hosting is deferred.
@@ -201,6 +201,7 @@ private object store for artwork. Local OMV hosting is deferred.
 | [Engine integration](docs/engine-integration.md) | Preserved Go flow, voting rules, harder words, and delivery guarantees. |
 | [Feature status](docs/feature-status.md) · [Verification](docs/verification.md) | Implemented behavior, incomplete features, and launch limitations. |
 | [Live deployment](docs/free-deployment.md) | Hosting, production configuration, verified checks, and free-tier limits. |
+| [Gallery voting and cleanup](docs/gallery-voting.md) · [Word research](docs/word-selection-research.md) | Separate nominations, retention, observed behavior, and our versioned difficulty model. |
 | [Changelog](CHANGELOG.md) | Major implementation changes. |
 
 ## Verification and launch status

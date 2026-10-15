@@ -64,14 +64,18 @@ func cleanRoomName(name string) string {
 }
 
 // ApplyProfileIdentity requires the lobby mutex. Re-admission refreshes the
-// trusted baseline without overwriting a room override or an in-game identity.
+// trusted baseline without overwriting an explicit room look. Names follow
+// the account live; in-game avatar appearance remains frozen.
 func (lobby *Lobby) ApplyProfileIdentity(p *Player, name, avatar string) {
 	p.ProfileIdentity = RoomIdentity{DisplayName: cleanRoomName(name), AvatarURL: avatar}
-	if !p.profileInitialized || (lobby.State == Unstarted && !p.roomIdentityOverride) {
-		if p.State == Ready && (p.Name != p.ProfileIdentity.DisplayName || p.AvatarURL != avatar) {
+	if !p.profileInitialized || !p.roomIdentityOverride {
+		if lobby.State == Unstarted && p.State == Ready && (p.Name != p.ProfileIdentity.DisplayName || p.AvatarURL != avatar) {
 			p.State = Standby
 		}
-		p.Name, p.AvatarURL = p.ProfileIdentity.DisplayName, avatar
+		p.Name = p.ProfileIdentity.DisplayName
+		if !p.profileInitialized || lobby.State == Unstarted {
+			p.AvatarURL = avatar
+		}
 	}
 	p.profileInitialized = true
 }
