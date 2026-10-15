@@ -11,6 +11,7 @@ Integrated main through `3d7e023` before the final checks; retained the existing
 
 - Node: 225 tests, 224 passed, one optional external PostgreSQL integration skipped, zero failures. Focused gallery UI, consent/takedown/retention, mobile viewport and readiness acknowledgement checks also passed after their final edits.
 - Go: all packages passed with the race detector; final game binary built. Original drawing/guessing loop remains intact.
+- Follow-up identity audit: 17 focused identity/leaderboard/UI tests passed. Public standings refresh after profile changes and visibility/connection recovery, preserving the existing table during background requests and leaving uploads/editors alone.
 - Infrastructure: all eight deployment/proxy tests passed. No hosting credentials were changed.
 - Ten-player protocol run: ten authenticated participants plus a spectator, three mobile User-Agent clients, 20 completed drawing turns, ten verified results; profile rename broadcast to all 11 clients and preserved on reconnect. Gallery votes remained separate from the unanimous penalty. Pending hard-word debt was consumed correctly. Scripted timing summaries were populated and replay expiry was capped at one hour. Mobile User-Agent headers are not evidence of physical-phone testing.
 - Storage test: two vote tuples used 141 bytes excluding indexes; zero extra blob bytes/objects. Duplicate simultaneous requests counted once; self/spectators/late votes rejected; tied/insufficient ballots returned no-decision. Re-consenting did not revive withdrawn gallery entries.

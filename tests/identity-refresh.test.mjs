@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import test from 'node:test';import assert from 'node:assert/strict';import {randomBytes} from 'node:crypto';
 import {openDatabase} from '../server/db.mjs';import {createApp} from '../server/index.mjs';import {Social} from '../server/social.mjs';import {Community} from '../server/community.mjs';
 test('display-name changes preserve handles and refresh profiles, friends, party and team rosters for another account',{timeout:60000},async()=>{
@@ -17,4 +19,15 @@ test('display-name changes preserve handles and refresh profiles, friends, party
   assert.equal((await community.getTeam(await account(b),team.id)).team.members[0].displayName,'jane');
   const fresh=await fetch(origin+'/api/me',{headers:{Cookie:`skribbil_session=${a.token}`}});assert.equal((await fresh.json()).user.displayName,'jane');
  }finally{await app.close();}
+});
+
+test('background identity refresh updates the public standings without interrupting an upload',async()=>{
+ const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+ const start=source.indexOf('let identityRefreshBusy = false;'),end=source.indexOf('if (identityChannel) identityChannel.onmessage',start);
+ const calls=[],state={route:'league',modal:null,busy:false};
+ const context=vm.createContext({state,document:{hidden:false,activeElement:{matches:()=>false}},refresh:async()=>calls.push('profile'),loadLeaderboard:async options=>calls.push(options.background?'standings-background':'standings-empty')});
+ vm.runInContext(source.slice(start,end)+';globalThis.update=refreshVisibleIdentity;',context);
+ await context.update();assert.deepEqual(calls,['profile','standings-background']);
+ state.busy=true;await context.update();assert.equal(calls.length,2);
+ state.busy=false;state.modal='avatar-editor';await context.update();assert.equal(calls.length,2);
 });

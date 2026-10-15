@@ -68,16 +68,15 @@ function safeUrl(value) { if (typeof value !== 'string' || !value.trim()) return
 function readableDate(value) { if (!value) return 'To be announced'; const date = new Date(value); return Number.isNaN(date.getTime()) ? 'To be announced' : new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Kolkata'}).format(date); }
 function boardPlayers() { return state.board?.players || []; }
 let leaderboardRequest = 0;
-async function loadLeaderboard() {
+async function loadLeaderboard({background = false} = {}) {
   const request = ++leaderboardRequest;
   const epoch = state.accountEpoch || 0;
-  state.boardLoading = true; state.boardError = null; state.board = null;
-  if (state.route === 'league') render();
+  if (!background) { state.boardLoading = true; state.boardError = null; state.board = null; if (state.route === 'league') render(); }
   try {
     const params = new URLSearchParams({period:state.leaderboardTab,scope:state.leaderboardScope,page:state.leaderboardPage,search:state.search});
     const board = await api(`/api/leaderboard?${params}`);
     if (request !== leaderboardRequest || epoch !== (state.accountEpoch || 0)) return;
-    state.board = board;
+    state.board = board; state.boardError = null;
   } catch (error) {
     if (request !== leaderboardRequest || epoch !== (state.accountEpoch || 0)) return;
     state.boardError = error.message;
@@ -852,7 +851,7 @@ async function submitForm(form) {
     if (kind === 'ban') { await api('/api/admin/bans',{method:'POST',body:JSON.stringify(fields)}); message = 'The account ban has been recorded.'; }
     if (kind === 'room') { const payload = {mode:state.roomMode,...(state.roomMode === 'private' ? {rounds:Number(fields.rounds || 3),drawTime:Number(fields.drawTime || 80),private:!!state.roomClubhouseId || fields.private === 'on'} : {}),...(state.roomClubhouseId ? {clubhouseId:state.roomClubhouseId} : {})}; const result = await api('/api/rooms',{method:'POST',body:JSON.stringify(payload)}); const url = safeUrl(result.url); if (!url) throw new Error('The server did not return a valid game link.'); location.assign(url); return; }
     if (kind === 'auth') { state.partyState = null; state.partyLoaded = false; state.partyError = null; state.myTeams = null; state.teamsLoaded = false; state.teamsError = null; state.clubhouseState = null; state.clubhousesLoaded = false; state.clubhousesError = null; state.clubhouseRequests = null; }
-    closeModal(); await refresh({silent:true}); if (state.route === 'admin') await loadAdmin(); toast(message); if (kind === 'auth' && state.returnAfterAuth) { const next = state.returnAfterAuth; state.returnAfterAuth = null; if (next.type === 'room') openModal('room'); else if (next.type === 'join') { state.pendingJoin = next.id; state.pendingRole = next.role; openModal('invite'); } else if (next.type === 'team') await showTeam(next.id); }
+    closeModal(); await refresh({silent:true}); if (kind === 'profile' && state.route === 'league') await loadLeaderboard({background:true}); if (state.route === 'admin') await loadAdmin(); toast(message); if (kind === 'auth' && state.returnAfterAuth) { const next = state.returnAfterAuth; state.returnAfterAuth = null; if (next.type === 'room') openModal('room'); else if (next.type === 'join') { state.pendingJoin = next.id; state.pendingRole = next.role; openModal('invite'); } else if (next.type === 'team') await showTeam(next.id); }
   } catch (error) { if (kind === 'room') { await refresh(); const saved = rows('ownRooms').length ? ' You have a saved room in the commons that you can resume.' : ''; setFormError((error.message || 'The room could not be opened.') + saved,$('form',dialogRoot)); } else setFormError(error.message || 'That did not work. Please try again.',form); }
   finally { state.busy = false; if(photoInput)photoInput.disabled=false; state.photoCropper?.setBusy(false); if (submit?.isConnected) { submit.disabled = false; submit.innerHTML = originalText; } }
 }
@@ -883,7 +882,7 @@ let identityRefreshBusy = false;
 async function refreshVisibleIdentity() {
   if (document.hidden || state.modal || state.busy || document.activeElement?.matches('input,textarea,select') || identityRefreshBusy) return;
   identityRefreshBusy = true;
-  try { await refresh({silent:true}); if (state.route === 'friends') { await loadParty(); await loadMyTeams(); } if (state.route === 'clubhouses' && user()) await loadClubhouses(); }
+  try { await refresh({silent:true}); if (state.route === 'league') await loadLeaderboard({background:true}); if (state.route === 'friends') { await loadParty(); await loadMyTeams(); } if (state.route === 'clubhouses' && user()) await loadClubhouses(); }
   catch { /* Existing content remains available while offline. */ }
   finally { identityRefreshBusy = false; }
 }
