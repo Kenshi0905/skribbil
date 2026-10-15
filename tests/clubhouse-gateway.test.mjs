@@ -85,10 +85,12 @@ test('Clubhouse HTTP routes enforce approval, invite-only room access and immedi
     assert.equal((await request(owner,`/api/clubhouses/${clubhouseId}`)).data.clubhouse.rooms[0].id,match.id);
     assert.deepEqual((await request(admin,`/api/clubhouses/${clubhouseId}`)).data.clubhouse.rooms,[]);
     assert.equal((await request(outsider,`/api/rooms/${match.id}/join`,{})).status,403);
+    assert.equal((await request(outsider,'/api/rooms/join-code',{code:match.id})).status,403,'a pasted code never bypasses Clubhouse membership');
     assert.equal((await request(outsider,`/api/rooms/${match.id}/join`,{role:'spectator'})).status,403);
     assert.equal((await request(admin,`/api/rooms/${match.id}/join`,{role:'spectator'})).status,403);
     assert.equal((await request(outsider,'/api/rooms',{mode:'private',clubhouseId})).status,403);
     assert.equal((await request(owner,`/api/rooms/${match.id}/join`,{role:'spectator'})).status,200);
+    assert.equal((await request(owner,'/api/rooms/join-code',{code:match.id})).status,200);
     assert.equal((await request(member,created.data.url)).status,200);
     assert.equal((await request(member,`/engine/lobby/${match.engine_room_id}`)).status,200);
 

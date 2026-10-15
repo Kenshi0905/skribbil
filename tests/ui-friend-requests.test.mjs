@@ -153,6 +153,7 @@ test('profile loads real data, escapes content, and exposes no account edit cont
   assert.equal(calls[0].path,'/api/friends/accepted-test/profile');
   const html=ui.friendProfileModal();assert.match(html,/&lt;script&gt;pal/);assert.match(html,/&lt;b&gt;hello/);
   assert.match(html,/Games played/);assert.match(html,/>700<\/strong>/);
+  assert.match(html,/Account handle: @accepted_/);assert.doesNotMatch(html,/Account handle: @&lt;script/);
   assert.doesNotMatch(html,/data-action="edit-profile"|<script>|<b>hello/);
 });
 

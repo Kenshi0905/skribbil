@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachCanvasInput } from '../engine/internal/frontend/resources/canvas-input.js';
 
-function setup() {
+function setup({view,rect=()=>({ left: 10, top: 20, width: 320, height: 180 })}={}) {
   const handlers = new Map(), lines = [], fills = [], capture = new Set();
   const canvas = {
-    getBoundingClientRect: () => ({ left: 10, top: 20, width: 320, height: 180 }),
+    ownerDocument:{defaultView:view},getBoundingClientRect:rect,
     addEventListener: (name, fn) => handlers.set(name, fn), removeEventListener: name => handlers.delete(name),
     setPointerCapture: id => capture.add(id), hasPointerCapture: id => capture.has(id), releasePointerCapture: id => capture.delete(id),
   };
@@ -24,6 +24,24 @@ test('touch taps draw one dot; captured strokes remain continuous and bounded', 
   f.emit('pointerup'); f.emit('pointermove', { clientX: 200 });
   assert.equal(f.lines.length, 3); assert.equal(f.capture.size, 0);
   assert.equal(f.handlers.has('click'), false, 'synthetic clicks cannot duplicate strokes');
+});
+
+test('coalesced input shares geometry within a frame and scrolling invalidates it immediately',()=>{
+  const frames=new Map();let id=0,reads=0,left=10;
+  const view=Object.assign(new EventTarget(),{
+    visualViewport:new EventTarget(),
+    requestAnimationFrame:fn=>{frames.set(++id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id),
+  });
+  const f=setup({view,rect:()=>{reads++;return{left,top:20,width:320,height:180};}});
+  f.emit('pointerdown');f.emit('pointermove',{getCoalescedEvents:()=>[
+    {clientX:30,clientY:50},{clientX:40,clientY:60},{clientX:50,clientY:70},
+  ]});
+  assert.equal(reads,1,'all samples are preserved without repeated layout reads');assert.equal(f.lines.length,4);
+  left=20;view.visualViewport.dispatchEvent(new Event('scroll'));f.emit('pointermove',{clientX:70,clientY:80});
+  assert.equal(reads,2);assert.deepEqual(f.lines.at(-1).slice(2,4),[50,60]);
+  for(const fn of [...frames.values()])fn();frames.clear();f.emit('pointermove',{clientX:80,clientY:90});
+  assert.equal(reads,3,'the next frame obtains current geometry');
+  f.detach();assert.equal(frames.size,0);view.dispatchEvent(new Event('resize'));assert.equal(frames.size,0);
 });
 
 test('fill uses one touch and does not turn a drag or second finger into fills', () => {

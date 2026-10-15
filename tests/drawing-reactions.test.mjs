@@ -11,7 +11,7 @@ function client() {
     if (!nodes.has(id)) nodes.set(id, {disabled:true, hidden:true, setAttribute(name,value) { this[name]=value; }, addEventListener(type,callback) { this[type]=callback; }});
     return nodes.get(id);
   };
-  const context = vm.createContext({document:{getElementById:node}, ownID:'guesser', WebSocket:{OPEN:1}, socket:{readyState:1, send:data=>sent.push(JSON.parse(data))}});
+  const context = vm.createContext({document:{getElementById:node}, attachMobileTools:()=>{}, ownID:'guesser', WebSocket:{OPEN:1}, socket:{readyState:1, send:data=>sent.push(JSON.parse(data))}});
   vm.runInContext(`${reactions}\nglobalThis.update=renderLeagueDislikes;`,context);
   return {update:context.update,node,sent};
 }

@@ -13,8 +13,8 @@ with the original
 [scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
 The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
 engine. Accounts and community identity are shared foundations for future games;
-only Skribbil is playable today. Open **Clubhouse → Skribbil** to play, or
-**Your Clubhouses** to find invite-only groups. Saved avatars appear beside
+only Skribbil is playable today. Open **Play** to create a room or paste an invite
+code; open **Clubhouses** for invite-only groups. Saved avatars appear beside
 players' ranks and scores inside the game.
 
 Make your permanent avatar in the **Character Workshop**. Before a managed game,
@@ -28,10 +28,13 @@ match. Your profile stays unchanged; guests ready up and the host starts the gam
 Register at the live site and create a private room. The free backend may need
 about a minute to wake after inactivity.
 
-![The Skribbil commons: a paper-and-marker dashboard with game rooms, league progress, and a playful drawing card.](docs/media/commons-desktop.jpg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/clean-community-dark.jpg">
+  <img src="docs/media/clean-community-light.jpg" alt="The clean community home: create or join a room, friends, available rooms, XP, quests and leaderboard.">
+</picture>
 
-*The commons, captured from the running local app. Rooms, rankings, artwork,
-and progress come from real community activity; new communities start empty.*
+*The running local app with disposable test players. Rooms, rankings, and progress
+come from saved activity; new communities start empty. [UI verification](docs/ui-revamp-verification.md).*
 
 [Run locally](#run-locally) · [Find your people](#find-your-people) ·
 [Watch the demo](#the-original-game-with-a-community-around-it) ·
@@ -81,14 +84,16 @@ boundary let future games share that identity and league.
 ## A smaller screen, the same canvas
 
 <p align="center">
-  <img src="docs/media/commons-phone.jpg" width="230" alt="The commons in a narrow browser viewport, with a menu button and stacked game card." />
+  <img src="docs/media/clean-community-phone.jpg" width="230" alt="The community home in a real narrow web viewport: room actions first, followed by standings, quests and XP." />
   &nbsp;&nbsp;
   <img src="docs/media/gameplay-phone.jpg" width="230" alt="The native game in a narrow browser viewport, with canvas, stacked chat, and a Send button." />
 </p>
 
-*Narrow browser captures. The sidebar scrolls, forms fit the viewport, and the
-game provides larger controls and pointer input. These are viewport checks,
-not physical-phone photographs or proof of real-device touch behavior.*
+*Narrow browser captures. The community scrolls naturally; the game resizes its
+full canvas above the guess field when the visible viewport shrinks. Saved dark
+mode remains available. These are viewport checks, not physical-phone photographs
+or proof of real-device touch behavior. The gameplay clip above predates the
+latest compact tools and gallery panel.*
 
 ## What you can do
 

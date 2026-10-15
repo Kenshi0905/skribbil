@@ -87,6 +87,7 @@ export function createGameAudio({ storage, createAudio = file => new Audio(file)
         // Call synchronously from a trusted pointer/keyboard event. One context
         // and decoded buffer cache serve every effect, including on iOS Safari.
         unlock() {
+            if (!enabled || volume === 0) return Promise.resolve();
             const ctx = getContext();
             if (!ctx || ctx.state === "running" || ctx.state === "closed") return Promise.resolve();
             try { return Promise.resolve(ctx.resume()).catch(() => {}); } catch { return Promise.resolve(); }

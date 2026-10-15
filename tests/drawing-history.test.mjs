@@ -6,6 +6,19 @@ import { createDrawingHistory } from '../engine/internal/frontend/resources/draw
 
 const renderer = vm.createContext({console});
 vm.runInContext(readFileSync(new URL('../engine/internal/frontend/resources/draw.js', import.meta.url), 'utf8'), renderer);
+
+test('dirty updates preserve all stroke pixels while touching only the local region',()=>{
+  const pixels={width:160,height:90,data:new Uint8ClampedArray(160*90*4).fill(255)},screen=pixels.data.slice(),areas=[];
+  const context={canvas:{width:160,height:90},putImageData(image,dx,dy,x,y,width,height){
+    areas.push(width*height);
+    for(let row=y;row<y+height;row++)screen.set(image.data.subarray((row*160+x)*4,(row*160+x+width)*4),(row*160+x)*4);
+  }};
+  for(const point of [[130,70,136,74],[0,0,3,4],[158,88,164,95]]) {
+    renderer.drawLine(context,pixels,...point,{r:35,g:20,b:90},4);
+    assert.deepEqual(screen,pixels.data,'partial presentation must match canonical pixels including edges');
+  }
+  assert.ok(areas.every(area=>area<160*90/5),'a small stroke must not repaint the origin-to-stroke rectangle');
+});
 function canvas() {
   const image = {width:64,height:36,data:new Uint8ClampedArray(64*36*4)};
   const context = {canvas:{width:64,height:36}};

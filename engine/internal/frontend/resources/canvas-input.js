@@ -3,8 +3,15 @@
 // line/fill. One pointer path prevents synthetic touch clicks drawing twice.
 export function attachCanvasInput(canvas, { state, line, fill }) {
     let active = null;
+    let geometry = null, geometryFrame = 0;
+    const view = canvas.ownerDocument?.defaultView;
+    const invalidate = () => { if (geometryFrame) view?.cancelAnimationFrame?.(geometryFrame); geometry = null; geometryFrame = 0; };
     const position = (event) => {
-        const rect = canvas.getBoundingClientRect();
+        const rect = geometry || canvas.getBoundingClientRect();
+        if (view?.requestAnimationFrame && !geometryFrame) {
+            geometry = rect;
+            geometryFrame = view.requestAnimationFrame(invalidate);
+        }
         return {
             x: Math.max(0, Math.min(Math.max(0, rect.width - 1), event.clientX - rect.left)),
             y: Math.max(0, Math.min(Math.max(0, rect.height - 1), event.clientY - rect.top)),
@@ -24,6 +31,7 @@ export function attachCanvasInput(canvas, { state, line, fill }) {
         const current = state();
         if (!current.enabled || active || event.isPrimary === false || (event.pointerType !== "touch" && event.button !== 0)) return;
         event.preventDefault();
+        invalidate();
         const point = position(event);
         active = { id: event.pointerId, point, tool: current.tool };
         canvas.setPointerCapture?.(event.pointerId);
@@ -49,11 +57,19 @@ export function attachCanvasInput(canvas, { state, line, fill }) {
     };
     const listeners = { pointerdown: down, pointermove: move, pointerup: stop, pointercancel: stop, lostpointercapture: stop };
     for (const [name, listener] of Object.entries(listeners)) canvas.addEventListener(name, listener, { passive: false });
-    const view = canvas.ownerDocument?.defaultView;
     view?.addEventListener("blur", stop);
+    view?.addEventListener("resize", invalidate);
+    view?.addEventListener("scroll", invalidate, true);
+    view?.visualViewport?.addEventListener("resize", invalidate);
+    view?.visualViewport?.addEventListener("scroll", invalidate);
     return () => {
         stop();
         for (const [name, listener] of Object.entries(listeners)) canvas.removeEventListener(name, listener);
         view?.removeEventListener("blur", stop);
+        view?.removeEventListener("resize", invalidate);
+        view?.removeEventListener("scroll", invalidate, true);
+        view?.visualViewport?.removeEventListener("resize", invalidate);
+        view?.visualViewport?.removeEventListener("scroll", invalidate);
+        if (geometryFrame) view?.cancelAnimationFrame?.(geometryFrame);
     };
 }

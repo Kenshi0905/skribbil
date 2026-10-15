@@ -5,6 +5,7 @@ import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}'
 import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
 import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
 import { attachMobileViewport } from './resources/{{.WithCacheBust "mobile-viewport.js"}}';
+import { attachMobileTools } from './resources/{{.WithCacheBust "mobile-tools.js"}}';
 import { createRoomExit } from './resources/{{.WithCacheBust "room-exit.js"}}';
 
 String.prototype.format = function () {
@@ -88,7 +89,10 @@ const gameAudio = createGameAudio({ storage: localStorage });
 // Browsers require user activation before Web Audio can make sound. Capture
 // both touch/mouse/pen gestures and keyboard controls without blocking them.
 for (const event of ["pointerdown", "pointerup", "keydown"]) {
-    document.addEventListener(event, () => gameAudio.unlock(), { capture: true, passive: true });
+    document.addEventListener(event, input => {
+        // Warm sound on ready/menu/keyboard gestures, never on a canvas stroke.
+        if (input.target?.id !== 'drawing-board') gameAudio.unlock();
+    }, { capture: true, passive: true });
 }
 const soundVolume = document.getElementById("sound-volume");
 const soundVolumeValue = document.getElementById("sound-volume-value");
@@ -993,6 +997,7 @@ messageInput.addEventListener("keydown", function (event) {
 
 function setAllowDrawing(value) {
     allowDrawing = value;
+    document.body.classList.toggle('is-drawing', Boolean(value));
     updateDrawingStateUI();
 
     if (allowDrawing) {
@@ -1028,9 +1033,23 @@ function onVotekickPlayer(playerId) {
 }
 
 //This automatically scrolls down the chat on arrivals of new messages
-new MutationObserver(
-    () => (messageContainer.scrollTop = messageContainer.scrollHeight),
-).observe(messageContainer, {
+let followChat = true;
+const latestMessages = document.createElement('button');
+latestMessages.type = 'button'; latestMessages.className = 'chat-latest'; latestMessages.hidden = true;
+latestMessages.textContent = 'New messages ↓';
+document.getElementById('chat').append(latestMessages);
+messageContainer.addEventListener('scroll', () => {
+    followChat = messageContainer.scrollHeight - messageContainer.clientHeight - messageContainer.scrollTop < 32;
+    if (followChat) latestMessages.hidden = true;
+}, {passive:true});
+latestMessages.addEventListener('click', () => {
+    followChat = true; messageContainer.scrollTop = messageContainer.scrollHeight;
+    latestMessages.hidden = true; messageInput.focus();
+});
+new MutationObserver(() => {
+    if (followChat) messageContainer.scrollTop = messageContainer.scrollHeight;
+    else latestMessages.hidden = false;
+}).observe(messageContainer, {
     attributes: false,
     childList: true,
     subtree: false,
@@ -1085,7 +1104,7 @@ const galleryVoting = galleryRoot && document.body.dataset.leagueSpectator !== '
     ? (await import('/gallery-votes.js')).createGalleryVoting(galleryRoot, {roomCode: location.pathname.split('/').filter(Boolean).at(-1)}) : null;
 window.addEventListener('pageshow', () => galleryVoting?.refresh());
 document.addEventListener('visibilitychange', () => galleryVoting?.refresh());
-window.addEventListener('pagehide', () => galleryVoting?.dispose(), {once:true});
+window.addEventListener('pagehide', event => { if (!event.persisted) galleryVoting?.dispose(); });
 let profileRefreshBusy = false;
 async function refreshProfileIdentity() {
     if (!document.body.dataset.leagueMode || document.hidden || profileRefreshBusy) return;
@@ -1094,23 +1113,37 @@ async function refreshProfileIdentity() {
     catch { /* Re-admission also refreshes the authoritative profile. */ }
     finally { profileRefreshBusy = false; }
 }
-setInterval(refreshProfileIdentity,20000);
+setInterval(refreshProfileIdentity,60000);
 window.addEventListener('online',refreshProfileIdentity);
 window.addEventListener('focus',refreshProfileIdentity);
 const profileChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('skribbil-profile') : null;
 if (profileChannel) profileChannel.onmessage = refreshProfileIdentity;
 function smoothTurnHandoff() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (gameState !== 'ongoing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const board = document.getElementById('drawing-board');
     const wrapper = document.getElementById('drawing-board-inner-wrapper');
     if (!board || !wrapper) return;
+    wrapper.querySelectorAll('.turn-handoff').forEach(old=>old.remove());
     const previous = document.createElement('canvas');
     previous.width = board.width; previous.height = board.height;
     previous.className = 'turn-handoff'; previous.setAttribute('aria-hidden','true');
     previous.getContext('2d').drawImage(board,0,0);
     wrapper.append(previous);
     if (!previous.animate) { previous.remove(); return; }
-    previous.animate([{opacity:1},{opacity:0}],{duration:240,easing:'ease-out'}).finished.then(()=>previous.remove(),()=>previous.remove());
+    previous.animate([{opacity:1},{opacity:0}],{duration:420,easing:'ease-out'}).finished.then(()=>previous.remove(),()=>previous.remove());
+}
+function showTurnFeedback(data) {
+    for (const id of ['turn-recap','word-choice-recap']) {
+        const holder = document.getElementById(id); if (!holder) continue;
+        holder.replaceChildren(); holder.hidden = !data?.previousWord;
+        if (holder.hidden) continue;
+        const word = document.createElement('strong'); word.textContent = `The word was “${data.previousWord}”`;
+        const gains = (data.players || []).filter(player=>Number(player.lastScore)!==0 && Number.isFinite(Number(player.lastScore)))
+            .sort((a,b)=>Number(b.lastScore)-Number(a.lastScore)).slice(0,3);
+        const scores = document.createElement('span');
+        scores.textContent = gains.map(player=>`${player.name}: ${Number(player.lastScore)>0?'+':''}${player.lastScore}`).join(' · ');
+        holder.append(word,scores);
+    }
 }
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
@@ -1140,6 +1173,7 @@ copyRoomInvite?.addEventListener("click", async () => {
 const dislikeButton = document.getElementById("league-dislike-button");
 const likeButton = document.getElementById("league-like-button");
 const drawingReactions = document.getElementById("drawing-reactions");
+attachMobileTools();
 const renderLeagueDislikes = (state) => {
     leagueDislikes = state;
     if (!state) return;
@@ -1193,6 +1227,7 @@ const handleEvent = (parsed) => {
             document.body.dataset.leagueMode = parsed.data.leagueMode;
         }
         handleReadyEvent(parsed.data);
+        showTurnFeedback(parsed.data.wordHints ? null : parsed.data);
         galleryVoting?.refresh();
         refreshProfileIdentity();
         if (parsed.data.leagueMode) {
@@ -1310,12 +1345,14 @@ const handleEvent = (parsed) => {
     } else if (parsed.type === "clear-drawing-board") {
         clear(context);
     } else if (parsed.type === "word-chosen") {
+        showTurnFeedback(null);
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
         setRoundTimeLeft(parsed.data.timeLeft);
         applyWordHints(parsed.data.hints);
         setAllowDrawing(drawerID === ownID);
     } else if (parsed.type === "next-turn") {
+        galleryVoting?.onTurn?.();
         smoothTurnHandoff();
         dislikeButton.disabled = true;
         likeButton.disabled = true;
@@ -1363,6 +1400,7 @@ const handleEvent = (parsed) => {
         applyPlayers(parsed.data.players);
 
         revealRoundWord(parsed.data.previousWord);
+        showTurnFeedback(parsed.data);
 
         //Even though we always hide the dialog in the "your-turn"
         //event handling, it will be shortly visible if we it here.
@@ -1458,7 +1496,10 @@ const handleEvent = (parsed) => {
 };
 
 function showRoundEndMessage(previousWord) {
-    if (previousWord) return;
+    if (previousWord) {
+        appendMessage('system-message',null,`The word was “${previousWord}”.`);
+        return;
+    }
     appendMessage(
         "system-message",
         null,
@@ -1612,9 +1653,9 @@ window.setInterval(() => {
     if (gameState === "ongoing") {
         const msLeft = roundEndTime - Date.now();
         const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
-        timeLeftValue.innerText = "" + secondsLeft;
+        if (timeLeftValue.textContent !== String(secondsLeft)) timeLeftValue.textContent = String(secondsLeft);
     } else {
-        timeLeftValue.innerText = "∞";
+        if (timeLeftValue.textContent !== '∞') timeLeftValue.textContent = '∞';
     }
 }, 500);
 
@@ -1937,7 +1978,7 @@ const drawingHistory = createDrawingHistory({
         if (event?.type === "line") {
             const data = event.data;
             const bounds = prepareDrawLineCoords(context, data.x, data.y, data.x2, data.y2, data.width);
-            context.putImageData(imageData, 0, 0, 0, 0, bounds.right, bounds.bottom);
+            context.putImageData(imageData, 0, 0, bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
         } else context.putImageData(imageData, 0, 0);
     },
     draw: ({type, data}) => {

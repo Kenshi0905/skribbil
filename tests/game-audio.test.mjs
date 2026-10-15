@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameAudio } from '../engine/internal/frontend/resources/game-audio.js';
 
+test('muted and zero-volume gestures never initialize audio hardware',async()=>{
+  for(const saved of [{sound:'false'},{'skribbil.sound.volume':'0'}]) {
+    let contexts=0;
+    const audio=createGameAudio({storage:{getItem:key=>saved[key]??null},createContext:()=>{contexts++;return {state:'running'};}});
+    await audio.unlock();audio.play('pop.wav');assert.equal(contexts,0);
+    audio.setEnabled(true);audio.setVolume(.4);await audio.unlock();assert.equal(contexts,1);
+    await audio.unlock();assert.equal(contexts,1,'subsequent gestures reuse the context');
+  }
+});
+
 function fixture(saved = {}) {
   const values = new Map(Object.entries(saved)), played = [];
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };

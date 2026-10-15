@@ -6,6 +6,9 @@ const dialogRoot = $('#dialog-root');
 const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number = value => new Intl.NumberFormat('en-IN').format(Number(value) || 0);
 const icons = {
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  key: '<circle cx="8" cy="8" r="5"/><path d="m12 12 9 9m-5-5 3-3m-1 5 3-3"/>',
   moon: '<path d="M20.5 13.5A8.5 8.5 0 0 1 10.5 3a8.5 8.5 0 1 0 10 10.5Z"/>',
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   trophy: '<path d="M7 3h10v5a5 5 0 0 1-10 0V3Zm5 10v5m-4 3h8m-8-3h8v3H8zM7 5H3v2a4 4 0 0 0 4 4m10-6h4v2a4 4 0 0 1-4 4"/>',
@@ -102,6 +105,7 @@ function ownRoomsPanel() {
 function engineNote() {
   if (!state.data.engine) return '';
   const available = state.data.engine.available === true;
+  if (available) return '';
   return `<div class="connection-note ${available ? 'connected' : ''}">${icon(available ? 'check' : 'info')}<span>${available ? `Original game engine connected · private rooms are ready.${state.data.engine.ranked ? ' Ranked is open.' : ' Ranked competition is not enabled.'}` : 'The drawing server is not connected yet. The community is open for exploring.'}</span></div>`;
 }
 function inviteModal() {
@@ -208,6 +212,7 @@ function resetAccountViews() {
 async function refresh({silent = false} = {}) {
   try { const data = await api('/api/bootstrap'); if ((data.user?.id || null) !== (user()?.id || null)) { resetAccountViews(); if (state.modal && !['auth','room','invite'].includes(state.modal)) closeModal(); } state.data = data; state.error = null; }
   catch (error) { if (error.code === 'ACCOUNT_CHANGED') return; state.error = error.message; if (silent) throw error; }
+  state.loading = false;
   render();
   if (state.modal === 'room') {
     const form = $('form',dialogRoot);
@@ -229,6 +234,9 @@ async function refresh({silent = false} = {}) {
 function currentRoute() { const route = location.hash.replace(/^#\/?/,'').split('?')[0] || 'home'; return ['home','skribbil','league','tournaments','community','profile','friends','clubhouses','admin'].includes(route) ? route : 'home'; }
 const routeLabels = {home:'Clubhouse',skribbil:'Skribbil',league:'Leaderboard',tournaments:'Tournaments',community:'The gallery',profile:'Your profile',friends:'Friends & teams',clubhouses:'Clubhouses',admin:'Admin dashboard'};
 function render() {
+  const previousRoute = state.route, codeInput = app.querySelector?.('[data-form="join-code"] input');
+  const codeDraft = codeInput?.value, codeFocused = codeInput && document.activeElement === codeInput;
+  const codeSelection = codeFocused ? [codeInput.selectionStart,codeInput.selectionEnd] : null;
   state.route = currentRoute();
   if (state.route === 'admin' && !isAdmin()) state.route = 'home';
   document.title = `${routeLabels[state.route]} · Skribbil Communities`;
@@ -238,16 +246,35 @@ function render() {
     <div class="main-column">${topbar()}<main class="content" id="main-content">${state.error ? `<div class="engine-banner">${icon('info')}<span>${e(state.error)} Some community data could not be loaded.</span>${button('Retry','refresh','refresh','outline')}</div>` : ''}${renderPage()}${footer()}</main></div>
   </div>`;
   syncMobileNavigation();
+  if (previousRoute === state.route && codeDraft !== undefined) {
+    const next = app.querySelector?.('[data-form="join-code"] input');
+    if (next) {
+      next.value = codeDraft;
+      if (codeFocused) { next.focus({preventScroll:true}); next.setSelectionRange(...codeSelection); }
+    }
+  }
 }
 function syncMobileNavigation() { const sidebar = $('.sidebar'); if (sidebar) sidebar.inert = typeof window !== 'undefined' && window.matchMedia('(max-width:760px)').matches && !state.mobileNav; }
 function currentLeague() { return rows('leagues')[0] || null; }
 function sidebar() {
-  const links = [['home','home','Clubhouse'],['skribbil','pencil','Skribbil'],['league','trophy','Leaderboard'],['tournaments','sword','Tournaments'],['community','palette','Hall of doodles']];
-  const community = [['clubhouses','people','Your Clubhouses'],['friends','people','Friends & teams'],['profile','user','My profile']];
+  const links = [['home','game','Play'],['clubhouses','home','Clubhouses'],['league','trophy','Leaderboard'],['community','pencil','Doodles']];
+  const community = [['skribbil','pencil','Skribbil'],['friends','people','Friends & teams'],['tournaments','sword','Tournaments'],['profile','user','My profile']];
   function nav([route,ico,label]) { return `<a class="nav-link ${route === 'skribbil' ? 'nav-game' : ''} ${state.route === route ? 'active' : ''}" href="#/${route}" ${state.route === route ? 'aria-current="page"' : ''}>${icon(ico)}<span>${label}</span></a>`; }
-  return `<aside class="sidebar" id="primary-navigation" aria-label="Main navigation"><a class="brand" href="#/home" aria-label="Skribbil Communities home"><img class="community-brand" data-community-logo src="${document.documentElement?.dataset.theme === 'dark' ? '/assets/skribbil-communities.png' : '/assets/skribbil-communities-light.png'}" width="2172" height="724" alt="Skribbil Communities — the red-caped doodle hero"/></a><div class="brand-sub">YOUR PEOPLE. YOUR PLACE.</div><div class="nav-label">OUR COMMUNITY</div><nav class="nav-list">${links.map(nav).join('')}</nav><div class="nav-divider"></div><div class="nav-label">YOUR CORNER</div><nav class="nav-list">${community.map(nav).join('')}${isAdmin() ? nav(['admin','shield','Admin dashboard']) : ''}</nav><div class="sidebar-bottom">${currentLeague() ? `<div class="season-card"><div class="tiny">OUR SHARED LEAGUE</div><h3>${e(currentLeague().name)}</h3><p>Little doodles.<br>Legendary rivalries.</p><a class="season-link" href="#/league">Meet your competition ${icon('arrow')}</a>${icon('trophy')}</div>` : ''}<div class="sidebar-footer">Made for friends. <span class="heart">♥</span> Fueled by chaos.</div></div></aside>`;
+  return `<aside class="sidebar" id="primary-navigation" aria-label="Main navigation"><a class="brand" href="#/home" aria-label="Skribbil Communities home"><img class="community-brand" data-community-logo src="${document.documentElement?.dataset.theme === 'dark' ? '/assets/skribbil-communities.png' : '/assets/skribbil-communities-light.png'}" width="2172" height="724" alt="Skribbil Communities — the red-caped doodle hero"/></a><nav class="nav-list">${links.map(nav).join('')}</nav><details class="nav-more" ${community.some(([route])=>route===state.route)||state.route==='admin'?'open':''}><summary>${icon('more')}<span>More</span>${icon('down')}</summary><nav class="nav-list">${community.map(nav).join('')}${isAdmin() ? nav(['admin','shield','Admin dashboard']) : ''}</nav></details><div class="sidebar-bottom">${currentLeague() ? `<a class="sidebar-league" href="#/league">${icon('trophy')}<span>${e(currentLeague().name)}</span></a>` : ''}<div class="sidebar-footer">Your people. Your place.</div></div></aside>`;
 }
-function topbar() { const person = user(); return `<header class="topbar"><button class="icon-button mobile-toggle" data-action="toggle-nav" aria-label="${state.mobileNav ? 'Close' : 'Open'} navigation" aria-controls="primary-navigation" aria-expanded="${state.mobileNav}">${icon('menu')}</button><div class="breadcrumb"><span>Your community</span>${icon('chevron')}<strong>${routeLabels[state.route]}</strong></div><div class="topbar-actions"><button type="button" class="icon-button theme-toggle" data-theme-toggle aria-label="Dark" aria-pressed="${document.documentElement?.dataset.theme === 'dark'}" title="${document.documentElement?.dataset.theme === 'dark' ? 'Switch to the original theme' : 'Switch to dark mode'}">${icon('moon')}<span class="theme-toggle-label">Dark</span></button><button class="account-button" aria-label="${person ? `Open settings for ${e(displayName(person))}` : 'Sign in or create an account'}" data-action="${person ? 'account-settings' : 'auth'}">${avatar(person || {displayName:'You'})}<span class="account-text">${person ? e(displayName(person)) : 'Hey, new friend!'}<small>${person ? `${person.level != null ? `Level ${number(person.level)} · ` : ''}${e(person.title || 'No title equipped')}` : 'Join the scribble squad'}</small></span>${icon('down')}</button></div></header>`; }
+function notificationItems() {
+  const requests = rows('friends').filter(friend=>friend.status==='pending' && !friend.outgoing);
+  return [
+    ...requests.map(friend=>({title:`${displayName(friend)} sent a friend request`,route:'friends',icon:'people'})),
+    ...(state.partyState?.invites || []).map(invite=>({title:`Party invitation from ${typeof invite.from==='object'?displayName(invite.from):invite.from || 'a friend'}`,route:'friends',icon:'game'})),
+    ...(state.clubhouseState?.invites || []).map(invite=>({title:`You’re invited to ${invite.clubhouseName || 'a Clubhouse'}`,route:'clubhouses',icon:'home'})),
+  ];
+}
+function topbar() {
+  const person=user(), hub=['home','skribbil'].includes(state.route), notifications=notificationItems();
+  const brand=`<a class="mobile-brand" href="#/home" aria-label="Skribbil Communities home"><img data-community-logo src="${document.documentElement?.dataset.theme==='dark'?'/assets/skribbil-communities.png':'/assets/skribbil-communities-light.png'}" width="2172" height="724" alt="Skribbil Communities"/></a>`;
+  return `<header class="topbar ${hub?'hub-topbar':''}"><button class="icon-button mobile-toggle" data-action="toggle-nav" aria-label="${state.mobileNav?'Close':'Open'} navigation" aria-controls="primary-navigation" aria-expanded="${state.mobileNav}">${icon('menu')}</button>${brand}${hub?`<div class="hub-title"><h1>Let’s play.</h1><p>Bad drawings. Good company.</p></div>`:`<div class="breadcrumb"><span>Your community</span>${icon('chevron')}<strong>${routeLabels[state.route]}</strong></div>`}<div class="topbar-actions"><button type="button" class="icon-button theme-toggle" data-theme-toggle aria-label="Dark" aria-pressed="${document.documentElement?.dataset.theme==='dark'}" title="Switch theme">${icon('moon')}<span class="theme-toggle-label">Dark</span></button><button class="icon-button notification-button" data-action="notifications" aria-label="Notifications${notifications.length?`, ${notifications.length} pending`:''}">${icon('bell')}${notifications.length?`<span class="notification-count">${number(notifications.length)}</span>`:''}</button><button class="account-button" aria-label="${person?`Open settings for ${e(displayName(person))}`:'Sign in or create an account'}" data-action="${person?'account-settings':'auth'}">${avatar(person || {displayName:'You'})}<span class="account-text">${person?e(displayName(person)):'Sign in'}</span>${icon('down')}</button></div></header>`;
+}
 function footer() { return `<footer class="content-footer"><span class="footer-note">${icon('pencil')}Your people. Your games. Skribbil Communities.</span><span><button data-action="help">How it works</button> &nbsp;·&nbsp; <a href="https://github.com/scribble-rs/scribble.rs" target="_blank" rel="noreferrer">Powered by scribble.rs ↗</a></span></footer>`; }
 function renderPage() { return ({home:homePage,skribbil:skribbilPage,league:leaguePage,tournaments:tournamentsPage,community:communityPage,profile:profilePage,friends:friendsPage,clubhouses:clubhousesPage,admin:adminPage}[state.route] || homePage)(); }
 
@@ -255,25 +282,67 @@ function hero() { return `<section class="hero" aria-label="Play Skribbil"><div 
 function gameShelf() {
   return `<section class="community-games" aria-labelledby="community-games-title"><div class="section-heading"><h2 id="community-games-title">${icon('game')}Games in the Clubhouse</h2><span class="section-note">ONE ACCOUNT. ALL YOUR PEOPLE.</span></div><a class="game-entry" href="#/skribbil"><span class="game-entry-icon">${icon('pencil')}</span><div><span class="tiny">DRAW &amp; GUESS</span><h2>Skribbil</h2><p>The original drawing-room chaos. Your community account, avatar, and friends come with you.</p></div><span class="game-entry-link">Open game ${icon('arrow')}</span></a><p class="form-note">Skribbil is our first game. Your profile and friendships are shared across the community.</p></section>`;
 }
-function skribbilPage() {
-  const rooms = rows('rooms');
-  return `${heading('A GAME IN THE CLUBHOUSE','Skribbil','Draw terribly. Guess brilliantly.', '<a class="text-link" href="#/home">← Clubhouse</a>')}${hero()}${engineNote()}${ownRoomsPanel()}<section class="section-space"><div class="section-heading"><h2>${icon('game')}Skribbil rooms</h2><a class="text-link" href="#/clubhouses">Your Clubhouses ${icon('arrow')}</a></div><div class="panel">${rooms.length ? rooms.map(roomRow).join('') : empty('A clean canvas awaits.','No public rooms are open right now. Create a room and invite your people.',button('Create a room','private-room','plus','outline'))}<div class="panel-footer">${icon('lock')}Private Clubhouse rooms are available to invited members inside Your Clubhouses.</div></div></section>`;
+function hubFriends() {
+  const friends=rows('friends').filter(friend=>friend.status==='accepted');
+  return `<section class="hub-friends" aria-labelledby="hub-friends-title"><h2 id="hub-friends-title">Your friends</h2><div class="hub-friend-list">${friends.length?friends.slice(0,6).map(friend=>`<button class="hub-friend" data-action="friend-profile" data-id="${e(friend.id)}">${avatar(friend)}<span>${e(displayName(friend))}</span>${friend.online===true?'<span class="friend-online" aria-label="Online"></span>':''}</button>`).join(''):`<p>${user()?'Invite your people for the next round.':'Sign in to find your friends.'}</p>`}</div><button class="text-link" data-action="add-friend">${icon('people')}<span>Invite friends</span>${icon('plus')}</button></section>`;
 }
-
-function homePage() {
-  const person = user();
-  const stats = person?.stats || {};
-  const statItems = [ ['trophy','All-time points',person ? (person.points ?? stats.points ?? stats.totalPoints ?? 0) : '—','yellow'],['bolt','Your XP',person ? (person.xp ?? 0) : '—',''],['target','Matches played',person ? (person.gamesPlayed ?? stats.matchesPlayed ?? stats.matches ?? 0) : '—','green'],['medal','Your level',person ? (person.level ?? '—') : '—','orange'] ];
-  const rooms = rows('rooms');
-  const leaders = rows('leaderboard');
-  const challenges = rows('challenges');
-  return `${heading('GOOD COMPANY. GREAT GAMES.',person ? `Hey, ${displayName(person)}!` : 'Welcome to the Clubhouse.', 'Your friends, your games, and a place to share.',`<span class="date-note">${icon('calendar')}${currentLeague() ? `${e(currentLeague().name)} · ` : ''}Community</span>`)}${gameShelf()}${ownRoomsPanel()}<section class="stat-grid" aria-label="Your progress">${statItems.map(([ico,label,value,color]) => `<div class="stat-card"><span class="stat-icon ${color}">${icon(ico)}</span><div><small>${label}</small><strong>${value === '—' ? '—' : number(value)}</strong></div></div>`).join('')}</section><div class="dashboard-grid"><div><section><div class="section-heading"><h2>${icon('game')}Skribbil rooms</h2><button class="text-link" data-action="private-room">Create a room ${icon('arrow')}</button></div><div class="panel">${rooms.length ? `<div class="room-list">${rooms.slice(0,4).map(roomRow).join('')}</div>` : empty('A clean canvas awaits.','No public rooms are open right now. Create a room and invite your people.',button('Create a room','private-room','plus','outline'))}<div class="panel-footer">${icon('people')}Private invitation-only rooms stay off this list.</div></div></section><section class="dashboard-secondary"><div class="section-heading"><h2>${icon('trophy')}The ones to beat</h2><a class="text-link" href="#/league">Full leaderboard ${icon('arrow')}</a></div><div class="panel">${leaders.length ? `<div class="leaderboard-mini">${leaders.slice(0,3).map(leaderboardMini).join('')}</div>` : empty('The leaderboard is a clean slate.','Verified match results will put the first names on the board.')}<div class="panel-footer">${icon('flag')}All-time standings · shared across the community.</div></div></section></div><div><section><div class="section-heading"><h2>${icon('bolt')}A little side quest</h2>${challenges.length ? `<span class="reset-note">${icon('clock')}DAILY & WEEKLY</span>` : ''}</div><div class="panel">${challenges.length ? `<div class="challenge-panel">${challenges.slice(0,3).map(challengeRow).join('')}</div>` : empty(person ? 'No active challenges.' : 'Your side quests live here.',person ? 'Available challenges and your progress will appear here.' : 'Sign in to see your available challenges and progress.',person ? '' : button('Join the community','auth','arrow','outline'))}</div></section><section class="dashboard-secondary"><div class="section-heading"><h2>${icon('sword')}For the glory</h2><span class="section-note">${rows('tournaments').length ? 'TOURNAMENT BOARD' : 'NO EVENTS SCHEDULED'}</span></div>${eventPreview()}</section></div></div>`;
+function hubRooms() {
+  const clubs=state.hubRoomTab==='clubhouses', groups=state.clubhouseState?.clubhouses || [], rooms=rows('rooms');
+  let content;
+  if(clubs) content=!user()?empty('Your private rooms live here.','Sign in to see your Clubhouses.',button('Sign in','auth','user','outline')):state.clubhousesError?`<div class="hub-state" role="alert"><p>${e(state.clubhousesError)}</p>${button('Try again','hub-rooms','','outline','data-value="clubhouses"')}</div>`:!state.clubhousesLoaded?'<p class="hub-state" role="status">Loading your Clubhouses…</p>':groups.length?groups.map(group=>`<div class="hub-club-row">${icon('home')}<div><strong>${e(group.name)}</strong><span>Open your Clubhouse to see its private rooms</span></div>${button('Open','clubhouse-detail','arrow','outline',`data-id="${e(group.id)}"`)}</div>`).join(''):empty('No Clubhouses yet.','Accept an invitation or request a Clubhouse for your group.','<a class="button button-outline" href="#/clubhouses">Your Clubhouses</a>');
+  else content=rooms.length?rooms.map(roomRow).join(''):state.loading?'<p class="hub-state" role="status">Finding available rooms…</p>':empty('A clean canvas awaits.','No public rooms are open right now. Create a room and invite your people.',button('Create a room','private-room','plus','outline'));
+  return `<section class="hub-rooms" aria-labelledby="hub-rooms-title"><div class="hub-section-heading"><h2 id="hub-rooms-title">Join a room</h2><div class="hub-room-tabs" role="group" aria-label="Room list"><button data-action="hub-rooms" data-value="all" aria-pressed="${!clubs}">All</button><button data-action="hub-rooms" data-value="clubhouses" aria-pressed="${clubs}">My Clubhouses</button></div></div>${ownRoomsPanel()}<div class="hub-room-list">${content}</div><p class="hub-help">New here? <button class="text-link" data-action="help">How to play ${icon('arrow')}</button></p></section>`;
+}
+function hubProgress() {
+  const person=user(), xp=Number(person?.xp||0), start=Number(person?.levelStartXp), next=Number(person?.nextLevelXp);
+  const measured=person && Number.isFinite(start) && Number.isFinite(next) && next>start;
+  const percent=measured?Math.max(0,Math.min(100,(xp-start)/(next-start)*100)):0;
+  return `<section class="hub-progress hub-card" aria-labelledby="hub-progress-title"><div class="hub-section-heading"><h2 id="hub-progress-title">Your progress</h2>${icon('bolt')}</div>${person?`<div class="hub-xp"><strong>${number(xp)} <small>XP</small></strong><span>Level ${number(person.level || 1)}</span></div>${measured?`<div class="progress-track" role="progressbar" aria-label="Progress to the next level" aria-valuenow="${Math.round(percent)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${percent}%"></span></div><p class="hub-next-level">${number(Math.max(0,next-xp))} XP to level ${number(Number(person.level||1)+1)}</p>`:''}<dl class="hub-stat-list"><div><dt>All-time points</dt><dd>${number(person.points ?? person.stats?.totalPoints ?? 0)}</dd></div><div><dt>Matches played</dt><dd>${number(person.gamesPlayed ?? 0)}</dd></div><div><dt>Wins</dt><dd>${number(person.wins ?? 0)}</dd></div></dl>`:`<p>Sign in to keep your XP, levels, and match history.</p>${button('Join the community','auth','arrow','outline')}`}</section>`;
+}
+function hubQuests() {
+  const challenges=rows('challenges');
+  return `<section class="hub-quests hub-card" aria-labelledby="hub-quests-title"><div class="hub-section-heading"><h2 id="hub-quests-title">Quests</h2>${challenges.length?'<span class="hub-cadence">Daily & weekly</span>':''}</div>${state.loading?'<p role="status">Loading quests…</p>':challenges.length?`<div class="challenge-panel">${challenges.map(challengeRow).join('')}</div>`:empty('No active quests.',user()?'Check back for the next challenge.':'Sign in to track your progress.')}</section>`;
+}
+function hubLeaderboard() {
+  const leaders=rows('leaderboard');
+  return `<section class="hub-leaderboard" aria-labelledby="hub-leaderboard-title"><div class="hub-section-heading"><h2 id="hub-leaderboard-title">${icon('trophy')}Leaderboard</h2><a class="text-link" href="#/league">View all ${icon('arrow')}</a></div><div class="hub-card">${state.loading?'<p class="hub-state" role="status">Loading standings…</p>':leaders.length?`<div class="leaderboard-mini">${leaders.slice(0,5).map(leaderboardMini).join('')}</div>`:empty('The leaderboard is a clean slate.','Verified match results will put the first names on the board.')}</div>${currentLeague()?`<p class="hub-board-context">All-time points · ${e(currentLeague().name)}</p>`:''}</section>`;
+}
+function playHub(community=false) {
+  return `<div class="play-hub"><section class="hub-actions" aria-label="Play Skribbil"><div class="hub-create"><div><h2>Start a room</h2><p>Your room. Your rules.</p>${button('Create room','private-room','plus','yellow')}<button class="hub-ranked text-link" data-action="play">${icon('trophy')}${state.data.engine?.ranked?'Play ranked':'Room options'}</button></div><img src="/assets/start-room.svg" width="250" height="210" alt=""/></div><div class="hub-join hub-card"><h2>Got an invite?</h2><p>Enter your room code.</p><form data-form="join-code"><label class="hub-code-field">${icon('key')}<span class="sr-only">Room code or invitation link</span><input name="code" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Room code or invite link" required maxlength="300"/></label>${button('Join','submit','','primary','type="submit"')}<p class="form-error" data-form-error role="alert" hidden></p></form></div></section>${state.error?'':engineNote()}${hubFriends()}<div class="hub-grid">${hubRooms()}${hubLeaderboard()}${hubQuests()}${hubProgress()}</div>${community?`<details class="hub-community"><summary>${icon('game')}Games in the Clubhouse ${icon('down')}</summary>${gameShelf()}</details>`:''}${rows('tournaments').length?`<section class="hub-events"><div class="hub-section-heading"><h2>Tournaments</h2><a class="text-link" href="#/tournaments">View all ${icon('arrow')}</a></div>${eventPreview()}</section>`:''}</div>`;
+}
+function skribbilPage() { return playHub(); }
+function homePage() { return playHub(true); }
+function notificationsModal() {
+  const items=notificationItems();
+  return `<h2 id="modal-title">Notifications</h2><p>Friend requests and invitations.</p>${state.notificationsLoading?'<p role="status">Checking your invitations…</p>':''}${state.partyError || state.clubhousesError?'<p class="form-error" role="alert">Some invitations could not load. Your friend requests are still shown.</p>':''}${items.length?`<div class="notification-list">${items.map(item=>`<button class="notification-row" data-action="notification-route" data-route="${item.route}">${icon(item.icon)}<span>${e(item.title)}</span>${icon('arrow')}</button>`).join('')}</div>`:!state.notificationsLoading?empty('You’re all caught up.','New requests and invitations will appear here.') : ''}<div class="admin-actions">${button('Refresh','notifications','refresh','outline')}</div>`;
+}
+function parseRoomCode(value) {
+  let code=String(value || '').trim();
+  if(/^https?:\/\//i.test(code)) {
+    const url=new URL(code);
+    if(url.origin!==location.origin && !['skribbil.pages.dev','skribbil.onrender.com'].includes(url.hostname)) throw new Error('Use a Skribbil invitation link or room code.');
+    code=url.searchParams.get('join') || url.pathname.match(/^\/engine\/lobby\/([^/]+)\/?$/)?.[1] || '';
+  }
+  if(!/^(?:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|league-[a-f0-9]{32})$/i.test(code)) throw new Error('Enter the room code from a Skribbil invitation, or paste the full invite link.');
+  return code.toLowerCase();
+}
+async function joinByCode(form, providedCode) {
+  const input=form?.elements.code, error=form?.querySelector('[data-form-error]'), submit=form?.querySelector('[type="submit"]');
+  if(state.joiningCode) return;
+  try {
+    const code=parseRoomCode(providedCode ?? input?.value);
+    if(!user()) { state.returnAfterAuth={type:'code',code};state.authMode='login';openModal('auth');return; }
+    state.joiningCode=true;if(submit)submit.disabled=true;if(error)error.hidden=true;
+    const result=await api('/api/rooms/join-code',{method:'POST',body:JSON.stringify({code})});
+    const url=safeUrl(result.url);if(!url)throw new Error('This room did not return a playable link.');location.assign(url);
+  } catch(problem) { if(error){error.textContent=problem.message;error.hidden=false;}else toast(problem.message,true);input?.focus(); }
+  finally {state.joiningCode=false;if(submit)submit.disabled=false;}
 }
 
 function roomRow(room,index) {
   const styles = ['','orange','green'];
   const ranked = room.mode === 'ranked';
-  const name = room.name || room.title || (ranked ? 'Ranked room' : 'Private room');
+  const name = room.name || room.title || (ranked ? 'Ranked Skribbil' : 'Casual Skribbil');
   const population = room.playerCount ?? (Array.isArray(room.players) ? room.players.length : room.players);
   const details = [room.rounds != null ? plural(room.rounds,'round') : '',room.drawTime != null ? `${number(room.drawTime)} sec` : '',room.status || ''].filter(Boolean);
   return `<div class="room-row"><span class="room-icon ${styles[index%3]}">${icon(ranked ? 'trophy' : 'palette')}</span><div class="room-info"><div class="room-name">${e(name)}${tag(ranked ? 'RANKED' : 'CASUAL',ranked ? '' : 'orange')}</div><div class="room-desc">${details.map(e).join('<span>·</span>')}</div></div><span class="room-population">${icon('people')}${population == null ? 'Players unavailable' : room.capacity != null ? `${number(population)}/${number(room.capacity)}` : plural(population,'player')}</span>${button('Join','join-room','','primary',`data-id="${e(room.id)}"`)}<button class="icon-button spectate-button" data-action="spectate-room" data-id="${e(room.id)}" aria-label="Watch this room">${icon('eye')}</button></div>`;
@@ -371,7 +440,7 @@ function artCard(drawing,index) {
 function profilePage() {
   const person = user();
   if (!person) return `${heading('EVERY LEGEND STARTS SOMEWHERE.','Your story, in scribbles.','One account. Every game. A whole lot of character.')}<div class="split-grid"><div>${empty('Your profile starts with you.','Sign in to see your own match history, earned XP, achievements, and cosmetic collection.',button('Join the community','auth','pencil','yellow'))}</div><div class="info-card"><h3>Your people. Your progress.</h3><ul class="rule-list"><li>${icon('user')}Keep one username and profile across the whole community.</li><li>${icon('bolt')}Finish challenges and climb through the levels.</li><li>${icon('medal')}Collect achievements, titles, and tournament trophies.</li><li>${icon('palette')}Your earned cosmetic collection follows you into future games.</li></ul></div></div>`;
-  const history = person.matchHistory || person.history || []; const xp = Number(person.xp || 0); const currentXp = person.nextLevelXp ? Math.min(100, xp / person.nextLevelXp * 100) : 0; return `${heading('LOOK AT YOU GO.','Your community profile.','Every win, every wild guess, every glorious doodle.')}<div class="profile-header">${avatar(person,'lg')}<div><h2>${e(displayName(person))}</h2><p>Account handle: @${e(displayName(person))} · ${e(person.title || 'No title equipped')}</p><div class="profile-progress">${person.nextLevelXp ? `<div class="progress-track"><span style="width:${currentXp}%"></span></div>` : ''}<span>${number(xp)} XP</span></div></div><div class="profile-buttons">${button('Avatar','avatar','palette','yellow')}${button('Profile & settings','account-settings','user','outline')}${button('My drawings','my-drawings','palette','outline')}${button('My reports','my-disputes','flag','outline')}</div></div>${person.bio ? `<div class="info-card section-space"><p>${e(person.bio)}</p></div>` : ''}<div class="split-grid"><div><div class="section-heading"><h2>${icon('sparkle')}Your personal flair</h2>${person.level != null ? tag(`LEVEL ${person.level}`) : ''}</div>${cosmeticsCollection(person)}<section class="dashboard-secondary"><div class="section-heading"><h2>${icon('book')}The match scrapbook</h2></div>${history.length ? `<div class="panel table-scroll"><table class="data-table"><thead><tr><th>Match</th><th>Points</th><th>Result</th><th>Played</th></tr></thead><tbody>${history.map(match => `<tr><td><button class="text-link" data-action="view-match" data-id="${e(match.matchId || match.id)}">${e(match.game || match.gameName || 'Skribbil')} ${icon('arrow')}</button></td><td>${number(match.points || match.score)}</td><td>${e(match.result || (match.rank ? `#${match.rank}` : 'Completed'))}</td><td>${e(readableDate(match.playedAt || match.date || match.createdAt))}</td></tr>`).join('')}</tbody></table></div>` : empty('Your first match is calling.','Finished matches will appear here when verified results are recorded.',button('Pick up a pencil','play','pencil','yellow'))}</section></div><div><div class="section-heading"><h2>${icon('medal')}Little badges. Big energy.</h2></div>${awardsPanel(person)}</div></div>`; }
+  const history = person.matchHistory || person.history || []; const xp = Number(person.xp || 0); const startXp = Number(person.levelStartXp || 0); const nextXp = Number(person.nextLevelXp); const currentXp = nextXp > startXp ? Math.max(0,Math.min(100,(xp-startXp)/(nextXp-startXp)*100)) : 0; return `${heading('LOOK AT YOU GO.','Your community profile.','Every win, every wild guess, every glorious doodle.')}<div class="profile-header">${avatar(person,'lg')}<div><h2>${e(displayName(person))}</h2><p>Account handle: @${e(person.username)} · ${e(person.title || 'No title equipped')}</p><div class="profile-progress">${person.nextLevelXp ? `<div class="progress-track"><span style="width:${currentXp}%"></span></div>` : ''}<span>${number(xp)} XP</span></div></div><div class="profile-buttons">${button('Avatar','avatar','palette','yellow')}${button('Profile & settings','account-settings','user','outline')}${button('My drawings','my-drawings','palette','outline')}${button('My reports','my-disputes','flag','outline')}</div></div>${person.bio ? `<div class="info-card section-space"><p>${e(person.bio)}</p></div>` : ''}<div class="split-grid"><div><div class="section-heading"><h2>${icon('sparkle')}Your personal flair</h2>${person.level != null ? tag(`LEVEL ${person.level}`) : ''}</div>${cosmeticsCollection(person)}<section class="dashboard-secondary"><div class="section-heading"><h2>${icon('book')}The match scrapbook</h2></div>${history.length ? `<div class="panel table-scroll"><table class="data-table"><thead><tr><th>Match</th><th>Points</th><th>Result</th><th>Played</th></tr></thead><tbody>${history.map(match => `<tr><td><button class="text-link" data-action="view-match" data-id="${e(match.matchId || match.id)}">${e(match.game || match.gameName || 'Skribbil')} ${icon('arrow')}</button></td><td>${number(match.points || match.score)}</td><td>${e(match.result || (match.rank ? `#${match.rank}` : 'Completed'))}</td><td>${e(readableDate(match.playedAt || match.date || match.createdAt))}</td></tr>`).join('')}</tbody></table></div>` : empty('Your first match is calling.','Finished matches will appear here when verified results are recorded.',button('Pick up a pencil','play','pencil','yellow'))}</section></div><div><div class="section-heading"><h2>${icon('medal')}Little badges. Big energy.</h2></div>${awardsPanel(person)}</div></div>`; }
 function cosmeticsCollection(person) {
   const owned = person?.cosmetics || person?.inventory || [];
   return owned.length ? `<div class="cosmetics">${owned.map(item => `<div class="cosmetic ${item.equipped ? 'unlocked' : ''}">${icon(item.slot === 'frame' ? 'image' : 'crown')}<h4>${e(item.name || item.slug)}</h4><p>${e(item.slot || 'Decoration')} · ${item.equipped ? 'equipped' : 'in your collection'}</p></div>`).join('')}</div><p class="bracket-caption">Your collection belongs to you across community games.</p>` : empty('A little room for personal flair.','Your unlocked decorations will appear here as you earn them.');
@@ -425,7 +494,7 @@ function friendProfileModal() {
   const person = state.friendProfile;
   if (state.friendProfileError) return `<div class="modal-icon">${icon('user')}</div><h2 id="modal-title">Profile unavailable</h2><p role="alert">${e(state.friendProfileError)}</p>${button('Try again','friend-profile','refresh','primary',`data-id="${e(state.friendProfileId)}"`)}`;
   if (!person) return `<div class="modal-icon">${icon('user')}</div><h2 id="modal-title">Opening their profile…</h2><p role="status">Finding your friend’s latest community highlights.</p>`;
-  return `<div class="friend-profile-heading">${avatar(person,'lg')}<div>${tag('YOUR FRIEND','green')}<h2 id="modal-title">${e(displayName(person))}</h2><p>Account handle: @${e(displayName(person))} · ${e(person.title || 'Rookie')}</p></div></div><div class="friend-profile-bio"><h3>About</h3><p>${e(person.bio || 'This scribbler hasn’t added a bio yet.')}</p></div><div class="friend-profile-stats">${[['Level',person.level],['XP',person.xp],['Games played',person.gamesPlayed],['Wins',person.wins],['Total points',person.points],['Average score',person.averageScore]].map(([label,value]) => `<div><strong>${number(value ?? 0)}</strong><span>${label}</span></div>`).join('')}</div><div class="section-heading"><h2>${icon('medal')}Badges & trophies</h2></div>${person.achievements?.length || person.trophies?.length ? awardsPanel(person) : `<div class="friend-quiet-state">${icon('medal')}<div><h3>More milestones ahead</h3><p>Their earned badges and tournament trophies will appear here.</p></div></div>`}`;
+  return `<div class="friend-profile-heading">${avatar(person,'lg')}<div>${tag('YOUR FRIEND','green')}<h2 id="modal-title">${e(displayName(person))}</h2><p>Account handle: @${e(person.username)} · ${e(person.title || 'Rookie')}</p></div></div><div class="friend-profile-bio"><h3>About</h3><p>${e(person.bio || 'This scribbler hasn’t added a bio yet.')}</p></div><div class="friend-profile-stats">${[['Level',person.level],['XP',person.xp],['Games played',person.gamesPlayed],['Wins',person.wins],['Total points',person.points],['Average score',person.averageScore]].map(([label,value]) => `<div><strong>${number(value ?? 0)}</strong><span>${label}</span></div>`).join('')}</div><div class="section-heading"><h2>${icon('medal')}Badges & trophies</h2></div>${person.achievements?.length || person.trophies?.length ? awardsPanel(person) : `<div class="friend-quiet-state">${icon('medal')}<div><h3>More milestones ahead</h3><p>Their earned badges and tournament trophies will appear here.</p></div></div>`}`;
 }
 async function respondFriendRequest(otherUserId, action) {
   if (!user()) { requireUser(() => {}); return; }
@@ -651,6 +720,7 @@ function profileModal() { const person = user(); return `<div class="account-set
 function renderModal() {
   let contents = ''; let wide = false;
   switch(state.modal) {
+    case 'notifications': contents = notificationsModal(); break;
     case 'clubhouse-detail': contents = clubhouseDetailModal(); wide = true; break;
     case 'create-clubhouse': contents = clubhouseFormModal(true); break;
     case 'request-clubhouse': contents = clubhouseFormModal(); break;
@@ -723,6 +793,14 @@ function passwordForm() { return `<form data-form="password" class="section-spac
 
 async function handleAction(action, element) {
   switch(action) {
+    case 'notifications': {
+      if (!user()) { state.authMode='login';openModal('auth');break; }
+      state.notificationsLoading=true;openModal('notifications');
+      await Promise.allSettled([loadParty({quiet:true}),loadClubhouses({quiet:true})]);
+      state.notificationsLoading=false;if(state.modal==='notifications')renderModal();render();break;
+    }
+    case 'notification-route': closeModal();location.hash='/'+element.dataset.route;break;
+    case 'hub-rooms': state.hubRoomTab=element.dataset.value;render();if(state.hubRoomTab==='clubhouses'&&user()&&!state.clubhousesLoaded){await loadClubhouses({quiet:true});render();}break;
     case 'toggle-nav': state.mobileNav = !state.mobileNav; render(); $(state.mobileNav ? '.sidebar .nav-link' : '.mobile-toggle')?.focus(); break;
     case 'help': openModal('help'); break;
     case 'auth': state.authMode = 'register'; openModal('auth'); break;
@@ -812,6 +890,7 @@ async function handleAction(action, element) {
   }
 }
 async function submitForm(form) {
+  if (form.dataset.form === 'join-code') { await joinByCode(form); return; }
   if (form.dataset.form === 'leaderboard-search') { state.search = form.elements.search.value; state.leaderboardPage = 1; await loadLeaderboard(); return; }
   if (state.busy) return;
   const fields = Object.fromEntries(new FormData(form)); const kind = form.dataset.form;
@@ -851,7 +930,7 @@ async function submitForm(form) {
     if (kind === 'ban') { await api('/api/admin/bans',{method:'POST',body:JSON.stringify(fields)}); message = 'The account ban has been recorded.'; }
     if (kind === 'room') { const payload = {mode:state.roomMode,...(state.roomMode === 'private' ? {rounds:Number(fields.rounds || 3),drawTime:Number(fields.drawTime || 80),private:!!state.roomClubhouseId || fields.private === 'on'} : {}),...(state.roomClubhouseId ? {clubhouseId:state.roomClubhouseId} : {})}; const result = await api('/api/rooms',{method:'POST',body:JSON.stringify(payload)}); const url = safeUrl(result.url); if (!url) throw new Error('The server did not return a valid game link.'); location.assign(url); return; }
     if (kind === 'auth') { state.partyState = null; state.partyLoaded = false; state.partyError = null; state.myTeams = null; state.teamsLoaded = false; state.teamsError = null; state.clubhouseState = null; state.clubhousesLoaded = false; state.clubhousesError = null; state.clubhouseRequests = null; }
-    closeModal(); await refresh({silent:true}); if (kind === 'profile' && state.route === 'league') await loadLeaderboard({background:true}); if (state.route === 'admin') await loadAdmin(); toast(message); if (kind === 'auth' && state.returnAfterAuth) { const next = state.returnAfterAuth; state.returnAfterAuth = null; if (next.type === 'room') openModal('room'); else if (next.type === 'join') { state.pendingJoin = next.id; state.pendingRole = next.role; openModal('invite'); } else if (next.type === 'team') await showTeam(next.id); }
+    closeModal(); await refresh({silent:true}); if (kind === 'profile' && state.route === 'league') await loadLeaderboard({background:true}); if (state.route === 'admin') await loadAdmin(); toast(message); if (kind === 'auth' && state.returnAfterAuth) { const next = state.returnAfterAuth; state.returnAfterAuth = null; if (next.type === 'room') openModal('room'); else if (next.type === 'join') { state.pendingJoin = next.id; state.pendingRole = next.role; openModal('invite'); } else if (next.type === 'team') await showTeam(next.id); else if (next.type === 'code') await joinByCode(null,next.code); }
   } catch (error) { if (kind === 'room') { await refresh(); const saved = rows('ownRooms').length ? ' You have a saved room in the commons that you can resume.' : ''; setFormError((error.message || 'The room could not be opened.') + saved,$('form',dialogRoot)); } else setFormError(error.message || 'That did not work. Please try again.',form); }
   finally { state.busy = false; if(photoInput)photoInput.disabled=false; state.photoCropper?.setBusy(false); if (submit?.isConnected) { submit.disabled = false; submit.innerHTML = originalText; } }
 }
@@ -872,6 +951,7 @@ document.addEventListener('keydown',event => {
 });
 window.matchMedia('(max-width:760px)').addEventListener('change',syncMobileNavigation);
 window.addEventListener('hashchange',() => { state.mobileNav = false; render(); window.scrollTo({top:0,behavior:'instant'}); if (state.route === 'league') loadLeaderboard(); if (state.route === 'admin') loadAdmin(); if (state.route === 'clubhouses' && user()) loadClubhouses(); if (state.route === 'friends') { loadParty(); if (user()) loadMyTeams(); } });
+state.loading=true;
 render();
 await refresh();
 if (state.pendingJoin) openModal('invite');
@@ -880,7 +960,7 @@ if (state.route === 'admin' && isAdmin()) await loadAdmin();
 // Refresh other tabs/clients without interrupting an open edit or upload.
 let identityRefreshBusy = false;
 async function refreshVisibleIdentity() {
-  if (document.hidden || state.modal || state.busy || document.activeElement?.matches('input,textarea,select') || identityRefreshBusy) return;
+  if (document.hidden || state.modal || state.busy || state.joiningCode || document.activeElement?.matches('input,textarea,select') || identityRefreshBusy) return;
   identityRefreshBusy = true;
   try { await refresh({silent:true}); if (state.route === 'league') await loadLeaderboard({background:true}); if (state.route === 'friends') { await loadParty(); await loadMyTeams(); } if (state.route === 'clubhouses' && user()) await loadClubhouses(); }
   catch { /* Existing content remains available while offline. */ }

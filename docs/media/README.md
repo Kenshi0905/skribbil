@@ -1,5 +1,22 @@
 # Local demonstration media
 
+## Clean community UI — 15 October 2026
+
+`clean-community-light.jpg`, `clean-community-dark.jpg` and
+`clean-community-phone.jpg` are resized/compressed screenshots from the running
+local UI verification fixtures. They show disposable accounts, an accepted
+friendship and an open room. Desktop captures include a real locally completed
+game and saved XP/quest/result data; the phone capture uses a fresh fixture.
+The deliberately long display name and geometric uploaded avatar exercise
+wrapping, truncation and photo upload. No production activity or private account
+credentials are shown. The phone image is a browser viewport, without simulated
+browser/status bars. See [the UI test record](../ui-revamp-verification.md).
+
+The older gameplay GIF/video below still demonstrates the preserved engine; its
+chrome predates the new compact palette and gallery history controls.
+
+## Original gameplay demonstration
+
 These media were captured locally on **12 October 2026** from the running
 Skribbil platform and its original Go game engine. They use an isolated automated
 test session and synthetic accounts. They do not show real community members,

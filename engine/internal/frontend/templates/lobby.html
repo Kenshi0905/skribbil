@@ -11,6 +11,7 @@
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "root.css"}}' />
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "lobby.css"}}' />
     {{if .LeagueMode}}<link rel="stylesheet" href="/themes.css" /><link rel="stylesheet" href="/room-look.css" />{{end}}
+    <link rel="stylesheet" href='{{.RootPath}}/resources/{{.WithCacheBust "game-clean.css"}}' />
     {{template "favicon-decl" .}}
     <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}' />
     <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}' />
@@ -146,6 +147,7 @@
                             <div class="center-dialog-content">
                                 <div class="word-choice-content">
                                     <p id="word-choice-summary" class="word-choice-note" role="status"></p>
+                                    <div id="word-choice-recap" class="turn-recap" role="status" hidden></div>
                                     <div id="word-button-container"> </div>
                                     <div class="word-choice-note">
                                         <span>{{.Translation.Get "word-choice-warning"}}:</span>
@@ -187,6 +189,7 @@
                             <span class="dialog-title">{{.Translation.Get "waiting-for-word-selection"}}</span>
                             <div class="center-dialog-content">
                                 <span id="waitchoose-drawer"></span>&nbsp;{{.Translation.Get "is-choosing-word"}}
+                                <div id="turn-recap" class="turn-recap" role="status" hidden></div>
                             </div>
                         </div>
 

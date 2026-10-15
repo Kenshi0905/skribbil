@@ -136,11 +136,12 @@ test('platform HTTP integration: accounts, consent, authoritative results and ad
       assert.deepEqual((await publish(finished)).data, { duplicate: true });
       assert.equal((await publish({ ...finished, payload: { ...finished.payload, participants: [] } })).status, 409);
       const profile = (await api('/api/me', { cookie: artist.cookie })).data.user;
-      assert.equal(profile.points, 0, "casual results do not enter competitive standings"); assert.equal(profile.xp, 25); assert.equal(profile.history.length, 1); assert.equal(profile.history[0].score, -60);
+      assert.equal(profile.points, -60, "profile all-time points include the accepted casual result exactly once"); assert.equal(profile.xp, 25); assert.equal(profile.history.length, 1); assert.equal(profile.history[0].score, -60);
+      assert.equal(Number((await db.query('SELECT coalesce(sum(total_points),0) AS points FROM skribbil.all_time_game_standings WHERE user_id=$1',[artist.data.user.id])).rows[0].points),0,'casual results still do not enter competitive standings');
       const score = (await db.query('SELECT sum(delta)::int AS total FROM skribbil.score_events WHERE match_id=$1 AND user_id=$2', [room.data.matchId, artist.data.user.id])).rows[0];
       assert.equal(score.total, -60, 'final score already includes the -100 penalty');
       const win = (await api('/api/me', { cookie: guesser.cookie })).data.user;
-      assert.equal(win.xp, 50); assert.equal(win.points, 0); assert.equal(win.history[0].score, 200);
+      assert.equal(win.xp, 50); assert.equal(win.points, 200); assert.equal(win.history[0].score, 200);
       assert.deepEqual(win.achievements.map(a=>a.slug).sort(),['comeback-kid','mind-reader']);
       assert.equal((await api(`/api/matches/${room.data.matchId}/mvp`, { method: 'POST', cookie: artist.cookie, body: { nomineeId: guesser.data.user.id, category: 'best_drawing' } })).status, 200);
       const absent=await api('/api/auth/register',{method:'POST',body:{username:'ticket_only',email:'absent@example.test',password}});

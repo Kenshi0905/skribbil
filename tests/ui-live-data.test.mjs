@@ -19,7 +19,7 @@ function client(data = {}) {
     window: {matchMedia:()=>({matches:false})},
     URL, URLSearchParams, Intl,
   });
-  vm.runInContext(`${renderers}\nglobalThis.ui = {state,homePage,skribbilPage,gameShelf,sidebar,currentRoute,leaguePage,tournamentsPage,communityPage,profilePage,friendsPage,clubhousesPage,roomRow,tournamentCard,cosmeticsCollection,awardsPanel,leaderboardTableRows,boardPlayers,challengeRow,officialBracketModal,hero,topbar,render};`,context);
+  vm.runInContext(`${renderers}\nglobalThis.ui = {state,homePage,skribbilPage,gameShelf,sidebar,currentRoute,leaguePage,tournamentsPage,communityPage,profilePage,friendsPage,clubhousesPage,roomRow,tournamentCard,cosmeticsCollection,awardsPanel,leaderboardTableRows,boardPlayers,challengeRow,officialBracketModal,hero,topbar,render,parseRoomCode,hubFriends,hubProgress,notificationItems,notificationsModal};`,context);
   context.ui.state.data = data;
   return context.ui;
 }
@@ -29,9 +29,54 @@ const noInventedCards = html => {
   assert.doesNotMatch(html,/data-id="sample-|DoodleDemon|PixelPandit|ChaiAndChaos|NotAnArtist|GuessWho|Placeholder Open|Golden hour|Main character|Qualifier [1-4]|EXAMPLE|SAMPLE DOODLE/i);
 };
 
+test('clean hub uses real progress and friends without inventing online presence',()=>{
+  const ui=client({user:{id:'me',xp:200,level:2,levelStartXp:100,nextLevelXp:300},friends:[
+    {id:'friend',displayName:'A very long <friend> name',status:'accepted'},
+    {id:'pending',displayName:'Pending person',status:'pending',outgoing:false},
+  ]});
+  assert.match(ui.hubProgress(),/aria-valuenow="50"/);
+  assert.match(ui.hubProgress(),/100 XP to level 3/);
+  assert.match(ui.hubFriends(),/A very long &lt;friend&gt; name/);
+  assert.doesNotMatch(ui.hubFriends(),/friend-online|Pending person/);
+  assert.equal(ui.notificationItems().length,1);
+  assert.match(ui.notificationsModal(),/Pending person sent a friend request/);
+  delete ui.state.data.user.nextLevelXp;
+  assert.doesNotMatch(ui.hubProgress(),/role="progressbar"/,'unknown thresholds do not become made-up percentages');
+});
+
+test('profile labels keep the account handle distinct from the current display name',()=>{
+  const ui=client({user:{id:'me',username:'jos',displayName:'jane',xp:200,level:2,levelStartXp:150,nextLevelXp:300}});
+  const html=ui.profilePage();
+  assert.match(html,/<h2>jane<\/h2>/);assert.match(html,/Account handle: @jos/);assert.doesNotMatch(html,/@jane/);
+  assert.match(html,/width:33\.33333333333333/,'profile progress is measured from the current level threshold');
+});
+
+test('room-code parsing accepts our invitations and rejects unsafe or malformed input',()=>{
+  const ui=client(),id='12345678-1234-4234-8234-123456789abc';
+  assert.equal(ui.parseRoomCode(' '+id+' '),id);
+  assert.equal(ui.parseRoomCode('http://localhost/?join='+id),id);
+  assert.equal(ui.parseRoomCode('https://skribbil.pages.dev/?join='+id),id);
+  const native='league-'+id.replaceAll('-','');
+  assert.equal(ui.parseRoomCode('https://skribbil.pages.dev/engine/lobby/'+native),native);
+  for(const code of ['javascript:alert(1)','https://other.invalid/?join='+id,'not-a-room','<img src=x>']) assert.throws(()=>ui.parseRoomCode(code));
+});
+
+test('hub states remain honest while loading, empty or showing member-only Clubhouses',()=>{
+  const ui=client({rooms:[],leaderboard:[],challenges:[]});ui.state.loading=true;
+  assert.match(ui.homePage(),/Finding available rooms|Loading standings/);
+  ui.state.loading=false;ui.state.hubRoomTab='clubhouses';
+  assert.match(ui.homePage(),/Sign in to see your Clubhouses/);
+  ui.state.data.user={id:'member'};ui.state.clubhousesLoaded=true;
+  ui.state.clubhouseState={clubhouses:[{id:'club',name:'Private <group>'}]};
+  assert.match(ui.homePage(),/Private &lt;group&gt;/);
+  assert.match(ui.homePage(),/Open your Clubhouse to see its private rooms/);
+  assert.doesNotMatch(ui.homePage(),/3\/8|Aditi|Rohan|Maya|The doodle den/);
+});
+
 test('Clubhouse navigation separates the shared community from its playable Skribbil section',()=>{
   const ui=client({});
-  assert.match(ui.homePage(),/Welcome to the Clubhouse/);
+  assert.match(ui.homePage(),/Games in the Clubhouse/);
+  assert.match(ui.topbar(),/Let’s play/);
   assert.match(ui.gameShelf(),/href="#\/skribbil"/);
   assert.match(ui.sidebar(),/assets\/skribbil-communities-light\.png/);
   assert.match(ui.sidebar(),/nav-game/);
@@ -58,7 +103,7 @@ test('a fresh or unavailable community renders honest empty pages without manufa
   assert.match(ui.profilePage(),/Sign in to see your own match history/);
   assert.match(ui.hero(),/A LITTLE CAT ILLUSTRATION/);
   assert.doesNotMatch(ui.topbar(),/LOCAL COMMUNITY/);
-  assert.match(ui.homePage(),/All-time points/);
+  assert.match(ui.homePage(),/Your progress/);
   assert.doesNotMatch(ui.hero(),/\+120|You guessed it!/);
   ui.state.error = 'Community service unavailable.';
   assert.doesNotThrow(()=>ui.render());

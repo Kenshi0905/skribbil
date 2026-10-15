@@ -41,6 +41,10 @@ test('community leaderboard ranks all saved games, filters periods and friends, 
   assert.equal(board.players[0].id,users[1].id);assert.equal(Number(board.players[0].points),1299);
   assert.equal(board.players[0].avatarUrl,`/api/media/${users[1].id}`);
   assert.equal((await platform.bootstrap(null,{})).leaderboard[0].id,users[1].id,'home uses the same all-game standings');
+  const profile=await platform.profile(users[0]);
+  assert.equal(profile.points,400,'profile totals include casual accepted scores and exclude cancelled results');
+  assert.equal(profile.gamesPlayed,2);assert.equal(profile.wins,2);
+  assert.equal(Number(profile.levelStartXp),0);assert.equal(Number(profile.nextLevelXp),150);
   board=await leaderboard(platform,users[29],{page:'2'});
   assert.equal(board.players.length,5);assert.equal(Number(board.players.at(-1).rank),30);
   assert.equal(Number(board.me.rank),30);
@@ -68,6 +72,7 @@ test('community leaderboard ranks all saved games, filters periods and friends, 
   await db.query('UPDATE skribbil.matches SET accepted_result_id=$2 WHERE id=$1',[match.id,correction]);
   board=await leaderboard(platform,null,{period:'weekly'});
   assert.equal(Number(board.players[0].points),200);
+  assert.equal((await platform.profile(users[0])).points,300,'profile totals follow result corrections without double-counting');
   await db.query("UPDATE skribbil.users SET status='erased' WHERE id=$1",[users[0].id]);
   assert.equal((await leaderboard(platform,null)).total,29);
   // Season standings use league points, not raw scores from community games.

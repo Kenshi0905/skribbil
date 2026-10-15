@@ -92,7 +92,7 @@ function floodfillUint8ClampedArray(data, x, y, color, width, height) {
 function drawLine(context, imageData, x1, y1, x2, y2, color, width) {
     const coords = prepareDrawLineCoords(context, x1, y1, x2, y2, width);
     _drawLineNoPut(imageData, coords, color, width);
-    context.putImageData(imageData, 0, 0, 0, 0, coords.right, coords.bottom);
+    context.putImageData(imageData, 0, 0, coords.left, coords.top, coords.right - coords.left, coords.bottom - coords.top);
 };
 
 // This implementation directly access the canvas data and does not

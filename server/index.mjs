@@ -378,6 +378,14 @@ export async function createApp({db,config,assets}={}) {
         if(source?.clubhouse_id)await clubhouses.requireMember(user,source.clubhouse_id,db,{lock:false});
         return json(res,200,await roomSessions.control(user,roomSession[1],input.action));
       }
+      if(path==='/api/rooms/join-code'&&req.method==='POST') {
+        const code=String(input.code||'').trim().toLowerCase();
+        requireValue(isUuid(code)||/^league-[a-f0-9]{32}$/.test(code),'Enter a valid room code.');
+        const match=await one(db,`SELECT * FROM skribbil.matches WHERE ${isUuid(code)?'id':'engine_room_id'}=$1`,[code]);
+        requireValue(match,'Room not found. Check the invitation or ask the host for a new one.',404);
+        if(match.engine_room_id.startsWith('pending-'))requireValue(await one(db,'SELECT 1 FROM skribbil.match_players WHERE match_id=$1 AND user_id=$2',[match.id,user.id]),'Only reserved participants can retry a room.',403);
+        return json(res,200,await admit(user,await provisionPending(match),'player'));
+      }
       const roomJoin=path.match(/^\/api\/rooms\/([a-f0-9-]+)\/join$/);
       if(roomJoin&&req.method==='POST'){
         requireValue(isUuid(roomJoin[1]),'Invalid room.');const match=await one(db,`SELECT * FROM skribbil.matches WHERE id=$1`,[roomJoin[1]]);

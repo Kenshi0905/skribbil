@@ -22,7 +22,10 @@ export class Platform {
   async profile(user) {
     if (!user) return null;
     const row = await one(this.db, `SELECT u.id,u.username,u.display_name AS "displayName",u.bio,u.avatar_color AS "avatarColor",
-      p.total_xp AS xp,p.level,u.avatar_url AS "avatarUrl",(SELECT coalesce(sum(total_points),0) FROM skribbil.all_time_game_standings WHERE user_id=u.id) AS points,
+      p.total_xp AS xp,p.level,
+      (SELECT minimum_xp FROM skribbil.level_definitions WHERE level=p.level) AS "levelStartXp",
+      (SELECT min(minimum_xp) FROM skribbil.level_definitions WHERE level>p.level) AS "nextLevelXp",
+      u.avatar_url AS "avatarUrl",
       EXISTS(SELECT 1 FROM skribbil.platform_roles WHERE user_id=u.id AND role='administrator') AS "isAdmin"
       FROM skribbil.users u JOIN skribbil.user_progression p ON p.user_id=u.id WHERE u.id=$1`, [user.id]);
     const inventory = (await this.db.query(`SELECT d.id,d.name,d.slug,d.slot,e.cosmetic_id IS NOT NULL AS equipped
@@ -33,9 +36,9 @@ export class Platform {
       WHERE p.user_id=$1 ORDER BY m.ended_at DESC LIMIT 20`, [user.id])).rows;
     const achievements=(await this.db.query(`SELECT d.slug,d.title,d.description,a.awarded_at AS "awardedAt" FROM skribbil.user_achievements a JOIN skribbil.achievement_definitions d ON d.id=a.achievement_id WHERE a.user_id=$1`,[user.id])).rows;
     const trophies=(await this.db.query(`SELECT title,placement,awarded_at AS "awardedAt" FROM skribbil.trophies WHERE user_id=$1 ORDER BY awarded_at DESC`,[user.id])).rows;
-    const totals=await one(this.db,`SELECT count(*) AS played,count(*) FILTER(WHERE p.won) AS wins,coalesce(avg(p.score),0)::int AS average
-      FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id WHERE p.user_id=$1`,[user.id]);
-    return { ...row, avatarPreset:avatarFromUrl(row.avatarUrl), xp:Number(row.xp), points:Number(row.points),gamesPlayed:Number(totals.played),wins:Number(totals.wins),averageScore:totals.average,
+    const totals=await one(this.db,`SELECT count(*) AS played,count(*) FILTER(WHERE p.won) AS wins,coalesce(avg(p.score),0)::int AS average,coalesce(sum(p.score),0) AS points
+      FROM skribbil.matches m JOIN skribbil.match_result_players p ON p.result_id=m.accepted_result_id AND p.match_id=m.id WHERE p.user_id=$1 AND m.status='completed'`,[user.id]);
+    return { ...row, avatarPreset:avatarFromUrl(row.avatarUrl), xp:Number(row.xp), points:Number(totals.points),gamesPlayed:Number(totals.played),wins:Number(totals.wins),averageScore:totals.average,
       title:inventory.find(i=>i.slot==='title'&&i.equipped)?.name || 'Rookie',frame:inventory.find(i=>i.slot==='frame'&&i.equipped)?.slug||null, inventory, history,achievements,trophies };
   }
   async friendProfile(user, friendId) {

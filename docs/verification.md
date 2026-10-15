@@ -7,6 +7,9 @@ remain in [implementation status](feature-status.md).
 
 ## Identity, nominations and phone hygiene — 15 October 2026
 
+The subsequent clean UI revamp, preserved keyboard behavior, renderer checks and
+release results are recorded separately in [UI verification](ui-revamp-verification.md).
+
 Integrated main through `3d7e023` before the final checks; retained the existing avatar/upload/auth/waiting-room changes. Tested changes include current profile names across social views and 11 connected clients, authenticated page re-entry with an old socket alive, unchanged account handles, frozen room looks, separate post-turn gallery nominations and the one-dislike-per-round account budget.
 
 - Node: 225 tests, 224 passed, one optional external PostgreSQL integration skipped, zero failures. Focused gallery UI, consent/takedown/retention, mobile viewport and readiness acknowledgement checks also passed after their final edits.

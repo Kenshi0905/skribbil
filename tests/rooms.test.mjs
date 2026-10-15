@@ -16,7 +16,7 @@ test('simultaneous creation reserves one room; uncertain provisioning resumes th
     if(fail){fail=false;res.writeHead(503);res.end('retry');return;}
     if(generic404&&req.url.endsWith('/status')){res.writeHead(404);res.end('404 page not found');return;}
     if(missing&&req.url.endsWith('/status')){res.writeHead(404);res.end('match not found');return;}
-    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({lobbyId:`test-${data.matchId}`,cancelled:true,exists:true}));
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({lobbyId:`league-${data.matchId.replaceAll('-','')}`,cancelled:true,exists:true}));
   });
   const config={secret:randomBytes(32).toString('hex'),engineUrl:await listen(engine),origin:'',ranked:false,secure:false};
   const app=await createApp({db,config}),base=await listen(app.server);config.origin=base;
@@ -27,14 +27,19 @@ test('simultaneous creation reserves one room; uncertain provisioning resumes th
     return {status:r.status,data:await r.json()};
   };
   try{
+    assert.equal((await api('/api/rooms/join-code',{code:'12345678-1234-4234-8234-123456789abc'})).status,401);
     assert.equal((await api('/api/auth/register',{username:'room_racer',email:'rooms@example.test',password:randomBytes(24).toString('base64url')})).status,200);
     const race=await Promise.all([api('/api/rooms',{mode:'private'}),api('/api/rooms',{mode:'private'})]);
     assert.deepEqual(race.map(r=>r.status).sort(),[409,503]);assert.equal(requested.length,1);
     const own=(await api('/api/bootstrap')).data.ownRooms;assert.equal(own.length,1);
     const id=own[0].id;assert.equal((await api(`/api/rooms/${id}/join`,{})).status,200);
     assert.equal(requested[0].matchId,requested[1].matchId);
+    assert.equal((await api('/api/rooms/join-code',{code:id})).status,200,'invitation IDs use the same admission checks');
+    assert.equal((await api('/api/rooms/join-code',{code:`league-${id.replaceAll('-','')}`})).status,200,'native room codes use the same admission checks');
+    assert.equal((await api('/api/rooms/join-code',{code:'https://untrusted.invalid/'})).status,400,'server accepts codes only, never fetches arbitrary URLs');
     assert.equal((await api(`/api/rooms/${id}/cancel`,{})).status,200);
     assert.equal((await api(`/api/rooms/${id}/join`,{})).status,409);
+    assert.equal((await api('/api/rooms/join-code',{code:id})).status,409,'closed rooms cannot be entered using a code');
     const created=await api('/api/rooms',{mode:'private'});assert.equal(created.status,201);assert.notEqual(created.data.matchId,id);
     const ownerCookie=cookie;
     assert.equal((await api('/api/auth/register',{username:'room_guest',email:'guest@example.test',password:randomBytes(24).toString('base64url')})).status,200);

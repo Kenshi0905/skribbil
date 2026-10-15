@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — Clean community home and smoother phone gameplay
+
+- Rebuilt the community presentation around the approved light/dark mockups, with real rooms, friends, notifications, quests, XP and standings. Preserved all routes, the Character Workshop/photo cropper, groups, permissions and account flows.
+- Added validated room-code joining through existing server admission, and preserved drafts/focus during background refreshes. Profile all-time points now include accepted casual games and corrections; explicit account-handle labels no longer show a display name.
+- Preserved keyboard-aware canvas resizing and saved themes. Added compact original tools/palette, proportional landscape canvas, stable gallery/history controls, readable turn recaps, bounded optional fades and chat history follow controls.
+- Corrected canvas dirty rectangles, cached input geometry per frame, kept audio startup off drawing gestures and reduced background gallery/identity requests. Original Go game mechanics, canonical pixels, retention and both independent voting systems remain intact.
+- Verified 236 passing Node tests (one optional PostgreSQL skip), all Go race tests, eight infrastructure tests, final builds, a ten-player/20-turn protocol game and desktop/touch-browser checks in both themes. Physical iOS/Android keyboards and sustained production load remain unverified. See [release evidence](docs/ui-revamp-verification.md).
+
 ## 2026-10-15 — Identity, gallery nominations and phone hygiene
 
 - Integrated the latest main changes while preserving avatar/photo uploads, auth, waiting-room settings, room controls and results.
