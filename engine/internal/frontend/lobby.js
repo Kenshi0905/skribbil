@@ -347,8 +347,25 @@ document
     .getElementById("toggle-fullscreen-button")
     .addEventListener("click", toggleFullscreen);
 
+const lobbyDrawingTime = document.getElementById("lobby-settings-drawing-time");
+const addDrawingTimeButton = document.getElementById("lobby-settings-add-time");
+function updateDrawingTimeIncrement() {
+    addDrawingTimeButton.disabled = ownID !== ownerID || Number(lobbyDrawingTime.value) >= Number(lobbyDrawingTime.max);
+}
+function increaseLobbyDrawingTime() {
+    if (ownID !== ownerID) return;
+    const minimum = Number(lobbyDrawingTime.min);
+    const maximum = Number(lobbyDrawingTime.max);
+    const current = Number(lobbyDrawingTime.value) || minimum;
+    lobbyDrawingTime.value = Math.min(maximum, Math.max(minimum, current + 10));
+    updateDrawingTimeIncrement();
+}
+addDrawingTimeButton.addEventListener("click", increaseLobbyDrawingTime);
+lobbyDrawingTime.addEventListener("input", updateDrawingTimeIncrement);
+
 function showLobbySettingsDialog() {
     hideMenu();
+    updateDrawingTimeIncrement();
     lobbySettingsDialog.style.visibility = "visible";
 }
 lobbySettingsButton.addEventListener("click", showLobbySettingsDialog);
@@ -1318,6 +1335,8 @@ const handleEvent = (parsed) => {
             '{{.Translation.Get "drawer-kicked"}}',
         );
     } else if (parsed.type === "lobby-settings-changed") {
+        lobbyDrawingTime.value = parsed.data.drawingTime;
+        updateDrawingTimeIncrement();
         rounds = parsed.data.rounds;
         updateRoundsDisplay();
         updateButtonVisibilities();

@@ -30,6 +30,11 @@
     align-self: baseline;
 }
 
+.input-container > .drawing-time-controls { display:flex; align-items:center; gap:6px; min-width:0; }
+.drawing-time-controls input { width:5rem; min-width:0; box-sizing:border-box; }
+#lobby-settings-add-time { flex-shrink:0; min-height:36px; padding:6px 10px; font:inherit; font-weight:700; cursor:pointer; }
+#lobby-settings-add-time:disabled { opacity:.5; cursor:default; }
+
 .input-container > input[type="checkbox"] {
     /* By default checkboxes seem to have a bigger margin on the left. */
     margin-left: 0;

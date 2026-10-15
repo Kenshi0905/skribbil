@@ -205,9 +205,13 @@
                             <div class="center-dialog-content">
                                 <div class="input-container">
                                     <b>{{.Translation.Get "drawing-time-setting"}}</b>
-                                    <input id="lobby-settings-drawing-time" class="input-item" type="number"
-                                        name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
-                                        value="{{.DrawingTime}}" />
+                                    <div class="drawing-time-controls">
+                                        <input id="lobby-settings-drawing-time" class="input-item" type="number"
+                                            name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
+                                            value="{{.DrawingTime}}" />
+                                        <button id="lobby-settings-add-time" class="dialog-button" type="button"
+                                            aria-label="Add 10 seconds to drawing time">+10 s</button>
+                                    </div>
                                     <b>{{.Translation.Get "rounds-setting"}}</b>
                                     <input id="lobby-settings-max-rounds" class="input-item" type="number" name="rounds"
                                         min="{{.MinRounds}}" max="{{.MaxRounds}}" value="{{.Rounds}}" />
