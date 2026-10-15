@@ -7,6 +7,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import { openDatabase } from './db.mjs';
 import { Platform } from './platform.mjs';
+import { leaderboard } from './leaderboard.mjs';
 import { Competition } from './competition.mjs';
 import { Social } from './social.mjs';
 import { Media } from './media.mjs';
@@ -291,6 +292,7 @@ export async function createApp({db,config,assets}={}) {
         requireValue(input&&typeof input==='object'&&!Array.isArray(input),'Send a JSON object.');
       }
       if(path==='/api/bootstrap'&&req.method==='GET')return json(res,200,await platform.bootstrap(user,await engineStatus()));
+      if(path==='/api/leaderboard'&&req.method==='GET')return json(res,200,await leaderboard(platform,user,Object.fromEntries(url.searchParams)));
       if(path==='/api/me'&&req.method==='GET')return json(res,200,{user:await platform.profile(user)});
       const mediaAsset=path.match(/^\/api\/media\/([a-f0-9-]+)$/);
       if(mediaAsset&&req.method==='GET'){
