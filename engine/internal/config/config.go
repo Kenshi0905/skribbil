@@ -100,7 +100,7 @@ var Default = Config{
 		MaxMaxPlayers:         24,
 		MinClientsPerIPLimit:  1,
 		MaxClientsPerIPLimit:  24,
-		MinCustomWordsPerTurn: 1,
+		MinCustomWordsPerTurn: 0,
 		MaxWordsPerTurn:       6,
 		MinWordsPerTurn:       1,
 	},

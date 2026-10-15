@@ -106,11 +106,10 @@ func ParseClientsPerIPLimit(cfg *config.Config, value string) (int, error) {
 		cfg.LobbySettingBounds.MaxClientsPerIPLimit, "clients per IP limit")
 }
 
-// ParseCustomWordsPerTurn checks whether the given value is an integer between
-// 0 and 100. All other invalid input, including empty strings, will return an
-// error.
+// ParseCustomWordsPerTurn applies the configured bounds. Zero disables custom
+// words and is the default in managed rooms without a custom word list.
 func ParseCustomWordsPerTurn(cfg *config.Config, value string) (int, error) {
-	return parseIntValue(value, 1, cfg.LobbySettingBounds.MaxWordsPerTurn, "custom words per turn")
+	return parseIntValue(value, cfg.LobbySettingBounds.MinCustomWordsPerTurn, cfg.LobbySettingBounds.MaxWordsPerTurn, "custom words per turn")
 }
 
 func ParseWordsPerTurn(cfg *config.Config, value string) (int, error) {

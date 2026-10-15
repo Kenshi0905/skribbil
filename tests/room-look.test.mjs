@@ -19,8 +19,8 @@ function fixture(role='member') {
     fire(type){this.events[type]?.({preventDefault(){}});}
   }
   globalThis.document=doc;
-  const root=new Element('section'),sent=[];let connected=true,focusedAfter=false;
-  const ui=createRoomLook(root,{send:e=>sent.push(e),isConnected:()=>connected,focusAfterStart:()=>{focusedAfter=true;}});
+  const root=new Element('section'),sent=[];let connected=true,focusedAfter=false,settingsOpened=0;
+  const ui=createRoomLook(root,{send:e=>sent.push(e),isConnected:()=>connected,focusAfterStart:()=>{focusedAfter=true;},editSettings:()=>{settingsOpened++;}});
   const profile={displayName:'Permanent name',avatarUrl:'/api/media/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'};
   const players=[{id:'host',name:'Host',state:'standby',connected:true},{id:'member',name:profile.displayName,avatarUrl:profile.avatarUrl,state:'standby',connected:true},{id:'spec',name:'Viewer',state:'spectating',connected:true}];
   const snapshot={ownID:role==='member'?'member':role==='host'?'host':'spec',ownerID:'host',players,profileIdentity:profile,gameState:'unstarted'};
@@ -28,7 +28,7 @@ function fixture(role='member') {
   const all=(el=root)=>[el,...el.children.flatMap(c=>all(c))];
   const find=(tag,text)=>all().find(el=>el.tag===tag&&(el.textContent===text||el.id===text));
   const isShown=el=>el&&!el.hidden&&(!el.parent||isShown(el.parent));
-  return {ui,root,doc,sent,players,profile,snapshot,find,all,isShown,disconnect(){connected=false;ui.disconnect();},reconnect(){connected=true;ui.update(snapshot);},focusedAfter:()=>focusedAfter};
+  return {ui,root,doc,sent,players,profile,snapshot,find,all,isShown,disconnect(){connected=false;ui.disconnect();},reconnect(){connected=true;ui.update(snapshot);},focusedAfter:()=>focusedAfter,settingsOpened:()=>settingsOpened};
 }
 test('host has customization and gated Start, guests Ready, spectators read-only; transfer recalculates',()=>{
   const f=fixture('host');assert.ok(f.isShown(f.find('button','Edit room look')));assert.ok(f.isShown(f.find('button','Start game')));assert.equal(f.isShown(f.find('input','room-ready')),false);
@@ -36,7 +36,7 @@ test('host has customization and gated Start, guests Ready, spectators read-only
   f.ui.update({...f.snapshot,ownerID:'member'});assert.equal(f.isShown(f.find('button','Start game')),false);assert.ok(f.isShown(f.find('input','room-ready')));
   const member=fixture();assert.equal(member.isShown(member.find('button','Start game')),false);assert.ok(member.isShown(member.find('input','room-ready')));
   const spec=fixture('spectator');assert.equal(spec.isShown(spec.find('button','Edit room look')),false);assert.equal(spec.isShown(spec.find('input','room-ready')),false);assert.equal(spec.isShown(spec.find('button','Start game')),false);
-  assert.ok(spec.all().some(n=>n.textContent==='You · Spectating'));
+  assert.ok(spec.all().some(n=>n.textContent==='Spectating'));
 });
 test('room customization drafts, cancel, restore, error and retry never call a profile API',()=>{
   const f=fixture();f.find('button','Edit room look').click();const name=f.find('input','room-display-name');assert.equal(f.doc.activeElement,name);
@@ -65,7 +65,7 @@ test('readiness excludes host, spectators and offline seats',()=>{
 
 test('room preview uses the same Unicode character limit and control stripping as the server',()=>{assert.equal(roomDisplayName('  '+ '界'.repeat(35)), '界'.repeat(30));assert.equal(roomDisplayName('\u202eMoon\n'), 'Moon');});
 
-test('large preview updates every feature and vibe locally, while roster stays authoritative',()=>{
+test('compact preview updates every feature and vibe locally, while roster stays authoritative',()=>{
   for(const role of ['host','member']){
     const f=fixture(role),preview=()=>f.all().find(n=>n.className==='room-look-preview');
     assert.match(preview().attrs['aria-label'],/Room look preview for/);
@@ -74,9 +74,30 @@ test('large preview updates every feature and vibe locally, while roster stays a
     for(const key of avatarV2Keys){const control=f.find('select','room-'+key);control.value=String(avatarV2Options[key].length-1);control.fire('change');assert.equal(f.sent.length,0);assert.ok(preview().children.some(n=>n.textContent==='Not applied yet'));}
     for(const v of avatarVibes){f.find('button',v).click();assert.equal(f.sent.length,0);}
     const name=f.find('input','room-display-name');name.value='<script>draft</script>';name.fire('input');assert.ok(preview().children.some(n=>n.textContent===name.value));
-    const roster=f.all().find(n=>n.className==='room-look-roster');assert.ok(!JSON.stringify(roster.children.map(n=>n.children[1].children[0].textContent)).includes('draft'));
+    assert.ok(!f.players.some(player=>player.name.includes('draft')),'drafts do not mutate the authoritative roster');
     f.find('button','Use my profile look').click();assert.equal(f.sent.length,0);
     f.find('button','Cancel').click();assert.ok(preview().children.some(n=>n.textContent===f.players.find(p=>p.id===f.snapshot.ownID).name));
     assert.ok(!preview().children.some(n=>n.textContent==='Not applied yet'));
   }
+});
+
+
+test('waiting room exposes settings to the private leader and keeps shared summaries current',()=>{
+  const f=fixture('host');
+  const settings={drawingTime:80,rounds:3,maxPlayers:12,wordsPerTurn:3};
+  f.ui.update({...f.snapshot,mode:'private',settings});
+  const edit=f.find('button','Edit settings');
+  assert.ok(f.isShown(edit));edit.click();assert.equal(f.settingsOpened(),1);
+  assert.ok(f.all().some(n=>n.textContent==='80 sec'));
+  assert.ok(f.all().some(n=>n.textContent==='2 / 12'));
+  f.ui.update({...f.snapshot,mode:'private',settings:{...settings,drawingTime:90}});
+  assert.ok(f.all().some(n=>n.textContent==='90 sec'));
+  f.ui.update({...f.snapshot,mode:'ranked',settings});
+  assert.equal(f.isShown(edit),false);edit.click();assert.equal(f.settingsOpened(),1);
+  assert.ok(f.all().some(n=>n.textContent==='Ranked settings are locked.'));
+  f.ui.update({...f.snapshot,mode:'private',ownerID:'member',settings});
+  assert.equal(f.isShown(edit),false);edit.click();assert.equal(f.settingsOpened(),1);
+  const guest=fixture();guest.find('button','Edit settings').click();assert.equal(guest.settingsOpened(),0);
+  assert.equal(guest.isShown(guest.find('button','Edit settings')),false);
+  const host=fixture('host');host.disconnect();assert.equal(host.find('button','Edit settings').disabled,true);
 });

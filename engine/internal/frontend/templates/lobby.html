@@ -201,8 +201,8 @@
                             </div>
                         </div>
 
-                        <div id="lobbysettings-dialog" class="center-dialog">
-                            <span class="dialog-title">{{.Translation.Get "change-lobby-settings-title"}}</span>
+                        <div id="lobbysettings-dialog" class="center-dialog" role="dialog" aria-modal="true" aria-labelledby="lobbysettings-title">
+                            <span id="lobbysettings-title" class="dialog-title">{{.Translation.Get "change-lobby-settings-title"}}</span>
                             <div class="center-dialog-content">
                                 <div class="input-container">
                                     <b>{{.Translation.Get "drawing-time-setting"}}</b>
