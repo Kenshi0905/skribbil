@@ -14,6 +14,16 @@ import (
 const EventTypeLike = "like-drawing"
 const EventTypeDislike = "dislike-drawing"
 const EventTypeDislikeState = "dislike-state"
+const EventTypeDrawingDisliked = "drawing-disliked"
+
+type DrawingDislikeVote struct {
+	VoterID    uuid.UUID `json:"voterId"`
+	VoterName  string    `json:"voterName"`
+	ArtistName string    `json:"artistName"`
+	Votes      int       `json:"votes"`
+	Required   int       `json:"required"`
+	Applied    bool      `json:"applied"`
+}
 
 // Difficulty is curated and versioned, not inferred from word length.
 var hardWordsV1 = []string{"time travel", "optical illusion", "photosynthesis", "continental drift", "parallel universe", "chain reaction", "metamorphosis", "gravitational wave", "ecosystem", "supply and demand", "infinite loop", "magnetic field"}
@@ -211,14 +221,14 @@ func (lobby *Lobby) dislike(player *Player, turnID int) error {
 	if ls.Applied || ls.Votes[player.ID] {
 		return nil
 	}
+	drawer := lobby.Drawer()
+	if drawer == nil {
+		return errors.New("no active artist")
+	}
 	ls.Votes[player.ID] = true
 	delete(ls.Likes, player.ID)
 	// Frozen membership prevents disconnect/leave from manufacturing unanimity.
 	if len(ls.Eligible) > 0 && len(ls.Votes) == len(ls.Eligible) {
-		drawer := lobby.Drawer()
-		if drawer == nil {
-			return errors.New("no active artist")
-		}
 		ls.Applied = true
 		drawer.Score -= 100 // Exact deduction; negative scores are intentional.
 		drawer.HardWordPending = true
@@ -226,6 +236,10 @@ func (lobby *Lobby) dislike(player *Player, turnID int) error {
 		lobby.Broadcast(&Event{Type: EventTypeUpdatePlayers, Data: lobby.players})
 		lobby.emitLeague("drawing.penalized", map[string]any{"turnId": ls.TurnUUID, "turnNumber": ls.TurnID, "artistId": drawer.AccountID, "userId": drawer.AccountID, "delta": -100, "dislikeCount": len(ls.Votes)})
 	}
+	lobby.Broadcast(&Event{Type: EventTypeDrawingDisliked, Data: DrawingDislikeVote{
+		VoterID: player.ID, VoterName: player.Name, ArtistName: drawer.Name,
+		Votes: len(ls.Votes), Required: len(ls.Eligible), Applied: ls.Applied,
+	}})
 	lobby.Broadcast(&Event{Type: EventTypeDislikeState, Data: lobby.dislikeState()})
 	return nil
 }

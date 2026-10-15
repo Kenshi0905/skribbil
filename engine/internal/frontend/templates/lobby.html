@@ -143,11 +143,12 @@
                             <span class="dialog-title">{{.Translation.Get "choose-a-word"}}</span>
                             <div class="center-dialog-content">
                                 <div class="word-choice-content">
+                                    <p id="word-choice-summary" class="word-choice-note" role="status"></p>
+                                    <div id="word-button-container"> </div>
                                     <div class="word-choice-note">
                                         <span>{{.Translation.Get "word-choice-warning"}}:</span>
                                         <span id="word-preselected" style="font-weight: bold;"></span>
                                     </div>
-                                    <div id="word-button-container"> </div>
                                 </div>
                             </div>
                         </div>
@@ -205,9 +206,13 @@
                             <div class="center-dialog-content">
                                 <div class="input-container">
                                     <b>{{.Translation.Get "drawing-time-setting"}}</b>
-                                    <input id="lobby-settings-drawing-time" class="input-item" type="number"
-                                        name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
-                                        value="{{.DrawingTime}}" />
+                                    <div class="drawing-time-controls">
+                                        <input id="lobby-settings-drawing-time" class="input-item" type="number"
+                                            name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
+                                            value="{{.DrawingTime}}" />
+                                        <button id="lobby-settings-add-time" class="dialog-button" type="button"
+                                            aria-label="Add 10 seconds to drawing time">+10 s</button>
+                                    </div>
                                     <b>{{.Translation.Get "rounds-setting"}}</b>
                                     <input id="lobby-settings-max-rounds" class="input-item" type="number" name="rounds"
                                         min="{{.MinRounds}}" max="{{.MaxRounds}}" value="{{.Rounds}}" />

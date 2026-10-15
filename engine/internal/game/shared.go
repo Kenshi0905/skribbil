@@ -131,9 +131,10 @@ type FillEvent struct {
 
 // KickVote represents a players vote to kick another players. If the VoteCount
 // is as great or greater than the RequiredVoteCount, the event indicates a
-// successful kick vote. The voting is anonymous, meaning the voting player
-// won't be exposed.
+// successful kick vote, including the voter and progress toward removal.
 type KickVote struct {
+	VoterName         string    `json:"voterName"`
+	VoterID           uuid.UUID `json:"voterId"`
 	PlayerName        string    `json:"playerName"`
 	PlayerID          uuid.UUID `json:"playerId"`
 	VoteCount         int       `json:"voteCount"`
@@ -170,6 +171,7 @@ type YourTurn struct {
 	TimeLeft        int      `json:"timeLeft"`
 	PreSelectedWord int      `json:"preSelectedWord"`
 	Words           []string `json:"words"`
+	HardWord        bool     `json:"hardWord"`
 }
 
 // NextTurn represents the data necessary for displaying the lobby state right

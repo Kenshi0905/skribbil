@@ -347,8 +347,25 @@ document
     .getElementById("toggle-fullscreen-button")
     .addEventListener("click", toggleFullscreen);
 
+const lobbyDrawingTime = document.getElementById("lobby-settings-drawing-time");
+const addDrawingTimeButton = document.getElementById("lobby-settings-add-time");
+function updateDrawingTimeIncrement() {
+    addDrawingTimeButton.disabled = ownID !== ownerID || Number(lobbyDrawingTime.value) >= Number(lobbyDrawingTime.max);
+}
+function increaseLobbyDrawingTime() {
+    if (ownID !== ownerID) return;
+    const minimum = Number(lobbyDrawingTime.min);
+    const maximum = Number(lobbyDrawingTime.max);
+    const current = Number(lobbyDrawingTime.value) || minimum;
+    lobbyDrawingTime.value = Math.min(maximum, Math.max(minimum, current + 10));
+    updateDrawingTimeIncrement();
+}
+addDrawingTimeButton.addEventListener("click", increaseLobbyDrawingTime);
+lobbyDrawingTime.addEventListener("input", updateDrawingTimeIncrement);
+
 function showLobbySettingsDialog() {
     hideMenu();
+    updateDrawingTimeIncrement();
     lobbySettingsDialog.style.visibility = "visible";
 }
 lobbySettingsButton.addEventListener("click", showLobbySettingsDialog);
@@ -1083,6 +1100,22 @@ likeButton.addEventListener("click", () => {
     }
 });
 
+function drawingDislikeMessage(vote) {
+    const remaining = Math.max(0, vote.required - vote.votes);
+    const progress = `${vote.voterName} disliked ${vote.artistName}'s drawing (${vote.votes}/${vote.required}).`;
+    return vote.applied
+        ? `${progress} ${vote.artistName} loses 100 points and gets a hard word next turn.`
+        : `${progress} ${remaining} more dislike${remaining === 1 ? '' : 's'} needed for a penalty.`;
+}
+
+function kickVoteMessage(vote) {
+    const remaining = Math.max(0, vote.requiredVoteCount - vote.voteCount);
+    const progress = `${vote.voterName || 'A player'} voted to kick ${vote.playerName} (${vote.voteCount}/${vote.requiredVoteCount}).`;
+    return remaining === 0
+        ? `${progress} ${vote.playerName} was kicked.`
+        : `${progress} ${remaining} more vote${remaining === 1 ? '' : 's'} needed to kick.`;
+}
+
 const handleEvent = (parsed) => {
     if (parsed.type === "ready") {
         // Player rendering applies spectator controls and opens the initial
@@ -1102,6 +1135,8 @@ const handleEvent = (parsed) => {
         roomSession?.closed();
     } else if (parsed.type === "dislike-state") {
         renderLeagueDislikes(parsed.data);
+    } else if (parsed.type === "drawing-disliked") {
+        appendMessage("system-message", '{{.Translation.Get "system"}}', drawingDislikeMessage(parsed.data));
     } else if (parsed.type === "game-over") {
         dislikeButton.disabled = true;
         likeButton.disabled = true;
@@ -1274,26 +1309,13 @@ const handleEvent = (parsed) => {
     } else if (parsed.type === "drawing") {
         applyDrawData(parsed.data);
     } else if (parsed.type === "kick-vote") {
+        appendMessage("system-message", '{{.Translation.Get "system"}}', kickVoteMessage(parsed.data));
         if (
             parsed.data.playerId === ownID &&
             parsed.data.voteCount >= parsed.data.requiredVoteCount
         ) {
             alert('{{.Translation.Get "self-kicked"}}');
             document.location.href = "{{.RootPath}}/";
-        } else {
-            let kickMessage = '{{.Translation.Get "kick-vote"}}'.format(
-                parsed.data.voteCount,
-                parsed.data.requiredVoteCount,
-                parsed.data.playerName,
-            );
-            if (parsed.data.voteCount >= parsed.data.requiredVoteCount) {
-                kickMessage += ' {{.Translation.Get "player-kicked"}}';
-            }
-            appendMessage(
-                "system-message",
-                '{{.Translation.Get "system"}}',
-                kickMessage,
-            );
         }
     } else if (parsed.type === "owner-change") {
         ownerID = parsed.data.playerId;
@@ -1313,6 +1335,8 @@ const handleEvent = (parsed) => {
             '{{.Translation.Get "drawer-kicked"}}',
         );
     } else if (parsed.type === "lobby-settings-changed") {
+        lobbyDrawingTime.value = parsed.data.drawingTime;
+        updateDrawingTimeIncrement();
         rounds = parsed.data.rounds;
         updateRoundsDisplay();
         updateButtonVisibilities();
@@ -1482,6 +1506,12 @@ function updateButtonVisibilities() {
 }
 
 function promptWords(data) {
+    const summary = document.getElementById("word-choice-summary");
+    summary.textContent = data.hardWord
+        ? "Hard-word penalty: your previous drawing received all required dislikes. This turn has one forced hard word."
+        : data.words.length === 1
+            ? "This room is set to offer one word per turn. The leader can change this in Edit settings."
+            : `Choose one of these ${data.words.length} words.`;
     wordPreSelected.textContent = data.words[data.preSelectedWord];
     wordButtonContainer.replaceChildren(
         ...data.words.map((word, index) => {
