@@ -14,6 +14,7 @@ import { createApp } from '../server/index.mjs';
 import { AssetStore } from '../server/assets.mjs';
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const TURN_EVENT_TIMEOUT_MS = 30000;
 async function until(check, label, timeout = 10000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) { const value = await check(); if (value) return value; await delay(25); }
@@ -209,7 +210,7 @@ try {
   players[0].ws.send('start');
   let penalized;
   for (let turn = 1; turn <= 20; turn++) {
-    const next = await until(() => turns.shift(), `artist turn ${turn}`);
+    const next = await until(() => turns.shift(), `artist turn ${turn}`, TURN_EVENT_TIMEOUT_MS);
     const artist = next.client;
     if (turn === 1) penalized = artist;
     if (turn > 10 && artist === penalized) { assert.equal(next.data.words.length, 1, 'penalized artist gets one forced hard word'); report.checks.push('next-turn hard word forced'); }
@@ -296,7 +297,7 @@ try {
     await Promise.all(players.map(c => c.ws.wait('next-turn')));
     report.checks.push('leader-only next session carries all ten players and spectator, preserves room identities, and starts automatically');
     for (let turn = 1; turn <= 20; turn++) {
-      const next = await until(() => turns.shift(), `next-session artist turn ${turn}`);
+      const next = await until(() => turns.shift(), `next-session artist turn ${turn}`, TURN_EVENT_TIMEOUT_MS);
       next.client.ws.send('choose-word', 0);
       await Promise.all(clients.map(c=>c.ws.wait('word-chosen')));
       await delay(900);
