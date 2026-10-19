@@ -376,7 +376,8 @@ export async function createApp({db,config,assets}={}) {
         rateLimit(req,'room-session',12);
         const source=await one(db,'SELECT clubhouse_id FROM skribbil.matches WHERE id=$1',[roomSession[1]]);
         if(source?.clubhouse_id)await clubhouses.requireMember(user,source.clubhouse_id,db,{lock:false});
-        return json(res,200,await roomSessions.control(user,roomSession[1],input.action));
+        const result=await roomSessions.control(user,roomSession[1],input.action);
+        return json(res,result.pending?202:200,result);
       }
       if(path==='/api/rooms/join-code'&&req.method==='POST') {
         const code=String(input.code||'').trim().toLowerCase();

@@ -22,7 +22,17 @@ const secret = randomBytes(48).toString('hex');
 const portProbe = net.createServer(); await new Promise(resolve => portProbe.listen(0, '127.0.0.1', resolve));
 const enginePort = portProbe.address().port; await new Promise(resolve => portProbe.close(resolve));
 const config = { secret, engineUrl: `http://127.0.0.1:${enginePort}`, origin: '', secure: false, ranked: false, production: false };
-const app = await createApp({ db, config, assets: new AssetStore({ root: join(scratch, 'assets'), bucket: '' }) });
+const assets = new AssetStore({ root: join(scratch, 'assets'), bucket: '' });
+let releaseResultSave, archivedTurns = 0;
+if(sessionFlow) {
+  const resultSaveGate = new Promise(resolve=>{releaseResultSave=resolve;});
+  const archive = assets.archive.bind(assets);
+  assets.archive = async (...args) => {
+    if(++archivedTurns>=20)await resultSaveGate;
+    return archive(...args);
+  };
+}
+const app = await createApp({ db, config, assets });
 await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${app.server.address().port}`; config.origin = base;
 const engine = spawn(resolve(process.env.ENGINE_BINARY || '.tools/skribbil-engine.exe'), [], {
@@ -209,6 +219,13 @@ try {
     if (turn % 5 === 0) console.log(`Protocol playtest: ${turn}/20 native turns completed.`);
   }
   await Promise.all(players.map(c => c.ws.wait('game-over')));
+  if(sessionFlow) {
+    const saving=await request(players[0],`/api/rooms/${matchId}/session`,{action:'rematch'});
+    assert.equal(saving.status,202); assert.equal((await saving.json()).pending,true);
+    assert.equal((await db.query('SELECT target_match_id FROM skribbil.match_rematches WHERE source_match_id=$1',[matchId])).rows.length,0);
+    releaseResultSave();
+    report.checks.push('game-over before result acceptance returns a saving state without allocating a rematch or bypassing results');
+  }
   const settled = await until(async () => (await db.query(`SELECT * FROM skribbil.matches WHERE id=$1 AND status='completed'`, [matchId])).rows[0], 'authoritative result settlement', 90000);
   const results = (await db.query('SELECT * FROM skribbil.match_result_players WHERE result_id=$1', [settled.accepted_result_id])).rows;
   assert.equal(results.length, 10); assert.ok(!results.some(r => r.user_id === spectator.user.id));
@@ -245,10 +262,21 @@ try {
     for (const client of clients) {
       client.ws.close(); delete client.playerId;
       const ticket = await json(await request(client, `/api/rooms/${nextSession.matchId}/join`, {role:client.spectator?'spectator':'player'}));
-      await connect(client, ticket.url);
+      const waiting=await connect(client, ticket.url);
+      assert.equal(waiting.gameState,'unstarted');
+      if(!client.spectator)assert.ok(waiting.players.every(p=>p.state!=='ready'),'arrival does not mark players ready');
     }
+    assert.equal(turns.length,0,'returning players do not automatically start the next match');
+    players[0].ws.send('start');
+    assert.ok((await players[0].ws.wait('room-command-result',d=>d.action==='start')).data.error,'unready guests prevent start');
+    const edited=players[1]; edited.roomName='Ready for another round';
+    edited.ws.send('room-identity-change',{displayName:edited.roomName,avatarUrl:edited.roomAvatar});
+    await edited.ws.wait('room-command-result',d=>d.action==='room-identity-change');
+    for(const p of players.slice(1)){p.ws.send('toggle-readiness');await p.ws.wait('room-command-result',d=>d.action==='toggle-readiness');}
+    assert.equal(turns.length,0,'readying everyone does not auto-start');
+    players[0].ws.send('start');
     await Promise.all(players.map(c => c.ws.wait('next-turn')));
-    report.checks.push('leader-only next session carries all ten players and spectator, preserves room identities, and starts automatically');
+    report.checks.push('all ten players and spectator return to waiting, preserve room looks, can edit before readying, and start only on the leader’s command');
     for (let turn = 1; turn <= 20; turn++) {
       const next = await until(() => turns.shift(), `next-session artist turn ${turn}`);
       next.client.ws.send('choose-word', 0);
@@ -290,6 +318,7 @@ try {
   }
   report.status = 'passed'; console.log(JSON.stringify(report, null, 2));
 } finally {
+  releaseResultSave?.();
   for (const client of clients) client.ws?.close();
   engine.kill();
   await Promise.race([new Promise(resolve => engine.once('exit', resolve)), delay(2000)]);

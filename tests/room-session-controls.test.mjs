@@ -12,10 +12,12 @@ function fixture(reply = () => ({ok:true, data:{closed:true}})) {
   const root = {hidden:true, contains: button=>buttons.includes(button),
     querySelector: selector=>({'.results-owner-actions':actions,'.results-session-note':note,'.results-session-error':error,'[data-session-action="retry"]':retry}[selector]),
     addEventListener: (_,fn)=>{click=fn;}};
-  const calls = [], navigations = [];
+  const calls = [], navigations = [], timers = new Map(); let timerId = 0;
   const controls = createRoomSessionControls(root, {matchId:sourceId, origin:'https://skribbil.test', navigate:url=>navigations.push(url),
+    schedule:(callback,delay)=>{timers.set(++timerId,{callback,delay});return timerId;},cancel:id=>timers.delete(id),
     fetch:async (url,options)=> {calls.push({url,options});const response=await reply(url,options);return {ok:response.ok,json:async()=>response.data};}});
-  return {root,note,error,retry,buttons,actions,calls,navigations,controls,
+  return {root,note,error,retry,buttons,actions,calls,navigations,controls,timers,
+    tick:async()=>{const [id,timer]=timers.entries().next().value;timers.delete(id);await timer.callback();},
     click:action=>click({target:buttons.find(button=>button.dataset.sessionAction===action)})};
 }
 
@@ -82,4 +84,32 @@ test('double-clicking Play again makes one leader request while it is pending', 
   const first=f.click('rematch');await f.click('rematch');
   assert.equal(f.calls.length,1);assert.ok(f.buttons.slice(0,2).every(button=>button.disabled));
   finish({ok:false,data:{error:'Retry'}});await first;
+});
+
+test('a finished game whose result is still saving retries automatically without a red error', async () => {
+  let saving = true;
+  const f = fixture(url => ({ok:true,data:url.endsWith('/join') ? {url:'/engine/league/join?ticket=fresh'}
+    : saving ? {pending:true} : {matchId:targetId}}));
+  f.controls.update({finished:true,isLeader:true});
+  await f.click('rematch');
+  assert.equal(f.error.hidden,true); assert.match(f.note.textContent,/Saving.*waiting room/);
+  assert.equal(f.buttons[0].disabled,true); assert.equal(f.buttons[1].disabled,false);
+  assert.equal(f.timers.size,1); assert.equal(f.timers.values().next().value.delay,1500);
+  await f.click('rematch'); assert.equal(f.calls.length,1);
+  f.controls.update({finished:true,isLeader:true}); assert.match(f.note.textContent,/Saving/);
+  await f.tick(); assert.equal(f.timers.values().next().value.delay,3000);
+  saving = false; await f.tick();
+  assert.deepEqual(f.navigations,['/engine/league/join?ticket=fresh']); assert.equal(f.timers.size,0);
+});
+
+test('waiting for result saving can be left or deleted and stops when leadership changes', async () => {
+  for (const action of ['leave','close','leadership']) {
+    const f=fixture((url,options)=>({ok:true,data:JSON.parse(options.body).action==='close'?{closed:true}:url.endsWith('/session')?{pending:true}:{ok:true}}));
+    f.controls.update({finished:true,isLeader:true}); await f.click('rematch');
+    assert.equal(f.timers.size,1);
+    if(action==='leadership') f.controls.update({finished:true,isLeader:false});
+    else await f.click(action);
+    assert.equal(f.timers.size,0);
+    if(action==='leave') assert.deepEqual(f.navigations,['/#/skribbil']);
+  }
 });

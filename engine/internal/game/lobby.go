@@ -1272,7 +1272,6 @@ func (lobby *Lobby) OnPlayerConnectUnsynchronized(player *Player) {
 		Type: EventTypeUpdatePlayers,
 		Data: lobby.players,
 	}, ExcludePlayer(player))
-	lobby.startTransferredSessionIfReady()
 }
 
 func (lobby *Lobby) OnPlayerDisconnect(player *Player) {

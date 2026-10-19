@@ -55,6 +55,9 @@ jobs:
       - run: node tests/playtest-10.mjs
         env:
           ENGINE_BINARY: .tools/skribbil-engine
+      - run: node tests/playtest-10.mjs --room-sessions
+        env:
+          ENGINE_BINARY: .tools/skribbil-engine
   deploy:
     needs: [platform, engine, container, multiplayer]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Kenshi0905/skribbil'

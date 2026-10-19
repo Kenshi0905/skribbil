@@ -41,7 +41,7 @@ func TestResultsSessionRequiresCurrentConnectedLeader(t *testing.T) {
 	}
 }
 
-func TestTransferredSessionPreservesIdentityAndStartsWithNewScores(t *testing.T) {
+func TestTransferredSessionReturnsToWaitingRoomBeforeExplicitStart(t *testing.T) {
 	source, host, guest, spec := roomFixture(t, true)
 	source.State = GameOver
 	host.Score, guest.Score = 500, 200
@@ -81,21 +81,40 @@ func TestTransferredSessionPreservesIdentityAndStartsWithNewScores(t *testing.T)
 	}
 	targetGuest.Score = 999
 	target.Synchronized(func() { target.OnPlayerConnectUnsynchronized(targetGuest) })
-	if target.State != Unstarted || targetGuest.State != Ready || targetGuest.Name != "Room guest" {
-		t.Fatal("guest was not readied with its previous room identity")
+	if target.State != Unstarted || targetGuest.State != Standby || targetGuest.Name != "Room guest" || targetGuest.Score != 0 {
+		t.Fatal("guest did not arrive unready with its previous room identity and fresh scores")
 	}
 	if err := target.HandleEvent(EventTypeStart, []byte(`{"type":"start"}`), targetGuest); err == nil {
 		t.Fatal("guest started the next session before its leader arrived")
 	}
 	target.Synchronized(func() { target.OnPlayerConnectUnsynchronized(targetHost) })
-	if target.State != Ongoing || target.OwnerID != targetHost.ID || targetHost.Name != "Room host" {
-		t.Fatal("session did not automatically start with the same leader")
+	if target.State != Unstarted || target.OwnerID != targetHost.ID || targetHost.Name != "Room host" {
+		t.Fatal("arrival started the match or lost the previous leader")
 	}
 	if targetHost.Score != 0 || targetGuest.Score != 0 || target.League.MatchID != "next" {
 		t.Fatal("next session retained old scores or result identity")
 	}
 	if targetSpec.State != Spectating {
 		t.Fatal("spectator became a player")
+	}
+	if err := target.HandleEvent(EventTypeStart, []byte(`{"type":"start"}`), targetHost); err == nil {
+		t.Fatal("host started before guests became ready")
+	}
+	if err := target.HandleEvent(EventTypeRoomIdentityChange, []byte(`{"type":"room-identity-change","data":{"displayName":"Edited in waiting","avatarUrl":"/api/avatar-presets/v2/0-0-0-0-0-0-0-0-0-0-0-0.svg"}}`), targetGuest); err != nil {
+		t.Fatal("room look was unavailable in the rematch waiting room", err)
+	}
+	target.Synchronized(func() { target.ApplySessionIdentity(targetGuest) })
+	if targetGuest.Name != "Edited in waiting" || targetGuest.State != Standby {
+		t.Fatal("carried identity overwrote a waiting-room edit")
+	}
+	if err := target.HandleEvent(EventTypeToggleReadiness, []byte(`{"type":"toggle-readiness"}`), targetGuest); err != nil {
+		t.Fatal(err)
+	}
+	if target.State != Unstarted {
+		t.Fatal("readying guests auto-started the rematch")
+	}
+	if err := target.HandleEvent(EventTypeStart, []byte(`{"type":"start"}`), targetHost); err != nil || target.State != Ongoing {
+		t.Fatal("host could not explicitly start after everyone was ready", err)
 	}
 	transfers = 0
 	var readyBeforeTransfer bool

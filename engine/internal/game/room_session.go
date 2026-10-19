@@ -161,35 +161,19 @@ func (lobby *Lobby) ApplySessionIdentity(player *Player) {
 	if identity, ok := lobby.League.SessionPlayers[player.AccountID]; ok {
 		player.Name, player.AvatarURL = identity.DisplayName, identity.AvatarURL
 		player.roomIdentityOverride = true
-		if player.AccountID == lobby.League.SessionOwnerAccountID {
-			if lobby.OwnerID != player.ID {
-				lobby.OwnerID = player.ID
-				lobby.Broadcast(&Event{Type: EventTypeOwnerChange, Data: &OwnerChangeEvent{PlayerID: player.ID, PlayerName: player.Name}})
-			}
-		} else {
-			if lobby.OwnerID == player.ID {
-				lobby.OwnerID = uuid.Nil
-			}
-			player.State = Ready
-		}
+		player.Score, player.LastScore = 0, 0
+		player.State = Standby
+		// Consume the carried look once. Later reconnects must keep edits made
+		// in this waiting room, including "Use my profile look".
+		delete(lobby.League.SessionPlayers, player.AccountID)
 	}
-}
-
-func (lobby *Lobby) startTransferredSessionIfReady() {
-	if lobby.League == nil || lobby.State != Unstarted || lobby.League.SessionPlayers == nil {
-		return
-	}
-	for accountID := range lobby.League.SessionPlayers {
-		found := false
-		for _, p := range lobby.players {
-			if p.AccountID == accountID && p.Connected && !p.SpectatorOnly {
-				found = true
-				break
-			}
+	if player.AccountID == lobby.League.SessionOwnerAccountID {
+		if lobby.OwnerID != player.ID {
+			lobby.OwnerID = player.ID
+			lobby.Broadcast(&Event{Type: EventTypeOwnerChange, Data: &OwnerChangeEvent{PlayerID: player.ID, PlayerName: player.Name}})
 		}
-		if !found {
-			return
-		}
+		// From here the ordinary waiting-room ownership and explicit Start
+		// controls apply. Arrival itself never starts another match.
+		lobby.League.SessionOwnerAccountID = ""
 	}
-	lobby.startGame()
 }

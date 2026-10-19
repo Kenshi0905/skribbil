@@ -32,6 +32,11 @@ export class RoomSessions {
       }
       requireValue(Array.isArray(members) && members.filter(p=>p.role==='player').length >= 2,
         'At least two players must stay for another game.', 409);
+      requireValue(source.status !== 'cancelled', 'This match could not be saved. Leave this room and create a new one.', 409);
+      // Game-over reaches browsers before the durable event worker finishes
+      // saving the result. Keep the verified leader waiting without allocating
+      // a successor or bypassing authoritative result acceptance.
+      if (source.status !== 'completed' || !source.accepted_result_id) return {pending:true};
       const launch = await this.rematch.join(user, sourceId);
       const target = await one(this.db, 'SELECT * FROM skribbil.matches WHERE id=$1', [launch.matchId]);
       requireValue(target, 'The next game could not be found. Try again.', 503);

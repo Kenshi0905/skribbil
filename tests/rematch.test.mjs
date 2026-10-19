@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { openDatabase } from '../server/db.mjs';
 import { Rematch } from '../server/rematch.mjs';
+import { RoomSessions } from '../server/room-sessions.mjs';
 import { Platform } from '../server/platform.mjs';
 import { Clubhouses } from '../server/clubhouses.mjs';
 import { ApiError } from '../server/security.mjs';
@@ -47,6 +48,26 @@ test('quick rematches preserve authority and reuse a durable successor', { timeo
   };
   const target = async source => one(db, `SELECT m.* FROM skribbil.match_rematches r JOIN skribbil.matches m ON m.id=r.target_match_id WHERE r.source_match_id=$1`, [source.id]);
   try {
+    await t.test('verified game-over waits for result acceptance before creating or transferring a rematch', async () => {
+      const source = await completed(); const calls = [];
+      await db.query("UPDATE skribbil.matches SET status='running',accepted_result_id=NULL WHERE id=$1",[source.id]);
+      const sessions = new RoomSessions({db,admit:launch,
+        rematch:new Rematch({db,admit:launch,provision:async payload=>({lobbyId:`waiting-${payload.matchId}`})}),
+        engineRequest:async (_path,payload)=>{
+          calls.push(payload);
+          if(payload.accountId!==source.players[0].id)throw new ApiError(409,'Only the connected room leader');
+          return {members:source.players.map(p=>({accountId:p.id,role:'player'}))};
+        }});
+      await rejects(sessions.control(source.players[1],source.id,'rematch'),409,/leader/);
+      assert.deepEqual(await sessions.control(source.players[0],source.id,'rematch'),{pending:true});
+      assert.equal(await target(source),undefined); assert.ok(calls.every(c=>c.action==='inspect'));
+      await db.query("UPDATE skribbil.matches SET status='completed',accepted_result_id=$2 WHERE id=$1",[source.id,source.resultId]);
+      const next=await sessions.control(source.players[0],source.id,'rematch');
+      assert.ok(next.matchId); assert.equal(calls.at(-1).action,'transfer');
+      assert.equal((await target(source)).status,'lobby');
+      assert.equal((await one(db,'SELECT accepted_result_id FROM skribbil.matches WHERE id=$1',[source.id])).accepted_result_id,source.resultId);
+    });
+
     await t.test('concurrent prior participants share one room with the previous private settings', async () => {
       const source = await completed({ privateRoom: false });
       const requests = [];
