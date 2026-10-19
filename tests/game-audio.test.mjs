@@ -164,3 +164,10 @@ test('HTML fallback also coalesces pops until completion', () => {
   f.played[0].listeners.get('ended')();
   f.audio.play('pop.wav', 0.5, { coalesce: true }); assert.equal(f.played.length, 3);
 });
+
+test('round-end audio can be decoded before the event without playing or bypassing mute',async()=>{
+ const f=webFixture();await f.audio.unlock();await f.audio.preload(['end-turn.wav']);
+ assert.equal(f.sources.length,0);assert.equal(f.counts().fetches,1);
+ await f.audio.play('end-turn.wav');assert.equal(f.sources.length,1);assert.equal(f.counts().fetches,1);
+ f.audio.setEnabled(false);await f.audio.preload(['other.wav']);assert.equal(f.counts().fetches,1);
+});

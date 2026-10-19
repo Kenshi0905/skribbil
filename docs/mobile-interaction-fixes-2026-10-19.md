@@ -40,3 +40,45 @@ drawer and guesser roles, exactly one received message, cleared draft, retained
 focus, both themes, narrow keyboard space, palette remaining open through drawing,
 name/score box separation and a correct-guess turn transition with zero recap
 elements. No production account or game data was changed during these checks.
+
+Follow-up: the mobile game header contains only branding, Copy invite and the
+room menu. The profile button is removed on mobile; theme switching remains in
+the room menu. During short-viewport input focus the entire toolbar is hidden,
+including Copy invite and the room menu, leaving round, hint and time above the
+canvas. Blur restores it. The active-play header is 44px otherwise. Desktop
+retains its profile and header controls. The mobile drawer omits the redundant
+canvas heading.
+
+The end-turn effect is decoded after a non-canvas user gesture and plays on
+actual turn endings, including the final game-over event. Initial waiting is
+quiet; existing mute, volume and word-choice effects are preserved.
+
+Explicit measurements on this workstation (not physical-phone measurements):
+
+| Measurement | Samples | Median | 95th percentile | Maximum |
+| --- | ---: | ---: | ---: | ---: |
+| Production pointer input to canvas pixel upload | 240 samples / 60 uploads | 16 ms | 19 ms | 20.8 ms |
+| Canonical line drawing CPU time | 240 | below timer resolution | 0.1 ms | 0.7 ms |
+| Local drawer-to-guesser WebSocket delivery | 50 | 0.249 ms | 0.546 ms | 0.799 ms |
+| Local guess-message acknowledgement | 8 | 1.053 ms | 1.155 ms | 1.155 ms |
+
+The browser benchmark uses the production input, canonical drawing and frame
+presenter at 1600×900 protocol resolution, displayed at mobile width. Upload
+timing does not measure physical display scanout. Transport measurements use
+event listeners, avoiding the test helper's 25ms polling delay; guesses are
+spaced to respect existing anti-spam rules. These loopback figures exclude
+internet latency and do not establish performance on an Android device.
+
+Follow-up validation: 249 Node tests, 248 passed, one optional external database
+test skipped; Go race tests passed. On-page Send was checked in drawer and
+guesser roles and both themes, including 320×300 and 390×350 visible viewports:
+one received message per tap, cleared draft, retained input focus, no horizontal
+overflow and input fully visible. With the toolbar hidden, the 390×350 guesser
+canvas grew from 98px to 146px high at its original 16:9 aspect ratio. The room
+menu and theme action were verified after blur. Native Gboard composition is
+covered by the regression test but still requires a real-device confirmation.
+
+The mobile drawing label uses 13px readable type, and reactions use 18px icons
+inside 46×44px buttons. Their dimensions remain the same before and after
+input focus; the canvas heading is consistently 44px. At 390×420 keyboard
+space the full canvas occupies 372×209px and the input ends at 411px.

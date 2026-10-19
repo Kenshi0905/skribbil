@@ -3,10 +3,18 @@ export function createGamePresentation({ avatar, doc = document }) {
   const byId = id => doc.getElementById(id);
   // The original menu trigger stays available in the round bar or phone header.
   const compactHeader = doc.defaultView.matchMedia('(max-width:900px)');
+  const themeControl = doc.querySelector('#game-profile-menu [data-theme-toggle]');
   const placeMenu = () => {
     const menu = byId('menu-button-container');
-    if (compactHeader.matches) byId('league-toolbar').insertBefore(menu, byId('game-profile-button'));
-    else byId('lobby-header').append(menu);
+    if (compactHeader.matches) {
+      byId('league-toolbar').insertBefore(menu, byId('game-profile-button'));
+      themeControl?.classList.add('menu-item','dialog-button');
+      if (themeControl) byId('menu').querySelector('.menu-list').append(themeControl);
+    } else {
+      byId('lobby-header').append(menu);
+      themeControl?.classList.remove('menu-item','dialog-button');
+      if (themeControl) byId('game-profile-menu').insertBefore(themeControl,byId('profile-game-menu'));
+    }
   };
   compactHeader.addEventListener('change', placeMenu);
   placeMenu();

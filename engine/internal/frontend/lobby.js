@@ -88,12 +88,19 @@ const kickDialogPlayers = document.getElementById("kick-dialog-players");
 
 const soundToggleLabel = document.getElementById("sound-toggle-label");
 const gameAudio = createGameAudio({ storage: localStorage });
+let roundSoundWarmed = false;
 // Browsers require user activation before Web Audio can make sound. Capture
 // both touch/mouse/pen gestures and keyboard controls without blocking them.
 for (const event of ["pointerdown", "pointerup", "keydown"]) {
     document.addEventListener(event, input => {
         // Warm sound on ready/menu/keyboard gestures, never on a canvas stroke.
-        if (input.target?.id !== 'drawing-board') gameAudio.unlock();
+        if (input.target?.id !== 'drawing-board') {
+            gameAudio.unlock();
+            if (!roundSoundWarmed && gameAudio.enabled && gameAudio.volume > 0) {
+                roundSoundWarmed = true;
+                gameAudio.preload(['{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}']);
+            }
+        }
     }, { capture: true, passive: true });
 }
 const soundVolume = document.getElementById("sound-volume");
@@ -1255,6 +1262,7 @@ const handleEvent = (parsed) => {
     } else if (parsed.type === "drawing-disliked") {
         appendMessage("system-message", '{{.Translation.Get "system"}}', drawingDislikeMessage(parsed.data));
     } else if (parsed.type === "game-over") {
+        playRoundEndSound();
         dislikeButton.disabled = true;
         likeButton.disabled = true;
         drawingReactions.hidden = true;
@@ -1362,6 +1370,7 @@ const handleEvent = (parsed) => {
         applyWordHints(parsed.data.hints);
         setAllowDrawing(drawerID === ownID);
     } else if (parsed.type === "next-turn") {
+        playRoundEndSound();
         galleryVoting?.onTurn?.();
         smoothTurnHandoff();
         dislikeButton.disabled = true;
@@ -1400,7 +1409,6 @@ const handleEvent = (parsed) => {
 
         //If a player doesn't choose, the dialog will still be up.
         wordDialog.style.visibility = "hidden";
-        playWav('{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}');
 
         clear(context);
 
@@ -1652,6 +1660,10 @@ function promptWords(data) {
         }),
     );
     wordDialog.style.visibility = "visible";
+}
+
+function playRoundEndSound() {
+    if (gameState === 'ongoing') playWav('{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}');
 }
 
 function playWav(file, gain = 1, coalesce = false) {
