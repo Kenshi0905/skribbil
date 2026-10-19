@@ -175,7 +175,9 @@ body[data-league-mode]:has(#room-look-panel:not([hidden])) #lobbysettings-dialog
   body[data-league-mode] #app { padding: 0 8px max(8px,env(safe-area-inset-bottom)); }
   body[data-league-mode] #league-toolbar { min-height: 58px; max-height: 58px; padding: 4px 0; gap: 6px; }
   .game-brand img { width: 150px; height: 44px; }
-  #league-toolbar .league-home-link, #league-toolbar .game-leaderboards, #league-toolbar .league-theme-toggle, #league-toolbar .mobile-gallery-link { display: none; }
+  #league-toolbar .game-leaderboards, #league-toolbar .league-theme-toggle, #league-toolbar .mobile-gallery-link { display: none; }
+  #league-toolbar .league-home-link { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; border-radius: 10px; font: 700 28px/1 var(--font-body); }
+  #league-toolbar .league-home-link:focus-visible { outline: 2px solid var(--yellow); outline-offset: -2px; }
   #league-toolbar button.league-theme-toggle { display: none !important; }
   #league-toolbar #copy-room-invite { width: 40px; min-width: 40px; padding: 0; font-size: 0; }
   #league-toolbar #copy-room-invite .invite-label { display: none; }
