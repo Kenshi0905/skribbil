@@ -7,124 +7,154 @@
 
 ### Draw terribly. Guess brilliantly.
 
-The **Clubhouse** is our community home: shared profiles, private friend groups,
-clans, tournaments, and admin-created leagues. **Skribbil** is its first game,
-with the original
-[scribble.rs](https://github.com/scribble-rs/scribble.rs) drawing game.
-The familiar canvas, guesses, rounds, and real-time rooms still run on its Go
-engine. Accounts and community identity are shared foundations for future games;
-only Skribbil is playable today. Open **Play** to create a room or paste an invite
-code; open **Clubhouses** for invite-only groups. Saved avatars appear beside
-players' ranks and scores inside the game.
+A drawing game for your crew, with a community to come back to. Create a room,
+share an invite, pick a word, and watch your friends guess everything except
+the answer.
 
-Make your permanent avatar in the **Character Workshop**. Before a managed game,
-**Edit room look** gives you a temporary name and preset character just for that
-match. Your profile stays unchanged; guests ready up and the host starts the game.
+**[Play Skribbil →](https://skribbil.pages.dev)** ·
+[Run locally](#run-locally) · [Screenshots](#the-new-ui) ·
+[Features](#more-than-a-game-room) · [Development](#development-and-verification)
 
-**[Play Skribbil →](https://skribbil.pages.dev)**
+[![Verify Skribbil](https://github.com/Kenshi0905/skribbil/actions/workflows/test.yml/badge.svg)](https://github.com/Kenshi0905/skribbil/actions/workflows/test.yml)
 
 **Live casual preview · Free hosting · Ranked disabled**
 
-Register at the live site and create a private room. The free backend may need
-about a minute to wake after inactivity.
+Skribbil runs on the original [scribble.rs](https://github.com/scribble-rs/scribble.rs)
+Go engine, with shared accounts, custom avatars, private Clubhouses, friends,
+progression, galleries, and league infrastructure around it. **Skribbil is the
+only playable game today.** The free backend may take about a minute to wake
+after inactivity.
+
+## The new UI
+
+Blue doodle backgrounds, white panels, chunky cartoon headings, purple accents,
+and a coordinated charcoal dark theme. The drawing stays at the center, with
+player scores on the left and chat on the right on desktop.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/clean-community-dark.jpg">
-  <img src="docs/media/clean-community-light.jpg" alt="The clean community home: create or join a room, friends, available rooms, XP, quests and leaderboard.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/game-guesser-dark.jpg">
+  <img src="docs/media/game-guesser-light.jpg" alt="Redesigned desktop guesser view: masked word, timer, player scores, a synchronized house drawing, reactions, gallery votes, and chat.">
 </picture>
 
-*The running local app with disposable test players. Rooms, rankings, and progress
-come from saved activity; new communities start empty. [UI verification](docs/ui-revamp-verification.md).*
+*Current game screenshots captured from the running local app on 19 October
+2026, using disposable test accounts and real engine connections. The drawings
+are demonstration artwork; the screenshots are not design mockups or production
+matches. [Media notes and full-size images](docs/media/README.md).*
 
-[Run locally](#run-locally) · [Find your people](#find-your-people) ·
-[Watch the demo](#the-original-game-with-a-community-around-it) ·
-[Architecture](docs/architecture.md) · [Feature status](docs/feature-status.md)
-
-## The original game, with a community around it
-
-Pick a word. Draw something questionable. Watch your friends guess everything
-except the answer. Skribbil keeps that experience inside the original Go engine,
-with a small league extension for identity, results, and the dislike penalty.
-
-[![An edited local gameplay demonstration showing the original drawing canvas and synchronized test players.](docs/media/gameplay.gif)](https://github.com/Kenshi0905/skribbil/raw/refs/heads/main/docs/media/gameplay.mp4)
-
-**[Download the silent gameplay video →](https://github.com/Kenshi0905/skribbil/raw/refs/heads/main/docs/media/gameplay.mp4)**
-The GIF plays here; download the MP4 for a larger, silent clip. GitHub does not
-provide an inline player for repository MP4 files.
+| During a game | What you see |
+| --- | --- |
+| **Drawing** | Your private word, the complete canvas, pencil/fill/eraser, the original 26-color palette, four brush sizes, undo, clear, and keyboard shortcuts. |
+| **Guessing** | The masked word and existing hints, timer, chat input, and green/red icon-and-count reactions outside the artwork. |
+| **Watching** | The live room and chat, with spectator restrictions preserved. |
+| **Between turns** | A brief automatic “The word was…” reveal, followed by the next artist choosing a word. No Continue button; sound respects mute and volume settings. |
+| **After the match** | Final standings and results. The host’s **Play again** waits for saving, then brings everyone to the same waiting room. |
 
 <details>
-<summary>See the desktop game screen</summary>
+<summary>See the drawer’s tools in light and dark mode</summary>
 
-![The original game screen: player scores, drawing canvas, and guesses.](docs/media/gameplay-desktop.jpg)
+![Light desktop drawer view with the private word, original tools, brush sizes, full palette, and shortcuts beneath the canvas.](docs/media/game-drawer-light.jpg)
+
+![Dark desktop drawer view with charcoal panels and a white drawing canvas.](docs/media/game-drawer-dark.jpg)
 
 </details>
 
-The screenshots and animation are edited screen captures from an **automated
-local test with synthetic accounts**. They show the running application, not
-human matches or captures of the deployed service. [Capture notes and evidence](docs/media/README.md).
+### Mobile: canvas and typing first
 
-## Find your people
-
-| Place | What it is |
-| --- | --- |
-| **The commons** | The shared home: discover rooms, check progress, and find the next event. |
-| **Clubhouses** | Invite-only friend groups. A platform admin creates one or approves a player's request. Members can start, join, and watch private rooms together. |
-| **Clans / teams** | Competitive teams with a name, tag, logo, captain, and roster for team tournaments. A clan is separate from a Clubhouse. |
-| **The league** | Shared competition infrastructure: seasons, historical results, tournaments, and all-time records. |
-
-![A private Clubhouse with its room list, member roster, invitation controls, and owner actions.](docs/media/clubhouse.jpg)
-
-*A synthetic demonstration Clubhouse. Even with a room link, playing or spectating
-requires current membership. Platform admins who are not members cannot join.*
-
-Your account, friends, cosmetics, teams, and league identity belong to the
-community. **Skribbil is the only playable game today**; the schema and adapter
-boundary let future games share that identity and league.
-
-## A smaller screen, the same canvas
+The full canvas keeps its original proportions. **Chat / Players / Gallery
+votes** sit below it, and the drawer’s palette stays open while drawing. A
+compact header keeps Back, Copy invite, and the room menu within reach.
 
 <p align="center">
-  <img src="docs/media/clean-community-phone.jpg" width="230" alt="The community home in a real narrow web viewport: room actions first, followed by standings, quests and XP." />
-  &nbsp;&nbsp;
-  <img src="docs/media/gameplay-phone.jpg" width="230" alt="The native game in a narrow browser viewport, with canvas, stacked chat, and a Send button." />
+  <img src="docs/media/game-mobile-drawer.jpg" width="260" alt="Mobile drawer in light mode, with a complete canvas, compact tools, and the full inline color palette.">
+  &nbsp;
+  <img src="docs/media/game-mobile-guesser.jpg" width="260" alt="Mobile guesser in dark mode, with masked word, reactions, Chat and Players tabs, Gallery votes, and a visible Send button.">
 </p>
 
-*Narrow browser captures. The community scrolls naturally; the game resizes its
-full canvas above the guess field when the visible viewport shrinks. Saved dark
-mode remains available. These are viewport checks, not physical-phone photographs
-or proof of real-device touch behavior. The gameplay clip above predates the
-latest compact tools and gallery panel.*
+When typing in a short mobile viewport, the toolbar and secondary chat history
+compact away. Round, time, hint, complete artwork, tabs, and the guess field stay
+visible. The on-page Send button keeps input focus and supports an explicit tap
+during keyboard composition; the normal layout returns after typing.
 
-## What you can do
+<p align="center">
+  <img src="docs/media/game-mobile-typing.jpg" width="390" alt="Dark mobile typing layout at 390 by 420 CSS pixels: the complete house drawing, round, time, masked word, compact tabs, input, and Send remain visible.">
+</p>
 
-- **Make it yours:** profiles, cropped photo avatars, admin-assigned titles and frames, match
-  history, XP, daily/weekly challenges, achievements, and trophies.
-  In **Your profile → Avatar**, build a character from preset hair, eyes, brows,
-  mouths, accessories, and colors, or crop your own PNG/JPEG/WebP photo (up to 8 MiB and 25 megapixels). Preview,
-  randomize, and reset your character before saving. Save your
-  look to use it across the account menu, friends list, and leaderboards.
-- **Set the mood:** quieter pop effects, saved sound volume, and a one-click mute.
-- **Play together:** configurable private rooms, spectators, friends, parties,
-  Clubhouse invitations, team rosters, and a shared quick-rematch room.
-- **Run a competition:** individual/team registration, brackets, seasons,
-  standings, and audited tools for fixture results, disputes, and score corrections.
-- **Keep the good doodles:** automatic archives, artist-controlled publication
-  consent, curated Halls of Fame and Shame, MVP votes, and match summary cards.
+*This is a reduced browser viewport reserving keyboard space, without a fake
+keyboard or browser chrome. Physical Android/iOS keyboard and stylus checks
+remain necessary. [Interaction checks and measured latency](docs/mobile-interaction-fixes-2026-10-19.md).*
 
-Tournament fixture results are currently entered by an admin. Replay downloads
-contain final canonical drawing operations, not timed stroke-by-stroke playback.
-See the [complete feature and limitation table](docs/feature-status.md).
+### Get the room ready
+
+Copy an invitation, see who is ready, edit the room settings, and try a temporary
+room look before starting. Guests ready up; the host starts once eligible.
+**Play again returns everyone here**, carrying room identities into a fresh
+session with zero scores. It never starts the next match automatically.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/waiting-room-dark.jpg">
+  <img src="docs/media/waiting-room-light.jpg" alt="Waiting room with invitation controls, player and ready counts, room settings, host-only Start, and Edit room look.">
+</picture>
+
+<details>
+<summary>Room settings and the room-look editor</summary>
+
+![Lobby settings with drawing time, rounds, maximum players, public visibility, word choices, custom-word count, and per-IP limit.](docs/media/lobby-settings.jpg)
+
+![Room-look editor with the original avatar renderer, live preview, temporary display name, quick styles, Face/Hair/Colors/Extras tabs, Cancel, and Apply.](docs/media/room-look-editor.jpg)
+
+</details>
+
+The **Character Workshop** saves your permanent profile avatar. **Edit room
+look** changes only your identity in that room: live preview, display name,
+Face/Hair/Colors/Extras, Cute/Anime/Goofy/Chaos styles, **Surprise me**, and
+**Use my profile look**. Apply confirms the draft; Cancel discards it. The
+existing flat SVG artwork and uploaded-photo support are shared across profile
+menus, player lists, chat, leaderboards, and previews.
+
+## More than a game room
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/clean-community-dark.jpg">
+  <img src="docs/media/clean-community-light.jpg" alt="Community home with create/join room actions, friends, available rooms, XP, quests, and leaderboard.">
+</picture>
+
+*Community-home capture from 15 October 2026 using local test activity. New
+communities start with empty progress and standings.*
+
+| Feature | What’s included |
+| --- | --- |
+| **Profiles and identity** | Character Workshop, cropped PNG/JPEG/WebP photos, account settings, match history, XP, challenges, achievements, trophies, and admin-assigned titles/frames. |
+| **Play together** | Configurable private rooms, invites, spectators, friends, parties, readiness, host controls, and shared rematches. |
+| **Clubhouses** | Invite-only friend groups created or approved by a platform admin. Members can start, join, and watch their private rooms; links still require membership. |
+| **Clans / teams** | Captains, tags, logos, rosters, and recipient-bound invitations, separate from Clubhouses. |
+| **Leagues and tournaments** | Seasons, individual/team registration, brackets, historical results, all-time records, disputes, and audited score corrections. Tournament fixture results are currently entered by an admin. |
+| **Art and gallery votes** | Automatic drawing archives, separate gallery nominations, artist-controlled publication consent, curated Halls of Fame/Shame, MVP votes, and summary cards. |
+| **Sound and themes** | Saved light/dark preference, volume, mute, word-choice effects, and an end-turn sound including the final turn. |
+
+Replay downloads contain final canonical drawing operations, rather than timed
+stroke-by-stroke playback. See [feature status](docs/feature-status.md) for the
+full implementation and limitation table.
+
+<details>
+<summary>See a private Clubhouse and the earlier engine demo</summary>
+
+![A synthetic private Clubhouse with rooms, members, invitations, and owner actions.](docs/media/clubhouse.jpg)
+
+[Earlier gameplay video](https://github.com/Kenshi0905/skribbil/raw/refs/heads/main/docs/media/gameplay.mp4)
+· [Animated preview](docs/media/gameplay.gif). These edited local captures are
+from 12 October 2026 and predate the redesigned game UI shown above.
+
+</details>
 
 ### The unanimous dislike penalty
 
 Each eligible player can dislike a drawing once. When **every player in the
-turn's frozen voting group** votes, the artist immediately loses exactly
+turn’s frozen voting group** votes, the artist immediately loses exactly
 **100 points**, once, and faces a harder word on their next drawing turn.
 The artist and spectators do not vote; disconnecting never lowers the threshold.
-
-Go applies this under its existing room lock. All offered choices and the timeout
-choice use the hard pool, and the platform carries pending account-bound penalties
-across matches. [Implementation and delivery limits](docs/engine-integration.md).
+All offered choices and the timeout choice use the hard pool, and the platform
+carries pending account-bound penalties across matches.
+[Rules and delivery limits](docs/engine-integration.md).
 
 ## Run locally
 
@@ -153,123 +183,106 @@ Set-Location ..
 npm run dev
 ```
 
-Open [Skribbil locally](http://localhost:3000), register, and create a private room.
-The launcher starts both services. `PORT` and `ENGINE_PORT` change their defaults,
-3000 and 4181. `npm start` runs only the platform; set `ENGINE_URL` if Go runs separately.
+Open [localhost:3000](http://localhost:3000), register, and create a private room.
+Open the invite in a separate browser profile/device for a second account.
+Guests ready up in the waiting room, then the host starts.
 
-Embedded PostgreSQL persists in `.data/postgres`, private artwork in
+The launcher starts both services. `PORT` and `ENGINE_PORT` change their defaults,
+3000 and 4181. `npm start` runs only the platform; set `ENGINE_URL` if Go runs
+separately. Embedded PostgreSQL persists in `.data/postgres`, private artwork in
 `.data/assets`, and generated development secrets inside `.data/`. These paths
-are Git-ignored. Accounts and results use the database, not browser-only demo state.
+are Git-ignored; accounts and results use the database.
 
 ### Account settings and local administration
 
 Use the account menu → **Account settings** to edit your profile or change your
-password. Changes verify the current password, sign out other sessions, and keep
-the requesting browser signed in with a new session.
+password. Password changes verify the current password, sign out other sessions,
+and keep this browser signed in with a fresh session. Login/registration use a
+browser-session cookie by default; **Remember me on this device** requests the
+normal seven-day persistent session. Session tokens use HttpOnly cookies.
 
-To grant your registered account local admin access, **stop the dev server first**:
+Photo uploads stay local until **Crop and save**. Pan, zoom, reset, or cancel;
+accepted PNG/JPEG/WebP files are limited to 8 MiB and 25 megapixels. The server
+validates and re-encodes the cropped image. Permanent titles are assigned through
+audited administrator controls.
+
+To grant your registered account **local** admin access, stop the dev server first:
 
 ```sh
 npm run admin -- YOUR_REGISTERED_USERNAME
 npm run dev
 ```
 
-Replace the placeholder with your username. The embedded database allows one
-process at a time. Admins approve Clubhouse requests, manage competitions, review
-disputes, curate consented artwork, and record audited corrections.
+The embedded database allows one process at a time. Admins approve Clubhouse
+requests, manage competitions, review disputes, curate consented artwork, and
+record audited corrections.
 
-Configuration is in [.env.example](.env.example). Keep real passwords, tokens,
-personal data, and private assets out of Git. Use ignored local files or the
-host's secret environment, and review staged changes before pushing.
-Enable the included commit/push guards with
-`git config core.hooksPath .githooks`. The push guard inspects all outgoing commits,
-including intermediate versions. `npm run check:secrets` adds a repository check; it cannot guarantee that every
-possible secret or personal detail will be detected.
+## Development and verification
 
-## Under the hood
-
-The plain JavaScript/CSS frontend talks to a Node platform for accounts,
-membership, progression, and results. The pinned Go engine owns drawing,
-guessing, timers, and concurrent rooms. The gateway streams WebSocket traffic
-without rewriting game packets; authenticated asynchronous results enter
-transactional receipts and ledgers that prevent duplicate awards.
-
-After a match ends, unpublished drawings expire within **24 hours** and canonical replay data within **one hour**. Gallery votes add no image copies.
-Public artwork needs artist consent and admin selection; active curation and
-legal holds affect retention. Production uses PostgreSQL for metadata and a
-private object store for artwork. Local OMV hosting is deferred.
-
-| Read next | What you'll find |
-| --- | --- |
-| [Schema](database/schema.sql) · [Data model](docs/data-model.md) | Universal accounts, game modules, social groups, seasons, and drawing metadata. |
-| [Architecture and storage](docs/architecture.md) | Service boundaries and OMV versus object storage: privacy, bandwidth, NAT, uptime, and database load. |
-| [Engine integration](docs/engine-integration.md) | Preserved Go flow, voting rules, harder words, and delivery guarantees. |
-| [Feature status](docs/feature-status.md) · [Verification](docs/verification.md) | Implemented behavior, incomplete features, and launch limitations. |
-| [Live deployment](docs/free-deployment.md) | Hosting, production configuration, verified checks, and free-tier limits. |
-| [Gallery voting and cleanup](docs/gallery-voting.md) · [Word research](docs/word-selection-research.md) | Separate nominations, retention, observed behavior, and our versioned difficulty model. |
-| [Changelog](CHANGELOG.md) | Major implementation changes. |
-
-## Verification and launch status
-
-Local verification includes **10 real WebSocket player connections plus a
-spectator**. Three clients used mobile user-agent strings, which tests protocol
-behavior rather than phone input. Browser layouts were inspected at **360, 390,
-and 430 CSS pixels**, alongside automated pointer-event tests. Physical phone,
-stylus, and on-screen-keyboard testing remain outstanding.
+The plain JavaScript/CSS frontend uses shared design tokens and reusable
+components. Node handles accounts, membership, progression, artwork, and results.
+The pinned Go engine owns drawing, guesses, timers, scoring, and concurrent
+rooms. The gateway streams WebSockets without rewriting game packets;
+authenticated results enter transactional receipts and ledgers that prevent
+duplicate awards.
 
 ```sh
 npm test
 npm run check
 npm run check:secrets
 node --test infra/tests/*.test.mjs
+node tests/playtest-10.mjs
+node tests/playtest-10.mjs --room-sessions
 cd engine
 go test -race ./...
 ```
 
-Go's race detector needs a supported C toolchain. On Windows, use suitable
-64-bit GCC and `CGO_ENABLED=1`; CI runs race checks on Ubuntu. These checks and
-media demonstrate local behavior, not production load capacity.
+Build the local engine first as above. The protocol playtests default to
+`.tools/skribbil-engine.exe`; on macOS/Linux, run
+`export ENGINE_BINARY=.tools/skribbil-engine` before either playtest. Set
+`ENGINE_BINARY` for any other binary path. Go’s race detector needs a supported
+C toolchain. On Windows, use suitable 64-bit GCC and `CGO_ENABLED=1`; CI runs
+race checks on Ubuntu.
 
-**The casual preview launched on 13 October 2026 at [skribbil.pages.dev](https://skribbil.pages.dev).**
-Cloudflare Pages serves the website; [the Render service](https://skribbil.onrender.com)
-runs Node and Go together in Singapore. PostgreSQL and private artwork storage
-use Supabase Free in the Skribbil Games organization. All services use Free plans,
-with automatic deployment after all four CI checks pass on `main`. GitHub Actions
-deploys the tested server revision before publishing the website. Pages backend
-bindings exist only in production; preview bindings are empty. The **Dark** toggle
-in the top bar remembers your theme, including in game rooms.
+Verification covers ten real WebSocket players plus a spectator, drawing/input
+regressions, both themes, narrow browser layouts, on-page Send taps in short
+viewports, automatic answer reveals, and a two-game rematch flow. The rematch
+test deliberately delays result saving, then checks everyone returns to an
+unstarted room, can edit their look, and needs guest readiness plus explicit
+host Start. Local latency measurements are workstation/loopback results, not
+physical-phone or internet performance guarantees.
 
-The initial launch was verified at [`dab93f4`](https://github.com/Kenshi0905/skribbil/commit/dab93f4),
-with all four jobs passing in [CI run 38290967168](https://github.com/Kenshi0905/skribbil/actions/runs/38290967168).
-Live site/backend health checks, verified PostgreSQL TLS, and private S3 upload,
-signed read, anonymous-read denial, and deletion have passed. Two real administrator
-accounts were provisioned privately. No account credentials are published.
-Live authentication and WSS checks passed with two players and one spectator in
-an unstarted private room, including chat, spectator restrictions, and account
-identity enforcement. A separate two-player reconnect check passed with graceful
-close acknowledgement, preserved identity, an empty canvas, and zero scores.
-All five temporary accounts and both unstarted rooms were removed in a guarded
-transaction; the two real administrators remain, with zero matches, results, or
-drawings. No full production match was started. See the
-[verification record](docs/verification.md) for evidence and remaining checks.
+Configuration is in [.env.example](.env.example). Keep real passwords, tokens,
+personal data, and private assets out of Git. Enable the commit/push guards with
+`git config core.hooksPath .githooks`; the secret check supplements manual review.
 
-The friend-request update [`4b8d013`](https://github.com/Kenshi0905/skribbil/commit/4b8d013317ed301cc1ee12d9b262c84bd159c4dc)
-adds explicit Accept/Decline controls for incoming requests and separate sent
-requests. All four [CI jobs passed](https://github.com/Kenshi0905/skribbil/actions/runs/38297170524);
-desktop and 390 × 844 browser checks passed using isolated local accounts. Its
-Render backend and Pages frontend are live at that revision. Live assets match
-the tested files, and bootstrap reports the engine available. Accept/Decline
-behavior was tested locally; existing production friendships were untouched.
-[Update evidence](docs/verification.md#friend-request-update).
+### Hosting and current limits
 
-Free hosting can sleep, restart, or suspend service at its quotas. Do not add a
-payment method or upgrade a plan to bypass those limits.
+[Cloudflare Pages](https://skribbil.pages.dev) serves the website;
+[Render](https://skribbil.onrender.com) runs Node and Go together in Singapore;
+Supabase provides PostgreSQL and private artwork storage. The free preview
+deploys the tested server revision before the website, after the platform,
+engine, multiplayer, and container CI jobs pass on `main`.
 
-Ranked is disabled by default and forcibly disabled in the free preview profile.
-Live Go rooms are in memory, and container replacement can lose the local outbox.
-Official ranked launch needs durable result delivery and further validation.
-Production also requires external PostgreSQL and private object storage; it
-refuses ephemeral local storage as a substitute.
+Free hosting can sleep, restart, or reach its quotas. Live Go rooms are in
+memory and do not survive a process restart; container replacement can also lose
+the local outbox. **Ranked remains disabled.** Production load/recovery and
+physical Android/iOS keyboard, touch, and stylus validation remain outstanding.
+Production requires external PostgreSQL and private object storage.
+
+Unpublished drawings expire within **24 hours** of match completion and
+canonical replay data within **one hour**. Gallery votes add no image copies.
+Public artwork requires artist consent and admin selection; active curation
+and legal holds affect retention.
+
+| Read next | Details |
+| --- | --- |
+| [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Schema](database/schema.sql) | Service boundaries, accounts, communities, leagues, and storage. |
+| [Feature status](docs/feature-status.md) · [Verification](docs/verification.md) | Implemented behavior, test evidence, and launch limits. |
+| [Mobile interactions](docs/mobile-interaction-fixes-2026-10-19.md) · [Rematch flow](docs/rematch-waiting-room-2026-10-19.md) | Send/input, drawing latency measurements, and return-to-waiting behavior. |
+| [Engine integration](docs/engine-integration.md) · [Gallery voting](docs/gallery-voting.md) | Preserved game rules, authenticated results, votes, and retention. |
+| [Live deployment](docs/free-deployment.md) · [Changelog](CHANGELOG.md) | Hosting configuration and implementation history. |
+| [Screenshot notes](docs/media/README.md) | Capture dates, themes, viewport sizes, and earlier demo media. |
 
 ## Credits and license
 
@@ -280,14 +293,3 @@ and the [pinned upstream revision](engine/UPSTREAM.md).
 
 This is an independent community project. The name **Skribbil** and new community
 artwork do not remove or replace upstream license obligations.
-## Character workshop and room looks
-
-Characters now have separate face, ears, nose, hair, eyes, brows, mouth, and extras, with Cute, Anime, Goofy, and Chaos randomizers. Existing v1 artwork remains unchanged. A feature edit upgrades the draft to v2; saving makes it your permanent profile avatar.
-
-Managed pre-game rooms have a large live preview. Draft names and presets stay local until **Apply room look** succeeds. **Cancel** returns to the confirmed room look; **Use my profile look** previews your permanent identity and still requires Apply. The host starts after connected guests ready. Room identities survive reconnects and reset in a fresh rematch.
-
-## Account and photo controls
-
-Login and registration default to a browser-session cookie. Check **Remember me on this device** to keep the normal seven-day persistent session; server expiry still applies, and password changes revoke other sessions while retaining this device’s choice. Session tokens use HttpOnly cookies; the app does not save passwords in browser storage.
-
-Photo uploads stay on your device until **Crop and save**. Pan with mouse/touch or arrow keys, zoom, reset, or cancel. The square 512×512 PNG export is decoded and validated again on the server, with metadata removed. Profile titles are read-only for players; administrators select existing title definitions or restore Rookie through the audited title action. **How it works** remains in the footer.
