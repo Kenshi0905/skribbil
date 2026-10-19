@@ -12,6 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestScriptCacheIncludesResourceChanges(t *testing.T) {
+	a := scriptCacheSource("module", map[string]string{"tools.js": "old", "canvas.js": "stable"})
+	b := scriptCacheSource("module", map[string]string{"canvas.js": "stable", "tools.js": "old", "index.js": "entry"})
+	require.Equal(t, a, b, "map order and entry hashes must not affect the resource seed")
+	c := scriptCacheSource("module", map[string]string{"tools.js": "new", "canvas.js": "stable"})
+	require.NotEqual(t, a, c, "updated imports must invalidate the cached entry point")
+}
+
 func TestManagedSpectatorControlsBeforeSocketConnects(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {

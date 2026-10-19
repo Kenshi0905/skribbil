@@ -283,7 +283,7 @@ export async function createApp({db,config,assets}={}) {
         requireValue(req.method==='GET'||req.method==='HEAD','Method not allowed.',405);
         const filename=resolve(webRoot,'.'+decodeURIComponent(path==='/'?'/index.html':path));
         requireValue(filename.startsWith(webRoot+'\\')||filename.startsWith(webRoot+'/'),'Not found.',404);
-        const ext=extname(filename),types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+        const ext=extname(filename),types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.ttf':'font/ttf'};
         requireValue(types[ext]&&!filename.endsWith('_worker.js'),'Not found.',404);
         let file;try{file=await readFile(filename);}catch{throw new ApiError(404,'Not found.');}
         res.setHeader('Content-Type',types[ext]);res.setHeader('Cache-Control','no-cache');res.end(req.method==='HEAD'?undefined:file);return;

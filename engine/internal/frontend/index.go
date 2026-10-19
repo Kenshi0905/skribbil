@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	txtTemplate "text/template"
 
 	"github.com/scribble-rs/scribble.rs/internal/api"
@@ -27,6 +29,27 @@ var lobbyJsRaw string
 
 //go:embed index.js
 var indexJsRaw string
+
+// The templated module contains cache-busted import URLs. A dependency change
+// must also invalidate this entry point, otherwise browsers retain old imports.
+func scriptCacheSource(source string, checksums map[string]string) []byte {
+	keys := make([]string, 0, len(checksums))
+	for key := range checksums {
+		if key != "index.js" && key != "lobby.js" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	var seed strings.Builder
+	seed.WriteString(source)
+	for _, key := range keys {
+		seed.WriteByte(0)
+		seed.WriteString(key)
+		seed.WriteByte(0)
+		seed.WriteString(checksums[key])
+	}
+	return []byte(seed.String())
+}
 
 type indexJsData struct {
 	*BasePageConfig
@@ -93,10 +116,10 @@ func NewHandler(cfg *config.Config) (*SSRHandler, error) {
 			return nil, fmt.Errorf("error hashing resource %s: %w", entry.Name(), err)
 		}
 	}
-	if err := basePageConfig.Hash("index.js", []byte(indexJsRaw)); err != nil {
+	if err := basePageConfig.Hash("index.js", scriptCacheSource(indexJsRaw, basePageConfig.checksums)); err != nil {
 		return nil, fmt.Errorf("error hashing: %w", err)
 	}
-	if err := basePageConfig.Hash("lobby.js", []byte(lobbyJsRaw)); err != nil {
+	if err := basePageConfig.Hash("lobby.js", scriptCacheSource(lobbyJsRaw, basePageConfig.checksums)); err != nil {
 		return nil, fmt.Errorf("error hashing: %w", err)
 	}
 

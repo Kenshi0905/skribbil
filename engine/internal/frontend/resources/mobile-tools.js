@@ -32,10 +32,12 @@ export function attachMobileTools(doc = document, view = window) {
     galleryLink = doc.createElement("button");
     galleryLink.type = "button";
     galleryLink.className = "mobile-gallery-link dialog-button";
-    galleryLink.textContent = "Gallery";
+    galleryLink.textContent = "Gallery votes";
     galleryLink.setAttribute("aria-controls", "gallery-voting");
     galleryLink.addEventListener("click", openGallery);
-    doc.getElementById("league-toolbar").append(galleryLink);
+    if (doc.body.dataset.leagueMode)
+      doc.getElementById("chat").insertBefore(galleryLink, doc.getElementById("message-form"));
+    else doc.getElementById("league-toolbar").append(galleryLink);
     galleryMenu = doc.createElement("button");
     galleryMenu.type = "button";
     galleryMenu.className = "menu-item dialog-button";
@@ -44,7 +46,7 @@ export function attachMobileTools(doc = document, view = window) {
     menu.append(galleryMenu);
     galleryObserver = new view.MutationObserver(() => {
       const count = Number(gallery.getAttribute("data-pending") || 0);
-      galleryLink.textContent = count ? `Gallery (${count})` : "Gallery";
+      galleryLink.textContent = count ? `Gallery votes (${count})` : "Gallery votes";
     });
     galleryObserver.observe(gallery, {
       attributes: true,
@@ -54,11 +56,8 @@ export function attachMobileTools(doc = document, view = window) {
   let placementFrame = 0;
   const placeReactions = () => {
     placementFrame = 0;
-    const keyboard =
-      (view.visualViewport?.height ?? view.innerHeight) < 500 &&
-      doc.activeElement?.id === "message-input";
-    const destination =
-      media.matches && !keyboard ? doc.getElementById("lobby") : reactionHome;
+    const keyboard = (view.visualViewport?.height ?? view.innerHeight) < 500 && doc.activeElement?.id === 'message-input';
+    const destination = doc.body.dataset.leagueMode ? doc.getElementById('canvas-frame-heading') || reactionHome : media.matches && !keyboard ? doc.getElementById('lobby') : reactionHome;
     if (reactions.parentElement !== destination) destination.append(reactions);
   };
   const schedulePlacement = () => {
@@ -108,7 +107,7 @@ export function attachMobileTools(doc = document, view = window) {
       menu.append(clear);
       clear.classList.add("menu-item", "dialog-button");
     } else {
-      reactionHome.append(reactions);
+      placeReactions();
       clearHome.insertBefore(clear, clearNext);
       clear.classList.remove("menu-item", "dialog-button");
     }

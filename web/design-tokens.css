@@ -1,0 +1,64 @@
+@font-face {
+  font-family: 'Baloo 2';
+  src: url('/assets/fonts/baloo-2.ttf') format('truetype');
+  font-weight: 400 800;
+  font-display: swap;
+}
+:root {
+  --font-play: 'Baloo 2', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --font-body: 'Segoe UI', system-ui, sans-serif;
+  --paper: #f7f8fc;
+  --white: #fff;
+  --surface: #fff;
+  --surface-raised: #f5f3fc;
+  --ink: #181735;
+  --muted: #626580;
+  --line: #dcddea;
+  --purple: #6925dc;
+  --purple-light: #f0eafb;
+  --accent-fill: #6925dc;
+  --on-accent: #fff;
+  --yellow: #ffcf44;
+  --radius-panel: 14px;
+  --radius-control: 10px;
+  --control-height: 44px;
+  --shadow: none;
+}
+:root[data-theme='dark'] {
+  --paper: #111820;
+  --white: #1c242f;
+  --surface: #1c242f;
+  --surface-raised: #252e3b;
+  --ink: #f7f5ff;
+  --muted: #b7bbd1;
+  --line: #394354;
+  --purple: #b797ff;
+  --purple-light: #352b52;
+  --accent-fill: #8850ed;
+  --on-accent: #fff;
+  --yellow: #ffdd6a;
+}
+body { font-family: var(--font-body); }
+h1, h2, h3, .dialog-title, .page-heading h1, .section-title, .avatar-preview-name {
+  font-family: var(--font-play);
+  font-weight: 800;
+  line-height: 1.15;
+}
+:is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid var(--purple);
+  outline-offset: 3px;
+}
+/* The community pages use the same controls and quiet surfaces as the game. */
+.button, .icon-button, .modal, .panel, .form-field :is(input, select, textarea) {
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+.modal { border: 1px solid var(--line); border-radius: 18px; }
+.avatar, .community-player-avatar, .room-look-avatar { isolation: isolate; }
+.avatar img, .community-player-avatar img, .room-look-avatar img { object-fit: cover; }
+img[src*='/api/avatar-presets/'] { object-fit: contain; }
+.modal:has(.avatar-mode-options), .avatar-editor-preview, .avatar-mode-option,
+.avatar-option, .avatar-feature-tab { box-shadow: none; border-color: var(--line); border-radius: 12px; }
+.avatar-editor-preview::before, .avatar-option.selected::after { display: none; }
+.avatar-option.selected, .avatar-mode-option.selected { border-color: var(--purple); }
+.avatar-feature-tab.selected { background: var(--accent-fill); color: var(--on-accent); }

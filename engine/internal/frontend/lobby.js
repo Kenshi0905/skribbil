@@ -7,6 +7,7 @@ import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-se
 import { attachMobileViewport } from './resources/{{.WithCacheBust "mobile-viewport.js"}}';
 import { attachMobileTools } from './resources/{{.WithCacheBust "mobile-tools.js"}}';
 import { createRoomExit } from './resources/{{.WithCacheBust "room-exit.js"}}';
+import { createGamePresentation } from './resources/{{.WithCacheBust "game-presentation.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -564,7 +565,7 @@ const size32buttonWrapper = document.getElementById("size-32-button-wrapper");
 
 pencilImage.setAttribute(
     "title",
-    `${pencilImage.getAttribute("title")} (${keyboardManager.get("pencil")})`,
+    `${pencilImage.getAttribute("title")} (${keyboardManager.get("pen")})`,
 );
 eraserImage.setAttribute(
     "title",
@@ -578,6 +579,13 @@ undoImage.setAttribute(
     "title",
     `${undoImage.getAttribute("title")} (${keyboardManager.get("undoModifier")}+${keyboardManager.get("undo")})`,
 );
+const toolbarShortcuts = document.getElementById("tool-shortcuts");
+if (toolbarShortcuts) {
+    const tools = document.createElement("span"), undo = document.createElement("span");
+    tools.textContent = `${keyboardManager.get("pen").toUpperCase()} pencil · ${keyboardManager.get("bucket").toUpperCase()} fill`;
+    undo.textContent = `${keyboardManager.get("rubber").toUpperCase()} eraser · ${keyboardManager.get("undoModifier")}+${keyboardManager.get("undo").toUpperCase()} undo`;
+    toolbarShortcuts.append(tools, undo);
+}
 
 if (sizeButton8.checked) {
     setLineWidthNoUpdate(8);
@@ -717,6 +725,9 @@ function numberTo16BitHexadecimal(number) {
 const rubberColor = { r: 255, g: 255, b: 255 };
 
 function updateDrawingStateUI() {
+    document.querySelectorAll(".color-button").forEach((button, index) => {
+        button.setAttribute("aria-pressed", String(index === localColorIndex));
+    });
     // Color all buttons, so the player always has a hint as to what the
     // active color is, since the cursor might not always be visible.
     sizeButtons.style.setProperty(
@@ -1096,8 +1107,10 @@ const roomLook = document.body.dataset.leagueMode
         focusAfterStart: () => messageInput.focus(),
         editSettings: showLobbySettingsDialog,
     }) : null;
+const gamePresentation = document.body.dataset.leagueMode ? createGamePresentation({avatar:createCommunityAvatar}) : {update(){},timer(){}};
 function updateRoomLook(profileIdentity) {
     roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, mode:document.body.dataset.leagueMode, settings:roomSettings, ...(profileIdentity ? {profileIdentity} : {})});
+    gamePresentation.update({players:cachedPlayers || [],ownID,ownerID,gameState,maxPlayers:roomSettings.maxPlayers});
 }
 const galleryRoot = document.getElementById('gallery-voting');
 const galleryVoting = galleryRoot && document.body.dataset.leagueSpectator !== 'true'
@@ -1653,8 +1666,11 @@ window.setInterval(() => {
     if (gameState === "ongoing") {
         const msLeft = roundEndTime - Date.now();
         const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
-        if (timeLeftValue.textContent !== String(secondsLeft)) timeLeftValue.textContent = String(secondsLeft);
+        gamePresentation.timer(secondsLeft, roomSettings.drawingTime, true);
+        const timeLabel = document.body.dataset.leagueMode ? `${String(Math.floor(secondsLeft / 60)).padStart(2,'0')}:${String(secondsLeft % 60).padStart(2,'0')}` : String(secondsLeft);
+        if (timeLeftValue.textContent !== timeLabel) timeLeftValue.textContent = timeLabel;
     } else {
+        gamePresentation.timer(0, 1, false);
         if (timeLeftValue.textContent !== '∞') timeLeftValue.textContent = '∞';
     }
 }, 500);
@@ -1681,6 +1697,8 @@ function appendMessage(styleClass, author, message, attrs, authorId) {
     }
 
     if (author !== null && author !== "") {
+        const person = authorId && getCachedPlayer(authorId);
+        if (document.body.dataset.leagueMode && person) newMessageDiv.appendChild(createCommunityAvatar(person));
         const authorNameSpan = document.createElement("span");
         authorNameSpan.classList.add("chat-name");
         if (authorId) authorNameSpan.dataset.playerId = authorId;

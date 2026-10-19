@@ -19,14 +19,18 @@ export function attachMobileViewport(view = window, doc = document) {
             root.style.setProperty('--game-top', `${viewport?.offsetTop ?? 0}px`);
             const elementHeight = id => doc.getElementById(id)?.getBoundingClientRect().height ?? 0;
             const reactions = doc.getElementById('drawing-reactions');
-            const chromeHeight = ['league-toolbar', 'gallery-voting', 'lobby-header', 'message-form']
+            const compactInput = height < 500 && doc.activeElement?.id === 'message-input' && elementHeight('canvas-frame-heading') > 0;
+            const chromeHeight = ['league-toolbar', 'gallery-voting', 'lobby-header', 'message-form', 'canvas-frame-heading', 'game-social-tabs']
                 .reduce((sum, id) => sum + elementHeight(id), 0)
                 + Math.max(elementHeight('toolbox'),reactions?.parentElement?.id==='lobby'?elementHeight('drawing-reactions'):0);
             const padding = view.getComputedStyle(doc.getElementById('app'));
             const safeArea = (parseFloat(padding.paddingTop) || 0) + (parseFloat(padding.paddingBottom) || 0);
             // Leave room for the full-width guess field and a little chat even
             // on short screens. Shrink the board uniformly, never crop pixels.
-            root.style.setProperty('--game-board-limit', `${Math.max(0, height - chromeHeight - safeArea - 68)}px`);
+            // Focused league games have three 4px gaps: hint, canvas, tabs,
+            // input. Tabs keep their own row below the complete artwork.
+            const breathingRoom = elementHeight('canvas-frame-heading') ? compactInput ? 12 : 48 : 68;
+            root.style.setProperty('--game-board-limit', `${Math.max(0, height - chromeHeight - safeArea - breathingRoom)}px`);
             root.style.setProperty('--game-content-height', `${Math.max(0, height - chromeHeight - safeArea - 28)}px`);
         } else if (!active) {
             root.classList.remove('mobile-game-short');
@@ -46,7 +50,7 @@ export function attachMobileViewport(view = window, doc = document) {
     const observer = panel ? new view.MutationObserver(schedule) : null;
     observer?.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
     const sizes = new view.ResizeObserver(schedule);
-    for (const id of ['league-toolbar', 'gallery-voting', 'lobby-header', 'toolbox', 'drawing-reactions', 'message-form']) {
+    for (const id of ['league-toolbar', 'gallery-voting', 'lobby-header', 'toolbox', 'drawing-reactions', 'message-form', 'canvas-frame-heading', 'game-social-tabs']) {
         const element = doc.getElementById(id);
         if (element) sizes.observe(element);
     }

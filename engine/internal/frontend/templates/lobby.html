@@ -12,6 +12,8 @@
     <link rel="stylesheet" type="text/css" href='{{.RootPath}}/resources/{{.WithCacheBust "lobby.css"}}' />
     {{if .LeagueMode}}<link rel="stylesheet" href="/themes.css" /><link rel="stylesheet" href="/room-look.css" />{{end}}
     <link rel="stylesheet" href='{{.RootPath}}/resources/{{.WithCacheBust "game-clean.css"}}' />
+    {{if .LeagueMode}}<link rel="stylesheet" href="/design-tokens.css" />{{end}}
+    <link rel="stylesheet" href='{{.RootPath}}/resources/{{.WithCacheBust "game-design.css"}}' />
     {{template "favicon-decl" .}}
     <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "plop.wav"}}' />
     <link rel="prefetch" href='{{.RootPath}}/resources/{{.WithCacheBust "end-turn.wav"}}' />
@@ -27,11 +29,21 @@
         <noscript><span class="noscript">{{.Translation.Get "requires-js"}}</span></noscript>
 
         <div id="league-toolbar" {{if not .LeagueMode}}hidden{{end}}>
-            <a href="/#/skribbil" class="league-home-link">← Clubhouse · Skribbil</a>
+            <a href="/#/skribbil" class="league-home-link" aria-label="Leave room and return to Clubhouse">← <span>Clubhouse</span></a>
+            <span class="game-brand"><img src="/assets/skribbil-communities.png" alt="Skribbil Communities" /></span>
             {{if .LeagueMode}}
-            <button id="copy-room-invite" class="dialog-button" type="button" data-room-id="{{.LeagueMatchID}}">Copy invite link</button>
+            <button id="copy-room-invite" class="dialog-button" type="button" data-room-id="{{.LeagueMatchID}}" aria-label="Copy invite link"><svg class="game-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 3 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 1)"/></svg><span class="invite-label">Copy invite</span></button>
             <input id="room-invite-link" type="text" aria-label="Room invite link" readonly hidden />
             <span id="room-invite-status" role="status"></span>
+            <a href="/#/league" class="game-leaderboards" aria-label="Leaderboards"><svg class="game-header-icon game-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8v7a4 4 0 0 1-8 0V3Zm0 2H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 2v5m-4 2h8m-8 0v-2h8v2"/></svg><span>Leaderboards</span></a>
+            <button id="game-profile-button" type="button" popovertarget="game-profile-menu" aria-label="Your profile" aria-haspopup="menu"><span id="game-profile-avatar"></span><span id="game-profile-name">Profile</span><svg class="game-profile-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 7 6 6 6-6"/></svg></button>
+            <div id="game-profile-menu" popover>
+                <a href="/#/profile">Your profile</a>
+                <a href="/#/league">Leaderboards</a>
+                <button type="button" data-theme-toggle>Switch theme</button>
+                <button type="button" id="profile-game-menu">Game menu</button>
+                <button type="button" id="profile-leave-room">Leave room</button>
+            </div>
             {{end}}
             <a id="league-results-link" href="/" hidden>Back to league · rematch &amp; results →</a>
         </div>
@@ -120,9 +132,11 @@
             </div>
 
             <div id="player-container"></div>
+            <div id="game-social-tabs" role="tablist" aria-label="Room panels"><button id="game-chat-tab" type="button" role="tab" aria-selected="true" aria-controls="message-container">Chat</button><button id="game-players-tab" type="button" role="tab" aria-selected="false" aria-controls="player-container">Players <span id="game-player-count"></span></button><button id="game-gallery-tab" type="button" hidden>Gallery votes</button></div>
 
             {{if .LeagueMode}}<section id="room-look-panel" hidden></section>{{end}}
             <div id="drawing-board-wrapper">
+                <div id="canvas-frame-heading"><span id="canvas-drawer-label">Drawing board</span></div>
                 <div id="drawing-board-inner-wrapper">
                     <canvas id="drawing-board" width="1600" height="900"></canvas>
                     <div id="drawing-reactions" role="group" aria-label="Drawing reactions" hidden>
@@ -207,10 +221,11 @@
                         </div>
 
                         <div id="lobbysettings-dialog" class="center-dialog" role="dialog" aria-modal="true" aria-labelledby="lobbysettings-title">
-                            <span id="lobbysettings-title" class="dialog-title">{{.Translation.Get "change-lobby-settings-title"}}</span>
+                            <span id="lobbysettings-title" class="dialog-title">Lobby settings</span>
                             <div class="center-dialog-content">
-                                <div class="input-container">
-                                    <b>{{.Translation.Get "drawing-time-setting"}}</b>
+                                <div class="settings-grid">
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-drawing-time">{{.Translation.Get "drawing-time-setting"}}</label>
                                     <div class="drawing-time-controls">
                                         <input id="lobby-settings-drawing-time" class="input-item" type="number"
                                             name="drawing_time" min="{{.MinDrawingTime}}" max="{{.MaxDrawingTime}}"
@@ -218,26 +233,41 @@
                                         <button id="lobby-settings-add-time" class="dialog-button" type="button"
                                             aria-label="Add 10 seconds to drawing time">+10 s</button>
                                     </div>
-                                    <b>{{.Translation.Get "rounds-setting"}}</b>
+                                    <small>Seconds · add time in 10-second steps</small>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-max-rounds">{{.Translation.Get "rounds-setting"}}</label>
                                     <input id="lobby-settings-max-rounds" class="input-item" type="number" name="rounds"
                                         min="{{.MinRounds}}" max="{{.MaxRounds}}" value="{{.Rounds}}" />
-                                    <b>{{.Translation.Get "max-players-setting"}}</b>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-max-players">{{.Translation.Get "max-players-setting"}}</label>
                                     <input id="lobby-settings-max-players" type="number" name="max_players"
                                         min="{{.MinMaxPlayers}}" max="{{.MaxMaxPlayers}}" value="{{.MaxPlayers}}" />
-                                    <b>{{.Translation.Get "public-lobby-setting"}}</b>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-public">{{.Translation.Get "public-lobby-setting"}}</label>
                                     <input id="lobby-settings-public" type="checkbox" name="public" {{if eq
                                             .Public true}}checked{{end}} />
-                                    <b>{{.Translation.Get "words-per-turn-setting"}}</b>
+                                    <small>Listed for others to join when enabled.</small>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-words-per-turn">{{.Translation.Get "words-per-turn-setting"}}</label>
                                     <input id="lobby-settings-words-per-turn" type="number" name="words_per_turn"
                                         min="{{.MinWordsPerTurn}}" max="{{.MaxWordsPerTurn}}" value="{{.WordsPerTurn}}" />
-                                    <b>{{.Translation.Get "custom-words-per-turn-setting"}}</b>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-custom-words-per-turn">{{.Translation.Get "custom-words-per-turn-setting"}}</label>
                                     <input id="lobby-settings-custom-words-per-turn" class="input-item" type="number"
                                         name="custom_words_per_turn" min="{{.MinCustomWordsPerTurn}}"
                                         max="{{.MaxWordsPerTurn}}" value="{{.CustomWordsPerTurn}}" />
-                                    <b>{{.Translation.Get "players-per-ip-limit-setting"}}</b>
+                                  </div>
+                                  <div class="settings-field">
+                                    <label for="lobby-settings-clients-per-ip-limit">{{.Translation.Get "players-per-ip-limit-setting"}}</label>
                                     <input id="lobby-settings-clients-per-ip-limit" type="number"
                                         name="clients_per_ip_limit" min="{{.MinClientsPerIPLimit}}"
                                         max="{{.MaxClientsPerIPLimit}}" value="{{.ClientsPerIPLimit}}" />
+                                  </div>
                                 </div>
                             </div>
                             <div class="button-bar">
@@ -338,8 +368,7 @@
                             name="tool-type" checked>
                         <div id="tool-type-pencil-wrapper" class="line-width-button-content">
                 <img id="use-pencil-button-image" title="{{.Translation.Get "use-pencil"}} " alt="{{.Translation.Get "use-pencil"}}"
-                                src='{{.RootPath}}/resources/{{.WithCacheBust "pencil.svg"}}'
-                                style="transform: scaleX(-1)" />
+                                src='{{.RootPath}}/resources/{{if .LeagueMode}}{{.WithCacheBust "tool-pencil.svg"}}{{else}}{{.WithCacheBust "pencil.svg"}}{{end}}' {{if not .LeagueMode}}style="transform: scaleX(-1)"{{end}} />
                         </div>
                     </label>
                     <label for="tool-type-fill">
@@ -348,7 +377,7 @@
                         <div id="tool-type-fill-wrapper" class="line-width-button-content">
                             <img id="use-fill-bucket-button-image" alt="{{.Translation.Get "use-fill-bucket"}}"
                   title="{{.Translation.Get "use-fill-bucket"}} "
-                                src='{{.RootPath}}/resources/{{.WithCacheBust "fill.svg"}}' />
+                                src='{{.RootPath}}/resources/{{if .LeagueMode}}{{.WithCacheBust "tool-fill.svg"}}{{else}}{{.WithCacheBust "fill.svg"}}{{end}}' />
                         </div>
                     </label>
                     <label for="tool-type-rubber">
@@ -356,45 +385,49 @@
                             name="tool-type">
                         <div id="tool-type-rubber-wrapper" class="line-width-button-content">
                 <img id="use-eraser-button-image" alt="{{.Translation.Get "use-eraser"}}" title="{{.Translation.Get "use-eraser"}} "
-                                src='{{.RootPath}}/resources/{{.WithCacheBust "rubber.svg"}}' />
+                                src='{{.RootPath}}/resources/{{if .LeagueMode}}{{.WithCacheBust "tool-eraser.svg"}}{{else}}{{.WithCacheBust "rubber.svg"}}{{end}}' />
                         </div>
                     </label>
                 </div>
                 <div id="size-buttons" class="pencil-sizes-container toolbox-group">
                     <label for="size-8-button">
-                        <input id="size-8-button" class="custom-check-or-radio line-width-button" type="radio"
+                        <input id="size-8-button" aria-label="Brush size 8" class="custom-check-or-radio line-width-button" type="radio"
                             name="line-width" checked>
                         <div id="size-8-button-wrapper" class="line-width-button-content"
                             alt="{{printf (.Translation.Get "change-pencil-size-to") "8"}}"
                 title="{{printf (.Translation.Get "change-pencil-size-to") "8"}} ">
                             <div class="dot" style="width: 8px; height: 8px"></div>
+                            {{if .LeagueMode}}<span class="brush-size-label" aria-hidden="true">8</span>{{end}}
                         </div>
                     </label>
                     <label for="size-16-button">
-                        <input id="size-16-button" class="custom-check-or-radio line-width-button" type="radio"
+                        <input id="size-16-button" aria-label="Brush size 16" class="custom-check-or-radio line-width-button" type="radio"
                             name="line-width">
                         <div id="size-16-button-wrapper" class="line-width-button-content"
                             alt="{{printf (.Translation.Get "change-pencil-size-to") "16"}}"
                 title="{{printf (.Translation.Get "change-pencil-size-to") "16"}} ">
                             <div class="dot" style="width: 16px; height: 16px"></div>
+                            {{if .LeagueMode}}<span class="brush-size-label" aria-hidden="true">16</span>{{end}}
                         </div>
                     </label>
                     <label for="size-24-button">
-                        <input id="size-24-button" class="custom-check-or-radio line-width-button" type="radio"
+                        <input id="size-24-button" aria-label="Brush size 24" class="custom-check-or-radio line-width-button" type="radio"
                             name="line-width">
                         <div id="size-24-button-wrapper" class="line-width-button-content"
                             alt="{{printf (.Translation.Get "change-pencil-size-to") "24"}}"
                 title="{{printf (.Translation.Get "change-pencil-size-to") "24"}} ">
                             <div class="dot" style="width: 24px; height: 24px"></div>
+                            {{if .LeagueMode}}<span class="brush-size-label" aria-hidden="true">24</span>{{end}}
                         </div>
                     </label>
                     <label for="size-32-button">
-                        <input id="size-32-button" class="custom-check-or-radio line-width-button" type="radio"
+                        <input id="size-32-button" aria-label="Brush size 32" class="custom-check-or-radio line-width-button" type="radio"
                             name="line-width">
                         <div id="size-32-button-wrapper" class="line-width-button-content"
                             alt="{{printf (.Translation.Get "change-pencil-size-to") "32"}}"
                 title="{{printf (.Translation.Get "change-pencil-size-to") "32"}} ">
                             <div class="dot" style="width: 32px; height: 32px"></div>
+                            {{if .LeagueMode}}<span class="brush-size-label" aria-hidden="true">32</span>{{end}}
                         </div>
                     </label>
                 </div>
@@ -402,14 +435,17 @@
                 <button id="clear-canvas-button" class="canvas-button toolbox-group"
                     alt="{{.Translation.Get "clear-canvas"}}" title="{{.Translation.Get "clear-canvas"}}">
                     <img alt="{{.Translation.Get "clear-canvas"}}" title="{{.Translation.Get "clear-canvas"}}"
-                        src='{{.RootPath}}/resources/{{.WithCacheBust "trash.svg"}}' />
+                        src='{{.RootPath}}/resources/{{if .LeagueMode}}{{.WithCacheBust "tool-clear.svg"}}{{else}}{{.WithCacheBust "trash.svg"}}{{end}}' />
+                    {{if .LeagueMode}}<span class="tool-action-label" aria-hidden="true">Clear</span>{{end}}
                 </button>
                 <!--We won't make this button easier to click, as there's no going back. -->
                 <button id="undo-button" class="canvas-button toolbox-group" alt="{{.Translation.Get "undo"}}"
                     title="{{.Translation.Get "undo"}}">
                     <img id="undo-button-image" alt="{{.Translation.Get "undo"}}" title="{{.Translation.Get "undo"}} "
-                        src='{{.RootPath}}/resources/{{.WithCacheBust "undo.svg"}}' />
+                        src='{{.RootPath}}/resources/{{if .LeagueMode}}{{.WithCacheBust "tool-undo.svg"}}{{else}}{{.WithCacheBust "undo.svg"}}{{end}}' />
+                    {{if .LeagueMode}}<span class="tool-action-label" aria-hidden="true">Undo</span>{{end}}
                 </button>
+                {{if .LeagueMode}}<div id="tool-shortcuts" aria-label="Drawing keyboard shortcuts"></div>{{end}}
             </div>
 
             <div id="chat">

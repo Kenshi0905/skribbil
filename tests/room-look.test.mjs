@@ -108,3 +108,20 @@ test('ready checkbox holds its intended state while waiting for an authoritative
  f.ui.result({action:'toggle-readiness',error:'Try again'});assert.equal(ready.checked,false);
  assert.equal(ready.disabled,false);
 });
+
+test('room editor tabs expose the complete original catalogs and thumbnail choices remain unapplied',()=>{
+ const f=fixture();f.find('button','Edit room look').click();
+ const groups={Face:['face','eyes','eyebrows','nose','mouth','ears'],Hair:['hair'],Colors:['skin','hairColor','shirtColor','background'],Extras:['accessory']};
+ for(const [label,keys] of Object.entries(groups)){
+  const tab=f.all().find(n=>n.attrs.role==='tab'&&n.textContent===label);tab.click();
+  assert.equal(tab.attrs['aria-selected'],'true');
+  for(const key of avatarV2Keys)assert.equal(f.find('select','room-'+key).parent.hidden,!keys.includes(key));
+  const choices=f.all().filter(n=>n.className==='room-avatar-choice');
+  assert.equal(choices.length,avatarV2Options[keys[0]].length);
+  assert.ok(choices.every(c=>c.children[0].src.startsWith('/api/avatar-presets/v2/')));
+  choices.at(-1).click();assert.equal(f.find('select','room-'+keys[0]).value,String(choices.length-1));
+  assert.equal(f.sent.length,0);
+ }
+ f.find('button','Cancel').click();assert.equal(f.sent.length,0);
+ f.find('button','Edit room look').click();assert.equal(f.find('input','room-display-name').value,f.profile.displayName);
+});

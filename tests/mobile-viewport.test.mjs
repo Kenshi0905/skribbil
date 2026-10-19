@@ -24,7 +24,7 @@ function setup({ viewport = true, mobile = true, waiting = false } = {}) {
   const doc = { documentElement: root, getElementById: id => id === 'room-look-panel' ? panel : { getBoundingClientRect: () => ({ height: heights[id] ?? 0 }) } };
   const detach = attachMobileViewport(view, doc);
   const flush = () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn()); };
-  return { view, visualViewport, media, panel, classes, styles, heights, frames, flush, detach, mutation: () => mutation(), resize: () => resize() };
+  return { doc, view, visualViewport, media, panel, classes, styles, heights, frames, flush, detach, mutation: () => mutation(), resize: () => resize() };
 }
 
 test('keyboard resizing and Safari viewport panning retain space for canvas, chat and input', () => {
@@ -81,4 +81,26 @@ test('gallery nominations reserve viewport space instead of covering the phone g
  assert.equal(parseFloat(f.styles.get('--game-board-limit')),before-154);
  f.visualViewport.height=400;f.visualViewport.dispatchEvent(new Event('resize'));f.flush();
  assert.ok(parseFloat(f.styles.get('--game-board-limit'))>=0);f.detach();
+});
+
+test('canvas-frame reactions and social tabs reserve space above a keyboard-sized canvas',()=>{
+ const f=setup();f.heights['canvas-frame-heading']=44;f.heights['game-social-tabs']=44;
+ f.visualViewport.height=320;f.visualViewport.offsetTop=80;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'28px');
+ assert.equal(f.styles.get('--game-top'),'80px');
+ f.visualViewport.height=200;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'0px');
+ f.detach();
+});
+
+test('focused short view reserves separate canvas reactions and tabs with compact gaps',()=>{
+ const f=setup();f.heights['canvas-frame-heading']=48;f.heights['game-social-tabs']=48;
+ f.heights['lobby-header']=48;f.doc.activeElement={id:'message-input'};
+ f.visualViewport.height=320;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'56px');
+ f.heights['game-social-tabs']+=12;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'44px','taller tabs never overlap or cover the artwork');
+ f.heights['game-social-tabs']-=12;
+ f.doc.activeElement=null;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'20px');f.detach();
 });
