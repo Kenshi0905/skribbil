@@ -89,8 +89,9 @@ export function createGamePresentation({ avatar, doc = document }) {
       byId('game-player-count').textContent = `(${count})`;
       byId('player-container').dataset.count = `${count}${maxPlayers ? ` / ${maxPlayers}` : ''}`;
       doc.body.dataset.gameState = gameState;
-      byId('canvas-drawer-label').textContent = drawer ? drawer.id === ownID ? 'Your canvas' : `${drawer.name} is drawing` : 'Drawing board';
-      caption.textContent = gameState === 'ongoing' ? drawer?.id === ownID ? 'Your word · private' : self?.state === 'spectating' ? 'Spectating' : 'Guess the word' : '';
+      byId('canvas-drawer-label').textContent = doc.body.dataset.roundAnswer ? gameState === 'gameOver' ? 'Game finished' : 'Next turn'
+        : drawer ? drawer.id === ownID ? 'Your canvas' : `${drawer.name} is drawing` : 'Drawing board';
+      caption.textContent = doc.body.dataset.roundAnswer ? 'The word was' : gameState === 'ongoing' ? drawer?.id === ownID ? 'Your word · private' : self?.state === 'spectating' ? 'Spectating' : 'Guess the word' : '';
       for (const row of byId('player-container').children) {
         const id = row.querySelector('.playername')?.id?.slice('playername-'.length);
         row.classList.toggle('player-is-self', id === ownID);

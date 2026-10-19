@@ -9,6 +9,7 @@ import { attachMobileViewport } from './resources/{{.WithCacheBust "mobile-viewp
 import { attachMobileTools } from './resources/{{.WithCacheBust "mobile-tools.js"}}';
 import { createRoomExit } from './resources/{{.WithCacheBust "room-exit.js"}}';
 import { createGamePresentation } from './resources/{{.WithCacheBust "game-presentation.js"}}';
+import { createRoundTransition } from './resources/{{.WithCacheBust "round-transition.js"}}';
 
 String.prototype.format = function () {
     return [...arguments].reduce((p, c) => p.replace(/%s/, c), this);
@@ -1126,6 +1127,10 @@ const roomLook = document.body.dataset.leagueMode
         editSettings: showLobbySettingsDialog,
     }) : null;
 const gamePresentation = document.body.dataset.leagueMode ? createGamePresentation({avatar:createCommunityAvatar}) : {update(){},timer(){}};
+const roundTransition = createRoundTransition({
+    board: drawingBoard, wrapper: document.getElementById('drawing-board-inner-wrapper'),
+    panels: [wordDialog, waitChooseDialog, gameOverDialog], body: document.body,
+});
 function updateRoomLook(profileIdentity) {
     roomLook?.update({players: cachedPlayers || [], ownID, ownerID, gameState, mode:document.body.dataset.leagueMode, settings:roomSettings, ...(profileIdentity ? {profileIdentity} : {})});
     gamePresentation.update({players:cachedPlayers || [],ownID,ownerID,gameState,maxPlayers:roomSettings.maxPlayers});
@@ -1149,21 +1154,6 @@ window.addEventListener('online',refreshProfileIdentity);
 window.addEventListener('focus',refreshProfileIdentity);
 const profileChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('skribbil-profile') : null;
 if (profileChannel) profileChannel.onmessage = refreshProfileIdentity;
-function smoothTurnHandoff() {
-    if (gameState !== 'ongoing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    canvasPresenter.flush();
-    const board = document.getElementById('drawing-board');
-    const wrapper = document.getElementById('drawing-board-inner-wrapper');
-    if (!board || !wrapper) return;
-    wrapper.querySelectorAll('.turn-handoff').forEach(old=>old.remove());
-    const previous = document.createElement('canvas');
-    previous.width = board.width; previous.height = board.height;
-    previous.className = 'turn-handoff'; previous.setAttribute('aria-hidden','true');
-    previous.getContext('2d').drawImage(board,0,0);
-    wrapper.append(previous);
-    if (!previous.animate) { previous.remove(); return; }
-    previous.animate([{opacity:1},{opacity:0}],{duration:420,easing:'ease-out'}).finished.then(()=>previous.remove(),()=>previous.remove());
-}
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
 let roomInviteStatusTimer;
@@ -1263,6 +1253,8 @@ const handleEvent = (parsed) => {
         appendMessage("system-message", '{{.Translation.Get "system"}}', drawingDislikeMessage(parsed.data));
     } else if (parsed.type === "game-over") {
         playRoundEndSound();
+        canvasPresenter.flush();
+        roundTransition.reveal(parsed.data.previousWord, parsed.data.roundEndReason);
         dislikeButton.disabled = true;
         likeButton.disabled = true;
         drawingReactions.hidden = true;
@@ -1364,15 +1356,19 @@ const handleEvent = (parsed) => {
     } else if (parsed.type === "clear-drawing-board") {
         clear(context);
     } else if (parsed.type === "word-chosen") {
+        roundTransition.begin();
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
         setRoundTimeLeft(parsed.data.timeLeft);
         applyWordHints(parsed.data.hints);
         setAllowDrawing(drawerID === ownID);
+        updateRoomLook();
     } else if (parsed.type === "next-turn") {
         playRoundEndSound();
         galleryVoting?.onTurn?.();
-        smoothTurnHandoff();
+        canvasPresenter.flush();
+        if (gameState === 'ongoing') roundTransition.reveal(parsed.data.previousWord, parsed.data.roundEndReason);
+        else roundTransition.begin();
         dislikeButton.disabled = true;
         likeButton.disabled = true;
         drawingReactions.hidden = true;
@@ -1567,6 +1563,8 @@ function setRoundTimeLeft(timeLeftMs) {
 }
 
 const handleReadyEvent = (ready) => {
+    if (ready.gameState !== 'gameOver') roundTransition.begin();
+    else if (!document.body.dataset.roundAnswer && ready.previousWord) roundTransition.reveal(ready.previousWord);
     ownerID = ready.ownerId;
     ownID = ready.playerId;
 
@@ -1644,6 +1642,7 @@ function updateButtonVisibilities() {
 
 function promptWords(data) {
     const summary = document.getElementById("word-choice-summary");
+    summary.dataset.essential = String(data.hardWord || data.words.length === 1);
     summary.textContent = data.hardWord
         ? "Hard-word penalty: your previous drawing received all required dislikes. This turn has one forced hard word."
         : data.words.length === 1
