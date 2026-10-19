@@ -135,24 +135,6 @@ body:has(#room-look-panel:not([hidden])) #gallery-voting {
   padding: 8px 12px;
   cursor: pointer;
 }
-.turn-recap {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line, #d9d4e9);
-  border-radius: 10px;
-  background: var(--purple-light, #eee8ff);
-  color: var(--ink, #302c3b);
-  font: 13px/1.5 system-ui;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.turn-recap strong {
-  display: block;
-  font-size: 16px;
-}
-.turn-recap[hidden] {
-  display: none;
-}
 #chat {
   position: relative;
 }
@@ -446,20 +428,5 @@ body:has(#room-look-panel:not([hidden])) #gallery-voting {
   }
   #lobby .playername-action {
     min-height: 44px;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .turn-recap {
-    animation: recap-enter 200ms ease-out;
-  }
-  @keyframes recap-enter {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
   }
 }

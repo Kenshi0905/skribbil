@@ -104,3 +104,11 @@ test('focused short view reserves separate canvas reactions and tabs with compac
  f.doc.activeElement=null;f.resize();f.flush();
  assert.equal(f.styles.get('--game-board-limit'),'20px');f.detach();
 });
+
+test('a typing drawer can reclaim its redundant canvas heading without triggering native-layout reserves',()=>{
+ const f=setup();f.doc.body={dataset:{leagueMode:'private'}};f.doc.activeElement={id:'message-input'};
+ f.heights['game-social-tabs']=44;f.heights['canvas-frame-heading']=0;f.visualViewport.height=320;
+ f.resize();f.flush();assert.equal(f.styles.get('--game-board-limit'),'108px');
+ f.heights['canvas-frame-heading']=48;f.resize();f.flush();
+ assert.equal(f.styles.get('--game-board-limit'),'60px','guessers still reserve the reaction heading');f.detach();
+});

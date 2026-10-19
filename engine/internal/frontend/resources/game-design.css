@@ -73,6 +73,8 @@ body[data-league-mode] .player { background: transparent; border-radius: 10px; m
 body[data-league-mode] .player.community-player { grid-template-columns: 20px 44px minmax(0,1fr); gap: 3px 8px; grid-template-rows: auto auto; }
 body[data-league-mode] .community-player .playername { grid-row: 1; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; align-self: end; }
 body[data-league-mode] .community-player .score-and-status { grid-row: 2; }
+body[data-league-mode] #player-container .community-player :is(.playername,.playername-action) { grid-column: 3; grid-row: 1; min-height: 24px; height: auto; padding: 0; margin: 0; font: 700 14px/1.35 var(--font-body); align-self: end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+body[data-league-mode] #player-container .community-player .score-and-status { grid-column: 3; grid-row: 2; min-width: 0; width: 100%; }
 body[data-league-mode] .community-player .rank { width: 20px; font: 800 22px var(--font-play); grid-row: 1/3; }
 body[data-league-mode] .community-player-avatar { width: 44px; height: 44px; border-radius: 50%; }
 body[data-league-mode] .playerscore-group { display: flex; flex-direction: column; align-items: flex-start; font-size: 14px; }
@@ -204,10 +206,13 @@ body[data-league-mode]:has(#room-look-panel:not([hidden])) #lobbysettings-dialog
   #canvas-frame-heading { min-height: 50px; height: 50px; padding: 2px 6px; }
   #canvas-drawer-label { font-size: 17px; }
   #canvas-frame-heading .drawing-reaction { min-width: 54px; height: 44px; font-size: 16px; padding: 4px 8px; }
-  body[data-league-mode] #toolbox { grid-column: 1; grid-row: 3; height: 50px; min-height: 50px; padding: 2px; gap: 2px; flex-wrap: nowrap; overflow-x: auto; }
-  body[data-league-mode] #toolbox .color-button-container { order: 0; width: auto; height: auto !important; }
+  body[data-league-mode] #toolbox { grid-column: 1; grid-row: 3; height: auto; min-height: 116px; padding: 4px; gap: 4px; flex-wrap: wrap; overflow: visible; align-content: start; }
+  body[data-league-mode] #toolbox .color-button-container { order: 5; flex: 1 0 100%; width: 100%; height: auto !important; }
   body[data-league-mode] #phone-colors[popover] { padding: 10px; }
-  body[data-league-mode] #phone-colors .color-button { width: 44px !important; height: 44px !important; }
+  body[data-league-mode] #toolbox #phone-colors { padding: 3px; gap: 4px; overflow-x: auto; }
+  body[data-league-mode] #toolbox #phone-colors .color-button-row { display: flex; flex-direction: row; gap: 2px; width: max-content; }
+  body[data-league-mode] #toolbox #phone-colors .color-button { width: 24px !important; height: 24px !important; min-width: 24px; min-height: 24px; }
+  body[data-league-mode] #canvas-drawer-label { font: 600 14px/1.3 var(--font-body); }
   body[data-league-mode] #toolbox .mobile-tool-toggle { background: var(--purple-light); color: var(--purple); font-size: 11px; }
   #game-social-tabs { grid-column: 1; grid-row: 4; display: flex; align-items: center; gap: 4px; background: var(--surface); padding: 0 4px; border: 1px solid var(--line); border-radius: 10px; }
   #game-social-tabs button { min-height: 44px; min-width: 44px; padding: 0 12px; background: transparent; color: var(--muted); border: 0; border-radius: 7px; font: 700 13px var(--font-body); cursor: pointer; }
@@ -376,6 +381,7 @@ html:has(#room-look-panel[data-editing='true']), body:has(#room-look-panel[data-
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #round-container { font-size: 18px; }
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #drawing-board-wrapper { height: 100%; display: flex; flex-direction: column; }
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #canvas-frame-heading { flex: none; }
+  .mobile-game-short body[data-league-mode].is-drawing:has(#message-input:focus) #canvas-frame-heading { display: none; }
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #drawing-board-inner-wrapper { flex: none; }
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #game-social-tabs { grid-row: 3; width: 100%; height: 44px; min-width: 0; margin: 0; box-sizing: border-box; }
   .mobile-game-short body[data-league-mode]:has(#message-input:focus) #message-form { grid-row: 4; }

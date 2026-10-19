@@ -1,6 +1,7 @@
 import KeyboardManager from "./resources/keyboardManager.js";
 import { attachCanvasInput } from './resources/{{.WithCacheBust "canvas-input.js"}}';
 import { createDrawingHistory } from './resources/{{.WithCacheBust "drawing-history.js"}}';
+import { createCanvasPresenter } from './resources/{{.WithCacheBust "canvas-presenter.js"}}';
 import { createGameAudio } from './resources/{{.WithCacheBust "game-audio.js"}}';
 import { renderGameResults } from './resources/{{.WithCacheBust "game-results.js"}}';
 import { createRoomSessionControls } from './resources/{{.WithCacheBust "room-session-controls.js"}}';
@@ -526,8 +527,8 @@ function scaleUpFactor() {
 // to use the server coordinate space, which then gets scaled by the
 // canvas API of the browser, as we have a different clientWidth than
 // width and clientHeight than height.
-function convertToServerCoordinate(value) {
-    return Math.round(parseFloat(scaleUpFactor() * value));
+function convertToServerCoordinate(value, scale = scaleUpFactor()) {
+    return Math.round(parseFloat(scale * value));
 }
 
 const pen = 0;
@@ -956,9 +957,9 @@ document
 let lastMessage = "";
 
 const encoder = new TextEncoder();
-function sendMessage(event) {
+function sendMessage(event, { explicit = false } = {}) {
     event.preventDefault();
-    if (composingMessage || messageInput.disabled || socket?.readyState !== WebSocket.OPEN) return;
+    if ((composingMessage && !explicit) || messageInput.disabled || socket?.readyState !== WebSocket.OPEN) return;
     if (!messageInput.value) {
         return;
     }
@@ -992,6 +993,16 @@ let composingMessage = false;
 messageInput.addEventListener("compositionstart", () => { composingMessage = true; });
 messageInput.addEventListener("compositionend", () => { composingMessage = false; });
 document.getElementById("message-form").addEventListener("submit", sendMessage);
+const messageSendButton = document.getElementById("message-send");
+// Keep the keyboard and focused layout stable until a deliberate tap completes.
+messageSendButton.addEventListener("pointerdown", event => {
+    if (event.isPrimary !== false && event.button === 0 && !messageSendButton.disabled && document.activeElement === messageInput) event.preventDefault();
+});
+messageSendButton.addEventListener("click", event => {
+    // Gboard can keep the current word composing until focus changes. A real
+    // Send tap submits that draft; implicit Enter must still respect the IME.
+    sendMessage(event, { explicit: event.detail > 0 || document.activeElement === messageSendButton });
+});
 messageInput.addEventListener("keydown", function (event) {
     if (event.key === "ArrowUp" && messageInput.value.length === 0) {
         messageInput.value = lastMessage;
@@ -1133,6 +1144,7 @@ const profileChannel = typeof BroadcastChannel === 'function' ? new BroadcastCha
 if (profileChannel) profileChannel.onmessage = refreshProfileIdentity;
 function smoothTurnHandoff() {
     if (gameState !== 'ongoing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    canvasPresenter.flush();
     const board = document.getElementById('drawing-board');
     const wrapper = document.getElementById('drawing-board-inner-wrapper');
     if (!board || !wrapper) return;
@@ -1144,19 +1156,6 @@ function smoothTurnHandoff() {
     wrapper.append(previous);
     if (!previous.animate) { previous.remove(); return; }
     previous.animate([{opacity:1},{opacity:0}],{duration:420,easing:'ease-out'}).finished.then(()=>previous.remove(),()=>previous.remove());
-}
-function showTurnFeedback(data) {
-    for (const id of ['turn-recap','word-choice-recap']) {
-        const holder = document.getElementById(id); if (!holder) continue;
-        holder.replaceChildren(); holder.hidden = !data?.previousWord;
-        if (holder.hidden) continue;
-        const word = document.createElement('strong'); word.textContent = `The word was “${data.previousWord}”`;
-        const gains = (data.players || []).filter(player=>Number(player.lastScore)!==0 && Number.isFinite(Number(player.lastScore)))
-            .sort((a,b)=>Number(b.lastScore)-Number(a.lastScore)).slice(0,3);
-        const scores = document.createElement('span');
-        scores.textContent = gains.map(player=>`${player.name}: ${Number(player.lastScore)>0?'+':''}${player.lastScore}`).join(' · ');
-        holder.append(word,scores);
-    }
 }
 let leagueDislikes = null;
 const copyRoomInvite = document.getElementById("copy-room-invite");
@@ -1240,7 +1239,6 @@ const handleEvent = (parsed) => {
             document.body.dataset.leagueMode = parsed.data.leagueMode;
         }
         handleReadyEvent(parsed.data);
-        showTurnFeedback(parsed.data.wordHints ? null : parsed.data);
         galleryVoting?.refresh();
         refreshProfileIdentity();
         if (parsed.data.leagueMode) {
@@ -1358,7 +1356,6 @@ const handleEvent = (parsed) => {
     } else if (parsed.type === "clear-drawing-board") {
         clear(context);
     } else if (parsed.type === "word-chosen") {
-        showTurnFeedback(null);
         wordDialog.style.visibility = "hidden";
         waitChooseDialog.style.visibility = "hidden";
         setRoundTimeLeft(parsed.data.timeLeft);
@@ -1413,7 +1410,6 @@ const handleEvent = (parsed) => {
         applyPlayers(parsed.data.players);
 
         revealRoundWord(parsed.data.previousWord);
-        showTurnFeedback(parsed.data);
 
         //Even though we always hide the dialog in the "your-turn"
         //event handling, it will be shortly visible if we it here.
@@ -1988,6 +1984,10 @@ const set_dummy_word_hints = () => {
 };
 set_dummy_word_hints();
 
+const canvasPresenter = createCanvasPresenter({paint: bounds => {
+    if (bounds) context.putImageData(imageData, 0, 0, bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+    else context.putImageData(imageData, 0, 0);
+}});
 const drawingHistory = createDrawingHistory({
     snapshot: () => imageData.data.slice(),
     restore: pixels => imageData.data.set(pixels),
@@ -1996,8 +1996,8 @@ const drawingHistory = createDrawingHistory({
         if (event?.type === "line") {
             const data = event.data;
             const bounds = prepareDrawLineCoords(context, data.x, data.y, data.x2, data.y2, data.width);
-            context.putImageData(imageData, 0, 0, bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
-        } else context.putImageData(imageData, 0, 0);
+            canvasPresenter.invalidate(bounds);
+        } else canvasPresenter.invalidate();
     },
     draw: ({type, data}) => {
         if (type === "fill") {
@@ -2109,16 +2109,18 @@ function clearCanvasPixels(context) {
 clear(context);
 
 function fillAndSendEvent(context, x, y, colorIndex) {
+    const scale = scaleUpFactor();
     const instruction = {type: "fill", data: {
-        x: convertToServerCoordinate(x), y: convertToServerCoordinate(y), color: colorIndex,
+        x: convertToServerCoordinate(x, scale), y: convertToServerCoordinate(y, scale), color: colorIndex,
     }};
     if (drawingHistory.append(instruction, true)) socket.send(JSON.stringify(instruction));
 }
 
 function drawLineAndSendEvent(context, x1, y1, x2, y2, lineWidth = localLineWidth) {
+    const scale = scaleUpFactor();
     const instruction = {type: "line", data: {
-        x: convertToServerCoordinate(x1), y: convertToServerCoordinate(y1),
-        x2: convertToServerCoordinate(x2), y2: convertToServerCoordinate(y2),
+        x: convertToServerCoordinate(x1, scale), y: convertToServerCoordinate(y1, scale),
+        x2: convertToServerCoordinate(x2, scale), y2: convertToServerCoordinate(y2, scale),
         color: localTool === rubber ? 0 : localColorIndex, width: lineWidth,
     }};
     drawingHistory.append(instruction);

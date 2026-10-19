@@ -98,8 +98,9 @@ export function attachMobileTools(doc = document, view = window) {
   const update = () => {
     close();
     for (const { element, button } of panels) {
-      button.hidden = !media.matches;
-      if (media.matches) element.setAttribute("popover", "auto");
+      const inlinePalette = Boolean(doc.body.dataset.leagueMode) && element.id === 'phone-colors';
+      button.hidden = !media.matches || inlinePalette;
+      if (media.matches && !inlinePalette) element.setAttribute("popover", "auto");
       else element.removeAttribute("popover");
     }
     if (media.matches) {

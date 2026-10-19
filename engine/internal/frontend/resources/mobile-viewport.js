@@ -19,7 +19,7 @@ export function attachMobileViewport(view = window, doc = document) {
             root.style.setProperty('--game-top', `${viewport?.offsetTop ?? 0}px`);
             const elementHeight = id => doc.getElementById(id)?.getBoundingClientRect().height ?? 0;
             const reactions = doc.getElementById('drawing-reactions');
-            const compactInput = height < 500 && doc.activeElement?.id === 'message-input' && elementHeight('canvas-frame-heading') > 0;
+            const compactInput = height < 500 && doc.activeElement?.id === 'message-input' && (doc.body?.dataset?.leagueMode || elementHeight('canvas-frame-heading') > 0);
             const chromeHeight = ['league-toolbar', 'gallery-voting', 'lobby-header', 'message-form', 'canvas-frame-heading', 'game-social-tabs']
                 .reduce((sum, id) => sum + elementHeight(id), 0)
                 + Math.max(elementHeight('toolbox'),reactions?.parentElement?.id==='lobby'?elementHeight('drawing-reactions'):0);
@@ -29,7 +29,7 @@ export function attachMobileViewport(view = window, doc = document) {
             // on short screens. Shrink the board uniformly, never crop pixels.
             // Focused league games have three 4px gaps: hint, canvas, tabs,
             // input. Tabs keep their own row below the complete artwork.
-            const breathingRoom = elementHeight('canvas-frame-heading') ? compactInput ? 12 : 48 : 68;
+            const breathingRoom = compactInput ? 12 : elementHeight('canvas-frame-heading') ? 48 : 68;
             root.style.setProperty('--game-board-limit', `${Math.max(0, height - chromeHeight - safeArea - breathingRoom)}px`);
             root.style.setProperty('--game-content-height', `${Math.max(0, height - chromeHeight - safeArea - 28)}px`);
         } else if (!active) {
@@ -47,6 +47,8 @@ export function attachMobileViewport(view = window, doc = document) {
     view.visualViewport?.addEventListener('resize', schedule);
     view.visualViewport?.addEventListener('scroll', schedule);
     mobile.addEventListener('change', schedule);
+    doc.addEventListener?.('focusin', schedule);
+    doc.addEventListener?.('focusout', schedule);
     const observer = panel ? new view.MutationObserver(schedule) : null;
     observer?.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
     const sizes = new view.ResizeObserver(schedule);
@@ -61,6 +63,8 @@ export function attachMobileViewport(view = window, doc = document) {
         view.visualViewport?.removeEventListener('resize', schedule);
         view.visualViewport?.removeEventListener('scroll', schedule);
         mobile.removeEventListener('change', schedule);
+        doc.removeEventListener?.('focusin', schedule);
+        doc.removeEventListener?.('focusout', schedule);
         observer?.disconnect();
         sizes.disconnect();
         root.classList.remove('mobile-game');
